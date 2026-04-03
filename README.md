@@ -1,8 +1,0 @@
-This is a webapp to keep score during pool matches with individuals and teams
-
-
-try it here : https://benjistealth.github.io/PoolPro/
-
-
-
-Well, maybe dont just yet, deployment issues......
