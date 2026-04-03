@@ -7,14 +7,27 @@
 }
 
 :root {
-  --sidebar-width: 40px;
-  --gameplay-width: calc(100vw - 80px);
+  --sidebar-width: 48px;
+  --gameplay-width: calc(100vw - 96px);
+  --team1-offset: -59px;
+  --team2-offset: 59px;
 }
 
 @media (min-width: 640px) {
   :root {
     --sidebar-width: 80px;
     --gameplay-width: calc(100vw - 160px);
+    --team1-offset: -105px;
+    --team2-offset: 105px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sidebar-width: 80px;
+    --gameplay-width: calc(100vw - 160px);
+    --team1-offset: -40px;
+    --team2-offset: -40px;
   }
 }
 
@@ -22,6 +35,8 @@
   :root {
     --sidebar-width: 120px;
     --gameplay-width: min(900px, calc(100vw - 300px));
+    --team1-offset: -40px;
+    --team2-offset: -40px;
   }
 }
 
