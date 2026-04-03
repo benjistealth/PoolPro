@@ -7,7 +7,13 @@
 }
 
 :root {
-  --gameplay-width: 717px;
+  --gameplay-width: 60vw;
+}
+
+@media (min-width: 480px) {
+  :root {
+    --gameplay-width: 75vw;
+  }
 }
 
 @media (min-width: 768px) {
