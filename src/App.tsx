@@ -634,7 +634,7 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center' : 'justify-start pt-32 pb-24'} px-2 sm:px-4 mx-auto w-full transition-all duration-500 overflow-hidden`}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center' : 'justify-start pt-32 pb-24'} px-2 sm:px-4 mx-auto w-full transition-all duration-500`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
       >
         <AnimatePresence mode="wait">
@@ -644,35 +644,35 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="h-full grid grid-rows-[12vh_1fr_12vh] gap-2 sm:gap-8"
+              className="relative py-4 sm:py-8 flex flex-col gap-4 sm:gap-8 min-h-screen sm:min-h-0"
             >
-              {/* Team Names Display (Vertical, Perfectly centered) */}
+              {/* Team Names Display (Absolute to scoreboard for perfect alignment) */}
               <div 
-                className="fixed inset-y-0 left-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                className="absolute inset-y-0 -left-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
                 style={{ width: 'var(--sidebar-width)' }}
               >
                 <div 
-                  className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center transition-transform duration-500"
+                  className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
                   style={{ color: player1.color }}
                 >
                   {team1Name}
                 </div>
               </div>
               <div 
-                className="fixed inset-y-0 right-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                className="absolute inset-y-0 -right-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
                 style={{ width: 'var(--sidebar-width)' }}
               >
                 <div 
-                  className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center transition-transform duration-500"
+                  className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
                   style={{ color: player2.color }}
                 >
                   {team2Name}
                 </div>
               </div>
 
-              {/* Row 1: Game Info Header */}
-              <div className="flex items-center justify-center">
-                {(isShotClockEnabled || isMatchClockEnabled) ? (
+              {/* Game Info Header */}
+              <div className="flex items-center justify-center shrink-0">
+                {(isShotClockEnabled || isMatchClockEnabled) && (
                   <div 
                     className="flex items-center justify-center bg-slate-900/50 p-1 sm:p-4 rounded-2xl border-2 transition-all duration-500 w-full max-w-md"
                     style={{ 
@@ -728,11 +728,11 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                ) : <div className="h-full w-full" />}
+                )}
               </div>
 
-              {/* Row 2: Score Cards Grid */}
-              <div className="flex items-center justify-center">
+              {/* Score Cards Grid */}
+              <div className="flex-1 flex items-center justify-center">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6 w-full">
                   {[player1, player2].map((p, idx) => (
                       <motion.div
@@ -744,7 +744,7 @@ export default function App() {
                             resetTimer();
                           }
                         }}
-                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[30vh] sm:min-h-[40vh]"
+                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center"
                         style={{ 
                           borderColor: p.color,
                           backgroundColor: p.bgColor,
@@ -767,7 +767,7 @@ export default function App() {
                         )}
 
                         <div className="relative group">
-                          <span className="text-[min(20vw,12vh)] sm:text-9xl font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
+                          <span className="text-[min(20vw,80px)] sm:text-9xl font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
                             {p.score}
                           </span>
                         </div>
@@ -775,7 +775,7 @@ export default function App() {
                         <div className="flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
                           <button
                             onClick={() => decrementScore(p.id)}
-                            className="flex-1 h-[6vh] sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                            className="flex-1 h-10 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
                           >
                             <Minus className="w-5 h-5" />
                           </button>
@@ -784,7 +784,7 @@ export default function App() {
                               e.stopPropagation();
                               incrementScore(p.id);
                             }}
-                            className="flex-[2] h-[6vh] sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                            className="flex-[2] h-10 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
                             style={{ 
                               backgroundColor: p.color,
                               boxShadow: `0 10px 15px -3px ${p.color}33`
@@ -799,11 +799,11 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Row 3: Finish Match Footer */}
-              <div className="flex items-center justify-center">
+              {/* Finish Match Footer */}
+              <div className="flex items-center justify-center shrink-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full max-w-md h-[8vh] sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="w-full max-w-md h-12 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
                   <CheckCircle2 className="w-6 h-6 text-white" />
                   Finish Match
