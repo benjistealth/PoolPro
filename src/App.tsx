@@ -644,15 +644,15 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
+              className="space-y-4 sm:space-y-8"
             >
               {/* Team Names Display (Vertical, Nudged up to align with scores) */}
               <div 
                 className="fixed inset-y-0 left-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
-                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
+                style={{ width: 'var(--sidebar-width)' }}
               >
                 <div 
-                  className="text-[18px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
+                  className="text-[14px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
                   style={{ color: player1.color }}
                 >
                   {team1Name}
@@ -660,10 +660,10 @@ export default function App() {
               </div>
               <div 
                 className="fixed inset-y-0 right-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
-                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
+                style={{ width: 'var(--sidebar-width)' }}
               >
                 <div 
-                  className="text-[18px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
+                  className="text-[14px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
                   style={{ color: player2.color }}
                 >
                   {team2Name}
@@ -730,7 +730,7 @@ export default function App() {
               )}
 
               {/* Score Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 {[player1, player2].map((p, idx) => (
                     <motion.div
                       key={p.id}
@@ -741,30 +741,30 @@ export default function App() {
                           resetTimer();
                         }
                       }}
-                      className="relative p-6 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
+                      className="relative p-4 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
                       style={{ 
                         borderColor: p.color,
                         backgroundColor: p.bgColor,
                         boxShadow: `0 0 40px -15px ${p.color}66`
                       }}
                     >
-                      <div className="flex flex-col items-center gap-6">
+                      <div className="flex flex-col items-center gap-4 sm:gap-6">
                       {isEditingNames ? (
                         <input
                           type="text"
                           value={p.name}
                           onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[1.5rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[1.2rem] sm:text-[1.5rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
                           style={{ color: p.color }}
                         />
                       ) : (
-                        <h2 className="text-[1.2rem] sm:text-[1.8rem] font-bold uppercase" style={{ color: p.color }}>
+                        <h2 className="text-[1rem] sm:text-[1.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
                           {p.name}
                         </h2>
                       )}
 
                       <div className="relative group">
-                        <span className="text-5xl sm:text-9xl font-black tracking-tighter tabular-nums" style={{ color: p.color }}>
+                        <span className="text-6xl sm:text-9xl font-black tracking-tighter tabular-nums" style={{ color: p.color }}>
                           {p.score}
                         </span>
                       </div>
@@ -799,7 +799,7 @@ export default function App() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={finishMatch}
-                  className="flex-1 h-16 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="flex-1 h-14 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-lg sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
                   <CheckCircle2 className="w-6 h-6 text-white" />
                   Finish Match
