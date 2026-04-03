@@ -644,7 +644,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-2 sm:space-y-8"
+              className="space-y-1 sm:space-y-8"
             >
               {/* Team Names Display (Vertical, Nudged up to align with scores) */}
               <div 
@@ -679,7 +679,7 @@ export default function App() {
               {/* Game Info Header */}
               {(isShotClockEnabled || isMatchClockEnabled) && (
                 <div 
-                  className="flex items-center justify-center bg-slate-900/50 p-2 sm:p-4 rounded-2xl border-2 transition-all duration-500"
+                  className="flex items-center justify-center bg-slate-900/50 p-0.5 sm:p-4 rounded-2xl border-2 transition-all duration-500"
                   style={{ 
                     borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                     borderRadius: '1rem'
@@ -688,9 +688,9 @@ export default function App() {
                   <div className="flex items-center gap-8">
                     {isMatchClockEnabled && (
                       <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
+                        <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
                         <div 
-                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
+                          className={`flex items-center gap-2 text-xl sm:text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
                           style={matchClock > 60 ? { color: player1.color } : {}}
                         >
                           <Timer className="w-5 h-5" />
@@ -701,9 +701,9 @@ export default function App() {
                     
                     {isShotClockEnabled && (
                       <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
+                        <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
                         <div 
-                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
+                          className={`flex items-center gap-2 text-xl sm:text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
                           style={shotClock > 5 ? { color: player2.color } : {}}
                         >
                           <Timer className="w-5 h-5" />
@@ -736,7 +736,7 @@ export default function App() {
               )}
 
               {/* Score Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-6">
                 {[player1, player2].map((p, idx) => (
                     <motion.div
                       key={p.id}
@@ -747,14 +747,14 @@ export default function App() {
                           resetTimer();
                         }
                       }}
-                      className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
+                      className="relative p-1 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
                       style={{ 
                         borderColor: p.color,
                         backgroundColor: p.bgColor,
                         boxShadow: `0 0 40px -15px ${p.color}66`
                       }}
                     >
-                      <div className="flex flex-col items-center gap-1 sm:gap-6">
+                      <div className="flex flex-col items-center gap-0 sm:gap-6">
                       {isEditingNames ? (
                         <input
                           type="text"
@@ -764,13 +764,13 @@ export default function App() {
                           style={{ color: p.color }}
                         />
                       ) : (
-                        <h2 className="text-[0.9rem] sm:text-[1.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
+                        <h2 className="text-[0.7rem] sm:text-[1.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
                           {p.name}
                         </h2>
                       )}
 
                       <div className="relative group">
-                        <span className="text-4xl sm:text-9xl font-black tracking-tighter tabular-nums" style={{ color: p.color }}>
+                        <span className="text-xl sm:text-9xl font-black tracking-tighter tabular-nums" style={{ color: p.color }}>
                           {p.score}
                         </span>
                       </div>
@@ -778,7 +778,7 @@ export default function App() {
                       <div className="flex items-center gap-3 w-full">
                         <button
                           onClick={() => decrementScore(p.id)}
-                          className="flex-1 h-9 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                          className="flex-1 h-6 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
                         >
                           <Minus className="w-5 h-5" />
                         </button>
@@ -787,7 +787,7 @@ export default function App() {
                             e.stopPropagation();
                             incrementScore(p.id);
                           }}
-                          className="flex-[2] h-9 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                          className="flex-[2] h-6 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
                           style={{ 
                             backgroundColor: p.color,
                             boxShadow: `0 10px 15px -3px ${p.color}33`
@@ -805,7 +805,7 @@ export default function App() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={finishMatch}
-                  className="flex-1 h-14 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-lg sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="flex-1 h-7 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
                   <CheckCircle2 className="w-6 h-6 text-white" />
                   Finish Match
