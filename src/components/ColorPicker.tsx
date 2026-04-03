@@ -10,9 +10,10 @@ interface ColorPickerProps {
   icon: React.ReactNode;
   isOpen: boolean;
   onToggle: (isOpen: boolean) => void;
+  themeColor?: string;
 }
 
-export const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange, colors, icon, isOpen, onToggle }) => {
+export const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange, colors, icon, isOpen, onToggle, themeColor }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,10 +77,14 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange
 
   return (
     <div className="relative" ref={containerRef}>
-      <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors cursor-pointer group"
+      <div className="flex items-center justify-between p-3 bg-slate-950/30 rounded-xl border transition-colors cursor-pointer group"
+           style={{ 
+             borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
+           }}
            onClick={() => onToggle(!isOpen)}>
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-emerald-400 transition-colors">
+          <div className="p-2 bg-slate-800 rounded-lg text-slate-400 transition-colors"
+               style={{ color: isOpen ? (themeColor || '#10b981') : undefined }}>
             {icon}
           </div>
           <div>
@@ -99,7 +104,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ label, value, onChange
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-[100] p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl backdrop-blur-xl min-w-[340px] flex flex-col items-center gap-6"
+            className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-[100] p-6 bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl min-w-[340px] flex flex-col items-center gap-6"
+            style={{ borderColor: (themeColor || '#10b981') + '33' }}
           >
             <div className="text-center">
               <h4 className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em]">Pick a Color</h4>

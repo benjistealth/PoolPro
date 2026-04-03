@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   Trophy, 
   Settings, 
@@ -18,6 +18,7 @@ import {
   Layout,
   Users,
   Download,
+  Upload,
   X,
   PlusCircle
 } from 'lucide-react';
@@ -70,6 +71,34 @@ export default function App() {
     );
   };
 
+  const teamTotals = useMemo(() => {
+    let t1 = 0;
+    let t2 = 0;
+    const maxMatches = Math.max(team1Players.length, team2Players.length);
+    
+    for (let i = 0; i < maxMatches; i++) {
+      const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
+      const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
+      
+      if (selectedMatchIndex === i) {
+        t1 += player1.score;
+        t2 += player2.score;
+      } else {
+        const match = getMatchResult(p1Name, p2Name);
+        if (match) {
+          if (match.player1 === p1Name) {
+            t1 += match.score1;
+            t2 += match.score2;
+          } else {
+            t1 += match.score2;
+            t2 += match.score1;
+          }
+        }
+      }
+    }
+    return { t1, t2 };
+  }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score]);
+
   // --- Initialization ---
   useEffect(() => {
     const savedHistory = localStorage.getItem('pool_match_history');
@@ -115,6 +144,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('pool_team2_players', JSON.stringify(team2Players));
   }, [team2Players]);
+
+  useEffect(() => {
+    localStorage.setItem('pool_match_history', JSON.stringify(matchHistory));
+  }, [matchHistory]);
 
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
@@ -237,6 +270,32 @@ export default function App() {
     resetTimer();
   };
 
+  const navigateToScoreboard = () => {
+    const maxMatches = Math.max(team1Players.length, team2Players.length);
+    
+    // If we're already on scoreboard and have a match, just stay
+    if (view === 'scoreboard' && selectedMatchIndex !== null) return;
+
+    if (maxMatches > 0) {
+      // Find the first match with no data
+      let firstUnplayedIndex = -1;
+      for (let i = 0; i < maxMatches; i++) {
+        const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
+        const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
+        if (!getMatchResult(p1Name, p2Name)) {
+          firstUnplayedIndex = i;
+          break;
+        }
+      }
+      
+      // If all matches have data, just select the first one (top row)
+      const indexToSelect = firstUnplayedIndex !== -1 ? firstUnplayedIndex : 0;
+      selectTeamMatch(indexToSelect);
+    } else {
+      setView('scoreboard');
+    }
+  };
+
   const clearTeams = () => {
     setTeam1Name('TEAM 1');
     setTeam2Name('TEAM 2');
@@ -267,6 +326,15 @@ export default function App() {
     localStorage.setItem('pool_team2_players', JSON.stringify(t2Players));
   };
 
+  const parseTime = (timeStr: string) => {
+    if (!timeStr || timeStr === 'OFF') return undefined;
+    const parts = timeStr.split(':');
+    if (parts.length === 2) {
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    }
+    return parseInt(timeStr);
+  };
+
   const downloadData = () => {
     if (matchHistory.length === 0) {
       // If no history, just download team info
@@ -276,14 +344,19 @@ export default function App() {
       team1Players.forEach(p => csvContent += `${team1Name},${p}\n`);
       team2Players.forEach(p => csvContent += `${team2Name},${p}\n`);
       
+      const now = new Date();
+      const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+      const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.csv`;
+      
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `pool_teams_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       return;
     }
 
@@ -304,15 +377,146 @@ export default function App() {
     let csvContent = headers.join(',') + '\n' + 
                      rows.map(e => e.map(val => `"${val}"`).join(',')).join('\n');
     
+    const now = new Date();
+    const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.csv`;
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `pool_stats_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const uploadData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        if (!content) return;
+
+        try {
+          const lines = content.split('\n').map(l => l.trim()).filter(l => l);
+          if (lines.length < 2) return;
+
+          const parseCSVLine = (line: string) => {
+            const values: string[] = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+              if (char === '"') {
+                inQuotes = !inQuotes;
+              } else if (char === ',' && !inQuotes) {
+                values.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+            values.push(current.trim());
+            return values;
+          };
+
+          const headers = parseCSVLine(lines[0]);
+          
+          if (headers[0] === 'Team' && headers[1] === 'Player Name') {
+            const t1Players: string[] = [];
+            const t2Players: string[] = [];
+            let t1Name = 'TEAM 1';
+            let t2Name = 'TEAM 2';
+
+            lines.slice(1).forEach(line => {
+              const values = parseCSVLine(line);
+              const team = values[0];
+              const player = values[1];
+              if (team && player) {
+                if (t1Players.length === 0) {
+                  t1Name = team;
+                  t1Players.push(player);
+                } else if (team === t1Name) {
+                  t1Players.push(player);
+                } else {
+                  t2Name = team;
+                  t2Players.push(player);
+                }
+              }
+            });
+            
+            updateTeamData(t1Name, t1Players, t2Name, t2Players);
+            setMatchHistory([]);
+            setSelectedMatchIndex(null);
+            alert('Teams loaded successfully!');
+          } else if (headers.includes('Team 1') && headers.includes('Player 1')) {
+            const history: MatchHistoryEntry[] = [];
+            const t1PlayersSet = new Set<string>();
+            const t2PlayersSet = new Set<string>();
+            let t1Name = 'TEAM 1';
+            let t2Name = 'TEAM 2';
+
+            lines.slice(1).forEach((line, idx) => {
+              const values = parseCSVLine(line);
+              const entry: any = {};
+              headers.forEach((h, i) => {
+                entry[h] = values[i];
+              });
+
+              if (idx === 0) {
+                t1Name = entry['Team 1'];
+                t2Name = entry['Team 2'];
+              }
+
+              if (entry['Player 1']) t1PlayersSet.add(entry['Player 1']);
+              if (entry['Player 2']) t2PlayersSet.add(entry['Player 2']);
+
+              let date = new Date().toISOString();
+              if (entry['Date']) {
+                const d = new Date(entry['Date']);
+                if (!isNaN(d.getTime())) {
+                  date = d.toISOString();
+                }
+              }
+
+              history.push({
+                id: `imported-${idx}-${Date.now()}`,
+                date: date,
+                team1: entry['Team 1'],
+                player1: entry['Player 1'],
+                score1: parseInt(entry['Score 1']) || 0,
+                team2: entry['Team 2'],
+                player2: entry['Player 2'],
+                score2: parseInt(entry['Score 2']) || 0,
+                winner: entry['Winner'],
+                shotClockSetting: entry['Shot Clock Setting'] && entry['Shot Clock Setting'] !== 'OFF' ? parseInt(entry['Shot Clock Setting'].replace('s', '')) : undefined,
+                matchClockRemaining: entry['Match Clock Remaining'] && entry['Match Clock Remaining'] !== 'OFF' ? parseTime(entry['Match Clock Remaining']) : undefined
+              });
+            });
+
+            setMatchHistory(history);
+            updateTeamData(t1Name, Array.from(t1PlayersSet), t2Name, Array.from(t2PlayersSet));
+            setSelectedMatchIndex(null);
+            alert('Match history and teams loaded successfully!');
+          } else {
+            alert('Unrecognized CSV format. Please use a file exported from this app.');
+          }
+        } catch (err) {
+          console.error('Error parsing CSV:', err);
+          alert('Failed to parse CSV file. Please ensure it is in the correct format.');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
   const clearHistory = () => {
@@ -344,19 +548,52 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden">
-      {/* Split Screen Background Layer - Moved to very top and using z-[-10] */}
-      <div className="fixed inset-0 z-[-10] flex overflow-hidden pointer-events-none">
-        <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player1.screenColor }} />
-        <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player2.screenColor }} />
+      {/* SVG Gradient Definitions */}
+      <svg width="0" height="0" className="absolute pointer-events-none">
+        <defs>
+          <linearGradient id="cup-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={player1.color} />
+            <stop offset="100%" stopColor={player2.color} />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Background Layer */}
+      <div className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none">
+        {/* Split Screen (Scoreboard only) */}
+        <div className={`absolute inset-0 flex transition-opacity duration-700 ${view === 'scoreboard' ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player1.screenColor }} />
+          <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player2.screenColor }} />
+        </div>
+        
+        {/* Plain Background (Teams & Settings) */}
+        <div className={`absolute inset-0 bg-slate-950 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
+        
+        {/* Subtle Gradient Overlay for Plain Background */}
+        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
       {/* Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 z-50 flex items-center justify-between px-6">
+      <nav 
+        className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-between px-6"
+        style={{ 
+          borderBottom: '2px solid',
+          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+        }}
+      >
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-slate-950" />
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-500 border border-slate-800 bg-slate-950/50"
+          >
+            <Trophy 
+              className="w-5 h-5 transition-all duration-500" 
+              style={{ stroke: 'url(#cup-gradient)' }}
+            />
           </div>
-          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+          <h1 
+            className="text-xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500"
+            style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
+          >
             PoolPro
           </h1>
         </div>
@@ -364,33 +601,42 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-4">
           <button 
             onClick={toggleFullscreen}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors hidden sm:flex"
+            className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border border-slate-800 bg-slate-950/50 hover:bg-slate-800/50 hidden sm:flex"
             title="Toggle Fullscreen"
           >
-            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+            {isFullscreen ? 
+              <Minimize className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} /> : 
+              <Maximize className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
+            }
           </button>
           <button 
-            onClick={() => setView('scoreboard')}
-            className={`p-2 rounded-lg transition-colors ${view === 'scoreboard' ? 'bg-emerald-500/10 text-emerald-400' : 'hover:bg-slate-800 text-slate-400'}`}
+            onClick={navigateToScoreboard}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-slate-950/50 hover:bg-slate-800/50`}
+            style={view === 'scoreboard' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Trophy className="w-5 h-5" />
+            <Trophy className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => setView('teams')}
-            className={`p-2 rounded-lg transition-colors ${view === 'teams' ? 'bg-emerald-500/10 text-emerald-400' : 'hover:bg-slate-800 text-slate-400'}`}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-slate-950/50 hover:bg-slate-800/50`}
+            style={view === 'teams' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Users className="w-5 h-5" />
+            <Users className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => setView('settings')}
-            className={`p-2 rounded-lg transition-colors ${view === 'settings' ? 'bg-emerald-500/10 text-emerald-400' : 'hover:bg-slate-800 text-slate-400'}`}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-slate-950/50 hover:bg-slate-800/50`}
+            style={view === 'settings' ? { backgroundColor: `${player2.color}33` } : {}}
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
         </div>
       </nav>
 
-      <main className="relative z-10 min-h-screen flex flex-col justify-center py-20 px-4 max-w-4xl mx-auto w-full">
+      <main 
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center py-20' : 'justify-start pt-32 pb-24'} px-4 mx-auto w-full transition-all duration-500`}
+        style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
+      >
         <AnimatePresence mode="wait">
           {view === 'scoreboard' && (
             <motion.div
@@ -402,22 +648,22 @@ export default function App() {
             >
               {/* Team Names Display (Vertical, Nudged up to align with scores) */}
               <div 
-                className="fixed inset-y-0 left-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12"
-                style={{ width: 'calc((100vw - 896px) / 2)' }}
+                className="fixed inset-y-0 left-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
+                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
               >
                 <div 
-                  className="text-[32px] sm:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
+                  className="text-[24px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
                   style={{ color: player1.color }}
                 >
                   {team1Name}
                 </div>
               </div>
               <div 
-                className="fixed inset-y-0 right-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12"
-                style={{ width: 'calc((100vw - 896px) / 2)' }}
+                className="fixed inset-y-0 right-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
+                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
               >
                 <div 
-                  className="text-[32px] sm:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
+                  className="text-[24px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
                   style={{ color: player2.color }}
                 >
                   {team2Name}
@@ -426,12 +672,21 @@ export default function App() {
 
               {/* Game Info Header */}
               {(isShotClockEnabled || isMatchClockEnabled) && (
-                <div className="flex items-center justify-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+                <div 
+                  className="flex items-center justify-center bg-slate-900/50 p-4 rounded-2xl border-2 transition-all duration-500"
+                  style={{ 
+                    borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                    borderRadius: '1rem'
+                  }}
+                >
                   <div className="flex items-center gap-8">
                     {isMatchClockEnabled && (
                       <div className="flex flex-col items-center">
                         <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
-                        <div className={`flex items-center gap-2 text-2xl font-mono font-bold ${matchClock <= 60 ? 'text-red-500 animate-pulse' : 'text-slate-100'}`}>
+                        <div 
+                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
+                          style={matchClock > 60 ? { color: player1.color } : {}}
+                        >
                           <Timer className="w-5 h-5" />
                           {formatTime(matchClock)}
                         </div>
@@ -441,7 +696,10 @@ export default function App() {
                     {isShotClockEnabled && (
                       <div className="flex flex-col items-center">
                         <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
-                        <div className={`flex items-center gap-2 text-2xl font-mono font-bold ${shotClock <= 5 ? 'text-red-500 animate-pulse' : 'text-slate-100'}`}>
+                        <div 
+                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
+                          style={shotClock > 5 ? { color: player2.color } : {}}
+                        >
                           <Timer className="w-5 h-5" />
                           {shotClock}s
                         </div>
@@ -451,7 +709,8 @@ export default function App() {
                     <div className="flex gap-2">
                       <button 
                         onClick={isTimerRunning ? pauseTimer : startTimer}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border"
+                        style={{ borderColor: isTimerRunning ? player2.color : player1.color, color: isTimerRunning ? player2.color : player1.color }}
                       >
                         {isTimerRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                       </button>
@@ -460,7 +719,8 @@ export default function App() {
                           resetTimer();
                           if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
                         }}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border border-slate-700"
+                        style={{ color: player1.color }}
                       >
                         <RotateCcw className="w-5 h-5" />
                       </button>
@@ -472,33 +732,23 @@ export default function App() {
               {/* Score Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[player1, player2].map((p, idx) => (
-                  <motion.div
-                    key={p.id}
-                    onClick={() => {
-                      if (!p.isTurn) {
-                        setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
-                        setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
-                        resetTimer();
-                      }
-                    }}
-                    className="relative p-6 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
-                    style={{ 
-                      borderColor: p.color,
-                      backgroundColor: p.bgColor,
-                      boxShadow: `0 0 40px -15px ${p.color}66`
-                    }}
-                  >
-                    {p.isTurn && (
-                      <motion.div 
-                        initial={{ y: -20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        className="absolute top-0 left-1/2 -translate-x-1/2 px-4 py-1 rounded-b-xl text-[10px] font-black uppercase tracking-[0.2em] z-10"
-                        style={{ backgroundColor: p.color, color: p.bgColor }}
-                      >
-                        Active Turn
-                      </motion.div>
-                    )}
-                    <div className="flex flex-col items-center gap-6">
+                    <motion.div
+                      key={p.id}
+                      onClick={() => {
+                        if (!p.isTurn) {
+                          setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
+                          setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
+                          resetTimer();
+                        }
+                      }}
+                      className="relative p-6 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
+                      style={{ 
+                        borderColor: p.color,
+                        backgroundColor: p.bgColor,
+                        boxShadow: `0 0 40px -15px ${p.color}66`
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-6">
                       {isEditingNames ? (
                         <input
                           type="text"
@@ -549,9 +799,9 @@ export default function App() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={finishMatch}
-                  className="flex-1 h-20 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 rounded-2xl flex items-center justify-center gap-3 text-xl font-bold transition-all shadow-xl border border-slate-700 active:scale-95"
+                  className="flex-1 h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                  <CheckCircle2 className="w-6 h-6 text-white" />
                   Finish Match
                 </button>
               </div>
@@ -564,59 +814,98 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
+              className="space-y-12 pb-20"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h2 className="text-3xl font-bold uppercase">Team Setup</h2>
-                <div className="flex items-center gap-3">
+              <div 
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 transition-all duration-500"
+                style={{ 
+                  borderBottom: '2px solid',
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+                }}
+              >
+                <div className="space-y-1">
+                  <h2 className="text-4xl font-black uppercase tracking-tight text-white">Team Setup</h2>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Configure your session players</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
                   <button 
                     onClick={downloadData}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-xl transition-all font-bold text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
+                    style={{ 
+                      borderColor: player2.color,
+                      color: player2.color,
+                      backgroundColor: player2.color + '11'
+                    }}
                   >
-                    <Download className="w-4 h-4" />
-                    Download Data
+                    <Download className="w-4 h-4" style={{ color: player2.color }} />
+                    Export
+                  </button>
+                  <button 
+                    onClick={uploadData}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
+                    style={{ 
+                      borderColor: player2.color,
+                      color: player2.color,
+                      backgroundColor: player2.color + '11'
+                    }}
+                  >
+                    <Upload className="w-4 h-4" style={{ color: player2.color }} />
+                    Import
                   </button>
                   <button 
                     onClick={() => setShowClearTeamsConfirm(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all border-2"
+                    style={{ 
+                      borderColor: player2.color,
+                      color: player2.color,
+                      backgroundColor: player2.color + '11'
+                    }}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Clear All Data
+                    <Trash2 className="w-4 h-4" style={{ color: player2.color }} />
+                    Clear All
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Team 1 Setup */}
-                <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-6">
-                  <div className="space-y-2">
+                <div className="space-y-8">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold uppercase text-slate-500">Team 1 Name</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
                     <input 
                       value={team1Name} 
                       onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-xl font-bold text-slate-100 focus:outline-none focus:border-emerald-500 uppercase" 
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-slate-900 border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ borderColor: player1.color }}
                       placeholder="TEAM 1 NAME"
                     />
                   </div>
                   <div className="space-y-4">
-                    <label className="text-[10px] font-bold uppercase text-slate-500">Team 1 Players (In Order)</label>
-                    <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Players (In Order)</label>
+                    <div className="space-y-3">
                       {team1Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <div className="w-8 h-10 flex items-center justify-center text-xs font-bold text-slate-600 bg-slate-800 rounded-lg">
+                        <div key={idx} className="flex gap-3 group">
+                          <div 
+                            className="w-10 h-12 flex items-center justify-center text-xs font-black bg-slate-900 border-2 rounded-xl"
+                            style={{ borderColor: player1.color + '33', color: player1.color }}
+                          >
                             {idx + 1}
                           </div>
                           <input 
                             value={player}
+                            autoFocus={idx === team1Players.length - 1 && player === ''}
                             onChange={(e) => {
                               const newPlayers = [...team1Players];
                               newPlayers[idx] = e.target.value.toUpperCase();
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                             }}
-                            className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-2 text-slate-100 focus:outline-none focus:border-emerald-500 uppercase"
+                            onFocus={(e) => e.target.select()}
+                            className="flex-1 bg-slate-900/50 border rounded-xl px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                            style={{ borderColor: player1.color + '22' }}
                             placeholder={`PLAYER ${idx + 1}`}
                           />
                           <button 
@@ -624,7 +913,7 @@ export default function App() {
                               const newPlayers = team1Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                             }}
-                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                            className="p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           >
                             <X className="w-5 h-5" />
                           </button>
@@ -632,45 +921,66 @@ export default function App() {
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                        className="w-full py-3 border-2 border-dashed border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl text-slate-500 hover:text-emerald-400 transition-all flex items-center justify-center gap-2 text-sm font-bold"
+                        className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
+                        style={{ 
+                          borderColor: player1.color + '33', 
+                          color: player1.color,
+                          backgroundColor: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = player1.color + '11';
+                          e.currentTarget.style.borderColor = player1.color + '66';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = player1.color + '33';
+                        }}
                       >
                         <Plus className="w-4 h-4" />
-                        Add Player to Team 1
+                        Add Player
                       </button>
                     </div>
                   </div>
                 </div>
 
                 {/* Team 2 Setup */}
-                <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-6">
-                  <div className="space-y-2">
+                <div className="space-y-8">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold uppercase text-slate-500">Team 2 Name</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
                     <input 
                       value={team2Name} 
                       onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-xl font-bold text-slate-100 focus:outline-none focus:border-emerald-500 uppercase" 
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-slate-900 border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ borderColor: player2.color }}
                       placeholder="TEAM 2 NAME"
                     />
                   </div>
                   <div className="space-y-4">
-                    <label className="text-[10px] font-bold uppercase text-slate-500">Team 2 Players (In Order)</label>
-                    <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Players (In Order)</label>
+                    <div className="space-y-3">
                       {team2Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <div className="w-8 h-10 flex items-center justify-center text-xs font-bold text-slate-600 bg-slate-800 rounded-lg">
+                        <div key={idx} className="flex gap-3 group">
+                          <div 
+                            className="w-10 h-12 flex items-center justify-center text-xs font-black bg-slate-900 border-2 rounded-xl"
+                            style={{ borderColor: player2.color + '33', color: player2.color }}
+                          >
                             {idx + 1}
                           </div>
                           <input 
                             value={player}
+                            autoFocus={idx === team2Players.length - 1 && player === ''}
                             onChange={(e) => {
                               const newPlayers = [...team2Players];
                               newPlayers[idx] = e.target.value.toUpperCase();
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                             }}
-                            className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-2 text-slate-100 focus:outline-none focus:border-emerald-500 uppercase"
+                            onFocus={(e) => e.target.select()}
+                            className="flex-1 bg-slate-900/50 border rounded-xl px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                            style={{ borderColor: player2.color + '22' }}
                             placeholder={`PLAYER ${idx + 1}`}
                           />
                           <button 
@@ -678,7 +988,7 @@ export default function App() {
                               const newPlayers = team2Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                             }}
-                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                            className="p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           >
                             <X className="w-5 h-5" />
                           </button>
@@ -686,10 +996,23 @@ export default function App() {
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
-                        className="w-full py-3 border-2 border-dashed border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl text-slate-500 hover:text-emerald-400 transition-all flex items-center justify-center gap-2 text-sm font-bold"
+                        className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
+                        style={{ 
+                          borderColor: player2.color + '33', 
+                          color: player2.color,
+                          backgroundColor: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = player2.color + '11';
+                          e.currentTarget.style.borderColor = player2.color + '66';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = player2.color + '33';
+                        }}
                       >
                         <Plus className="w-4 h-4" />
-                        Add Player to Team 2
+                        Add Player
                       </button>
                     </div>
                   </div>
@@ -697,9 +1020,12 @@ export default function App() {
               </div>
 
               {/* Matchups Table */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Matchups</h3>
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+              <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-white">Matchups</h3>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Session schedule and results</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-800/50 border-b border-slate-800">
@@ -718,66 +1044,104 @@ export default function App() {
                           <td colSpan={7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
                         </tr>
                       ) : (
-                        Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
-                          const p1 = team1Players[idx];
-                          const p2 = team2Players[idx];
-                          const p1Name = p1 || `PLAYER ${idx + 1}`;
-                          const p2Name = p2 || `PLAYER ${idx + 1}`;
-                          const lastMatch = getMatchResult(p1Name, p2Name);
-                          
-                          return (
-                            <tr 
-                              key={idx} 
-                              onClick={() => selectTeamMatch(idx)}
-                              className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
-                            >
-                              <td className="px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                              <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
-                                {p1 || <span className="text-slate-700 italic">EMPTY</span>}
-                              </td>
-                              <td className="px-6 py-4 text-center text-slate-700 font-black">VS</td>
-                              <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
-                                {p2 || <span className="text-slate-700 italic">EMPTY</span>}
-                              </td>
-                              <td className="px-6 py-4">
-                                {lastMatch ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                                      {lastMatch.score1} - {lastMatch.score2}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 font-bold uppercase">{new Date(lastMatch.date).toLocaleDateString('en-GB')}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-slate-600 font-bold uppercase">NO DATA</span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4">
-                                {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
-                                    {lastMatch.matchClockRemaining !== undefined && <span className="text-[9px] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                {lastMatch && (
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      clearMatchResult(p1Name, p2Name);
-                                    }}
-                                    className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                    title="Clear Result"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
+                        <>
+                          {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
+                            const p1 = team1Players[idx];
+                            const p2 = team2Players[idx];
+                            
+                            // Skip if both are empty (don't show "empty vs empty" rows)
+                            if (!p1 && !p2) return null;
+
+                            const p1Name = p1 || `PLAYER ${idx + 1}`;
+                            const p2Name = p2 || `PLAYER ${idx + 1}`;
+                            const lastMatch = getMatchResult(p1Name, p2Name);
+                            
+                            return (
+                              <tr 
+                                key={idx} 
+                                onClick={() => selectTeamMatch(idx)}
+                                className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
+                              >
+                                <td className="px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
+                                <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
+                                  {p1 || <span className="text-slate-700 italic">EMPTY</span>}
+                                </td>
+                                <td className="px-6 py-4 text-center text-slate-700 font-black">VS</td>
+                                <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
+                                  {p2 || <span className="text-slate-700 italic">EMPTY</span>}
+                                </td>
+                                <td className="px-6 py-4">
+                                  {lastMatch ? (
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                                        {lastMatch.score1} - {lastMatch.score2}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 font-bold uppercase">{new Date(lastMatch.date).toLocaleDateString('en-GB')}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-600 font-bold uppercase">NO DATA</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4">
+                                  {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
+                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[9px] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  {lastMatch && (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        clearMatchResult(p1Name, p2Name);
+                                      }}
+                                      className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                      title="Clear Result"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {/* Totals Row */}
+                          <tr className="bg-slate-800/80 border-t-2 border-slate-700 font-black">
+                            <td className="px-6 py-5 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
+                            <td className="px-6 py-5">
+                              <div className="flex flex-col">
+                                <span className="text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
+                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter">{team1Name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5 text-center text-slate-700 font-black">SUM</td>
+                            <td className="px-6 py-5">
+                              <div className="flex flex-col">
+                                <span className="text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
+                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter">{team2Name}</span>
+                              </div>
+                            </td>
+                            <td colSpan={3} className="px-6 py-5 bg-slate-900/50">
+                              <div className="flex items-center justify-end gap-4">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-[10px] text-slate-500 uppercase font-bold">Overall Lead</span>
+                                  <span className="text-sm font-black text-slate-100">
+                                    {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
+                                     teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
+                                     `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
+                                  </span>
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                  <Trophy className="w-5 h-5 text-emerald-400" />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        </>
                       )}
                     </tbody>
                   </table>
@@ -792,86 +1156,146 @@ export default function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="space-y-8"
+              className="space-y-12 pb-20"
             >
-              <h2 className="text-3xl font-bold">Settings</h2>
+              <div 
+                className="space-y-1 pb-8 transition-all duration-500"
+                style={{ 
+                  borderBottom: '2px solid',
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+                }}
+              >
+                <h2 className="text-4xl font-black uppercase tracking-tight text-white">Settings</h2>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Customize your scoring experience</p>
+              </div>
 
-              <div className="space-y-6">
-                <section className="space-y-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Player Customization</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-12">
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                  >
+                    Player Customization
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
                     {[player1, player2].map((p, idx) => (
-                      <div key={p.id} className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+                      <div 
+                        key={p.id} 
+                        className="relative p-8 rounded-[32px] border-2 space-y-6 shadow-xl transition-all duration-500"
+                        style={{ 
+                          backgroundColor: p.bgColor,
+                          borderColor: p.color,
+                          boxShadow: `0 20px 50px -20px ${p.color}33`,
+                          '--player-color': p.color 
+                        } as React.CSSProperties}
+                      >
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold uppercase text-slate-500">Player {idx + 1} Name</label>
-                          <Palette className="w-4 h-4 text-slate-600" />
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Player {idx + 1} Name</label>
+                          <Palette className="w-4 h-4" style={{ color: p.color }} />
                         </div>
                         <input
                           type="text"
                           value={p.name}
                           onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-xl font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                          className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all"
+                          style={{ 
+                            borderColor: 'transparent',
+                            outline: 'none',
+                            boxShadow: 'none'
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = p.color;
+                            e.target.style.boxShadow = `0 0 0 2px ${p.color}33`;
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = 'transparent';
+                            e.target.style.boxShadow = 'none';
+                          }}
                         />
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                           <ColorPicker
-                            label="Theme Color"
+                            label="Text & Border"
                             value={p.color}
                             onChange={(color) => idx === 0 ? setPlayer1({...p, color}) : setPlayer2({...p, color})}
                             colors={THEME_COLORS}
                             icon={<Palette className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-theme`}
                             onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-theme` : null)}
+                            themeColor={p.color}
                           />
 
                           <ColorPicker
-                            label="Background Color"
+                            label="Card Background"
                             value={p.bgColor}
                             onChange={(color) => idx === 0 ? setPlayer1({...p, bgColor: color}) : setPlayer2({...p, bgColor: color})}
                             colors={BACKGROUND_COLORS}
                             icon={<Layout className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-bg`}
                             onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-bg` : null)}
+                            themeColor={p.color}
                           />
 
-                          <ColorPicker
-                            label="Screen Background"
-                            value={p.screenColor}
-                            onChange={(color) => idx === 0 ? setPlayer1({...p, screenColor: color}) : setPlayer2({...p, screenColor: color})}
-                            colors={BACKGROUND_COLORS}
-                            icon={<Maximize className="w-4 h-4" />}
-                            isOpen={activePicker === `p${idx + 1}-screen`}
-                            onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-screen` : null)}
-                          />
+                          <div className="relative">
+                            <ColorPicker
+                              label="Screen Background"
+                              value={p.screenColor}
+                              onChange={(color) => idx === 0 ? setPlayer1({...p, screenColor: color}) : setPlayer2({...p, screenColor: color})}
+                              colors={BACKGROUND_COLORS}
+                              icon={<Maximize className="w-4 h-4" />}
+                              isOpen={activePicker === `p${idx + 1}-screen`}
+                              onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-screen` : null)}
+                              themeColor={p.color}
+                            />
+                            {/* Screen Color Indicator Circle - 3rem (w-12 h-12) */}
+                            <div 
+                              className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-4 ${idx === 0 ? 'left-0' : 'right-0'}`}
+                              style={{ 
+                                backgroundColor: p.screenColor,
+                                borderColor: p.color,
+                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * ((100vw - var(--gameplay-width)) / 4 + 4.5rem)))' : 'translateX(calc((100vw - var(--gameplay-width)) / 4 + 4.5rem))'}`,
+                              } as any}
+                              title="Screen Background Color"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Master Match Clock</h3>
-                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-6">
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                  >
+                    Master Match Clock
+                  </h3>
+                  <div 
+                    className="bg-slate-900/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    style={{ borderColor: `${player1.color}33` }}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="font-bold text-slate-200">Enable Match Clock</p>
-                        <p className="text-xs text-slate-500">A master countdown for the entire match.</p>
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Match Clock</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">A master countdown for the entire match.</p>
                       </div>
                       <button 
                         onClick={() => {
                           setIsMatchClockEnabled(!isMatchClockEnabled);
                           if (isMatchClockEnabled) pauseTimer();
                         }}
-                        className={`w-12 h-6 rounded-full transition-colors relative ${isMatchClockEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                        className={`w-14 h-7 rounded-full transition-colors relative`}
+                        style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
                       >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-7' : 'left-1'}`} />
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-8' : 'left-1'}`} />
                       </button>
                     </div>
 
                     {isMatchClockEnabled && (
-                      <div className="space-y-4 pt-4 border-t border-slate-800">
+                      <div className="space-y-6 pt-8 border-t border-slate-800">
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-bold text-slate-400">Match Duration (minutes)</label>
-                          <span className="text-xl font-mono font-bold text-emerald-400">{Math.floor(matchClockDuration / 60)}m</span>
+                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Match Duration</label>
+                          <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
                         </div>
                         <input 
                           type="range" 
@@ -884,18 +1308,19 @@ export default function App() {
                             setMatchClockDuration(val);
                             setMatchClock(val);
                           }}
-                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                          style={{ accentColor: player1.color }}
                         />
-                        <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
                           <span>5m</span>
                           <span>30m</span>
                           <span>60m</span>
                         </div>
                         <button 
                           onClick={resetMatchClock}
-                          className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                          className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                         >
-                          <RotateCcw className="w-3 h-3" />
+                          <RotateCcw className="w-4 h-4" />
                           Reset Match Clock
                         </button>
                       </div>
@@ -903,30 +1328,39 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Shot Clock Settings</h3>
-                  <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-6">
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player2.color }}
+                  >
+                    Shot Clock Settings
+                  </h3>
+                  <div 
+                    className="bg-slate-900/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    style={{ borderColor: `${player2.color}33` }}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="font-bold text-slate-200">Enable Shot Clock</p>
-                        <p className="text-xs text-slate-500">Toggle the visibility and timer on the scoreboard.</p>
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Shot Clock</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Toggle the visibility and timer on the scoreboard.</p>
                       </div>
                       <button 
                         onClick={() => {
                           setIsShotClockEnabled(!isShotClockEnabled);
                           if (isShotClockEnabled) pauseTimer();
                         }}
-                        className={`w-12 h-6 rounded-full transition-colors relative ${isShotClockEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                        className={`w-14 h-7 rounded-full transition-colors relative`}
+                        style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
                       >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-7' : 'left-1'}`} />
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-8' : 'left-1'}`} />
                       </button>
                     </div>
 
                     {isShotClockEnabled && (
-                      <div className="space-y-4 pt-4 border-t border-slate-800">
+                      <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-bold text-slate-400">Timer Duration (seconds)</label>
-                          <span className="text-xl font-mono font-bold text-emerald-400">{shotClockDuration}s</span>
+                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Timer Duration</label>
+                          <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
                         </div>
                         <input 
                           type="range" 
@@ -939,9 +1373,10 @@ export default function App() {
                             setShotClockDuration(val);
                             setShotClock(val);
                           }}
-                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                          style={{ accentColor: player2.color }}
                         />
-                        <div className="flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
                           <span>10s</span>
                           <span>60s</span>
                           <span>120s</span>
@@ -951,13 +1386,21 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Danger Zone</h3>
-                  <div className="space-y-4">
-                    <div className="bg-slate-900 border border-red-900/30 rounded-2xl p-6 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-slate-200">Reset Current Game</p>
-                        <p className="text-xs text-slate-500">Resets scores without saving to history.</p>
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: '#ef4444' }}
+                  >
+                    Danger Zone
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div 
+                      className="bg-slate-900/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
+                      style={{ borderColor: `${player1.color}33` }}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Game</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets scores without saving.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -966,20 +1409,23 @@ export default function App() {
                           resetTimer();
                           setView('scoreboard');
                         }}
-                        className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded-xl font-bold transition-all"
+                        className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
                       >
                         Reset Now
                       </button>
                     </div>
 
-                    <div className="bg-slate-900 border border-red-900/30 rounded-2xl p-6 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-slate-200">Clear Match History</p>
-                        <p className="text-xs text-slate-500">Permanently deletes all recorded match history.</p>
+                    <div 
+                      className="bg-slate-900/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
+                      style={{ borderColor: `${player2.color}33` }}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Clear History</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Permanently delete all results.</p>
                       </div>
                       <button 
                         onClick={() => setShowClearHistoryConfirm(true)}
-                        className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded-xl font-bold transition-all"
+                        className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
                       >
                         Clear History
                       </button>
@@ -987,15 +1433,18 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-                    <div className="flex items-center justify-between text-sm">
+                <section className="pt-12">
+                  <div 
+                    className="bg-slate-900/80 backdrop-blur-md border-2 rounded-3xl p-8 space-y-4 shadow-xl"
+                    style={{ borderColor: `${player1.color}33` }}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Version</span>
-                      <span className="font-mono text-slate-300">1.0.0-pro</span>
+                      <span className="font-mono" style={{ color: player1.color }}>1.0.0-pro</span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Developer</span>
-                      <span className="font-mono text-slate-300">Stealthton</span>
+                      <span className="font-mono" style={{ color: player2.color }}>Stealthton</span>
                     </div>
                   </div>
                 </section>
@@ -1012,7 +1461,8 @@ export default function App() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                className="bg-slate-900 border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
               >
                 <div className="flex items-center gap-4 text-red-500">
                   <Trash2 className="w-8 h-8" />
@@ -1042,7 +1492,8 @@ export default function App() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                className="bg-slate-900 border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
               >
                 <div className="flex items-center gap-4 text-red-500">
                   <Trash2 className="w-8 h-8" />
@@ -1075,12 +1526,16 @@ export default function App() {
                 initial={{ scale: 0.8, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.8, opacity: 0, y: 20 }}
-                className="bg-slate-900 border-2 border-emerald-500/30 p-10 rounded-[40px] max-w-2xl w-full shadow-[0_0_50px_rgba(16,185,129,0.1)] space-y-10 text-center"
+                className="bg-slate-900 border-2 p-10 rounded-[40px] max-w-2xl w-full space-y-10 text-center"
+                style={{ 
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                  boxShadow: `0 0 50px ${player1.color}11`
+                }}
               >
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <div className="bg-emerald-500/10 p-4 rounded-full">
-                      <Trophy className="w-12 h-12 text-emerald-400" />
+                    <div className="p-4 rounded-full" style={{ backgroundColor: `${player1.color}11` }}>
+                      <Trophy className="w-12 h-12" style={{ color: player1.color }} />
                     </div>
                   </div>
                   <h2 className="text-5xl font-black uppercase tracking-tighter text-white">Team Totals</h2>
@@ -1089,26 +1544,29 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-8 items-center">
                   <div className="space-y-4">
-                    <p className="text-xl font-black text-slate-400 uppercase tracking-tight truncate">{team1Name}</p>
+                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player1.color }}>{team1Name}</p>
                     <p className="text-8xl font-black text-white tabular-nums">
-                      {matchHistory
-                        .filter(m => m.team1 === team1Name && m.team2 === team2Name)
-                        .reduce((acc, m) => acc + m.score1, 0)}
+                      {teamTotals.t1}
                     </p>
                   </div>
                   <div className="space-y-4">
-                    <p className="text-xl font-black text-slate-400 uppercase tracking-tight truncate">{team2Name}</p>
+                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player2.color }}>{team2Name}</p>
                     <p className="text-8xl font-black text-white tabular-nums">
-                      {matchHistory
-                        .filter(m => m.team1 === team1Name && m.team2 === team2Name)
-                        .reduce((acc, m) => acc + m.score2, 0)}
+                      {teamTotals.t2}
                     </p>
                   </div>
                 </div>
 
                 <button 
-                  onClick={() => setShowTeamTotals(false)}
-                  className="w-full h-20 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                  onClick={() => {
+                    setShowTeamTotals(false);
+                    setView('teams');
+                  }}
+                  className="w-full h-20 text-slate-950 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all active:scale-95"
+                  style={{ 
+                    backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                    boxShadow: `0 10px 20px ${player1.color}33`
+                  }}
                 >
                   Close Results
                 </button>
@@ -1119,22 +1577,28 @@ export default function App() {
       </main>
 
       {/* Quick Actions Floating Bar (Mobile) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border border-slate-800 p-2 rounded-2xl shadow-2xl md:hidden z-50">
+      <div 
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50"
+        style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+      >
         <button 
-          onClick={() => setView('scoreboard')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}
+          onClick={navigateToScoreboard}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
+          style={view === 'scoreboard' ? { backgroundColor: player1.color } : {}}
         >
           Score
         </button>
         <button 
           onClick={() => setView('teams')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
+          style={view === 'teams' ? { backgroundColor: player1.color } : {}}
         >
           Teams
         </button>
         <button 
           onClick={() => setView('settings')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
+          style={view === 'settings' ? { backgroundColor: player2.color } : {}}
         >
           Settings
         </button>

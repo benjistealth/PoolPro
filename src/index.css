@@ -6,6 +6,22 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+:root {
+  --gameplay-width: 717px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gameplay-width: 806px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --gameplay-width: 1075px;
+  }
+}
+
 @layer base {
   html, body {
     @apply text-slate-100 antialiased;
@@ -28,4 +44,5 @@
 
 .vertical-text {
   writing-mode: vertical-rl;
+  white-space: nowrap;
 }
