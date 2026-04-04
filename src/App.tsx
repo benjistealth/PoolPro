@@ -101,23 +101,28 @@ export default function App() {
 
   // --- Initialization ---
   useEffect(() => {
-    const savedHistory = localStorage.getItem('pool_match_history');
-    if (savedHistory) {
-      setMatchHistory(JSON.parse(savedHistory));
+    try {
+      const savedHistory = localStorage.getItem('pool_match_history');
+      if (savedHistory) {
+        setMatchHistory(JSON.parse(savedHistory));
+      }
+      const savedTeam1Name = localStorage.getItem('pool_team1_name');
+      const savedTeam2Name = localStorage.getItem('pool_team2_name');
+      const savedTeam1Players = localStorage.getItem('pool_team1_players');
+      const savedTeam2Players = localStorage.getItem('pool_team2_players');
+      const savedPlayer1 = localStorage.getItem('pool_player1_settings');
+      const savedPlayer2 = localStorage.getItem('pool_player2_settings');
+      
+      if (savedTeam1Name) setTeam1Name(savedTeam1Name);
+      if (savedTeam2Name) setTeam2Name(savedTeam2Name);
+      if (savedTeam1Players) setTeam1Players(JSON.parse(savedTeam1Players));
+      if (savedTeam2Players) setTeam2Players(JSON.parse(savedTeam2Players));
+      if (savedPlayer1) setPlayer1(JSON.parse(savedPlayer1));
+      if (savedPlayer2) setPlayer2(JSON.parse(savedPlayer2));
+    } catch (error) {
+      console.error('Failed to load data from localStorage:', error);
+      // Fallback to defaults is already handled by initial state
     }
-    const savedTeam1Name = localStorage.getItem('pool_team1_name');
-    const savedTeam2Name = localStorage.getItem('pool_team2_name');
-    const savedTeam1Players = localStorage.getItem('pool_team1_players');
-    const savedTeam2Players = localStorage.getItem('pool_team2_players');
-    const savedPlayer1 = localStorage.getItem('pool_player1_settings');
-    const savedPlayer2 = localStorage.getItem('pool_player2_settings');
-    
-    if (savedTeam1Name) setTeam1Name(savedTeam1Name);
-    if (savedTeam2Name) setTeam2Name(savedTeam2Name);
-    if (savedTeam1Players) setTeam1Players(JSON.parse(savedTeam1Players));
-    if (savedTeam2Players) setTeam2Players(JSON.parse(savedTeam2Players));
-    if (savedPlayer1) setPlayer1(JSON.parse(savedPlayer1));
-    if (savedPlayer2) setPlayer2(JSON.parse(savedPlayer2));
   }, []);
 
   // --- Persistence ---
@@ -634,7 +639,7 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center py-10 sm:py-20' : 'justify-start pt-32 pb-24'} px-2 sm:px-4 mx-auto w-full transition-all duration-500`}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center' : 'justify-start pt-32 pb-24'} px-2 sm:px-4 mx-auto w-full transition-all duration-500`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
       >
         <AnimatePresence mode="wait">
@@ -644,164 +649,168 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
+              className="relative py-2 sm:py-8 flex flex-col gap-2 sm:gap-8 min-h-screen sm:min-h-0"
             >
-              {/* Team Names Display (Vertical, Nudged up to align with scores) */}
-              <div 
-                className="fixed inset-y-0 left-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
-                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
-              >
-                <div 
-                  className="text-[18px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
-                  style={{ color: player1.color }}
-                >
-                  {team1Name}
-                </div>
-              </div>
-              <div 
-                className="fixed inset-y-0 right-0 flex items-center justify-center pointer-events-none z-0 -translate-y-12 overflow-hidden"
-                style={{ width: 'calc((100vw - var(--gameplay-width)) / 2)' }}
-              >
-                <div 
-                  className="text-[18px] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
-                  style={{ color: player2.color }}
-                >
-                  {team2Name}
-                </div>
-              </div>
-
               {/* Game Info Header */}
-              {(isShotClockEnabled || isMatchClockEnabled) && (
-                <div 
-                  className="flex items-center justify-center bg-slate-900/50 p-4 rounded-2xl border-2 transition-all duration-500"
-                  style={{ 
-                    borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                    borderRadius: '1rem'
-                  }}
-                >
-                  <div className="flex items-center gap-8">
-                    {isMatchClockEnabled && (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
-                        <div 
-                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
-                          style={matchClock > 60 ? { color: player1.color } : {}}
-                        >
-                          <Timer className="w-5 h-5" />
-                          {formatTime(matchClock)}
+              <div className="flex items-center justify-center shrink-0">
+                {(isShotClockEnabled || isMatchClockEnabled) && (
+                  <div 
+                    className="flex items-center justify-center bg-slate-900/50 p-1 sm:p-4 rounded-2xl border-2 transition-all duration-500 w-full max-w-md"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                      borderRadius: '1rem'
+                    }}
+                  >
+                    <div className="flex items-center gap-4 sm:gap-8">
+                      {isMatchClockEnabled && (
+                        <div className="flex flex-col items-center">
+                          <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
+                          <div 
+                            className={`flex items-center gap-2 text-lg sm:text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
+                            style={matchClock > 60 ? { color: player1.color } : {}}
+                          >
+                            <Timer className="w-4 h-4 sm:w-5 sm:h-5" />
+                            {formatTime(matchClock)}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    
-                    {isShotClockEnabled && (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
-                        <div 
-                          className={`flex items-center gap-2 text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
-                          style={shotClock > 5 ? { color: player2.color } : {}}
-                        >
-                          <Timer className="w-5 h-5" />
-                          {shotClock}s
+                      )}
+                      
+                      {isShotClockEnabled && (
+                        <div className="flex flex-col items-center">
+                          <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
+                          <div 
+                            className={`flex items-center gap-2 text-lg sm:text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
+                            style={shotClock > 5 ? { color: player2.color } : {}}
+                          >
+                            <Timer className="w-4 h-4 sm:w-5 sm:h-5" />
+                            {shotClock}s
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={isTimerRunning ? pauseTimer : startTimer}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border"
-                        style={{ borderColor: isTimerRunning ? player2.color : player1.color, color: isTimerRunning ? player2.color : player1.color }}
-                      >
-                        {isTimerRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          resetTimer();
-                          if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
-                        }}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border border-slate-700"
-                        style={{ color: player1.color }}
-                      >
-                        <RotateCcw className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Score Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[player1, player2].map((p, idx) => (
-                    <motion.div
-                      key={p.id}
-                      onClick={() => {
-                        if (!p.isTurn) {
-                          setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
-                          setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
-                          resetTimer();
-                        }
-                      }}
-                      className="relative p-6 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl"
-                      style={{ 
-                        borderColor: p.color,
-                        backgroundColor: p.bgColor,
-                        boxShadow: `0 0 40px -15px ${p.color}66`
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-6">
-                      {isEditingNames ? (
-                        <input
-                          type="text"
-                          value={p.name}
-                          onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[1.5rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
-                          style={{ color: p.color }}
-                        />
-                      ) : (
-                        <h2 className="text-[1.2rem] sm:text-[1.8rem] font-bold uppercase" style={{ color: p.color }}>
-                          {p.name}
-                        </h2>
                       )}
 
-                      <div className="relative group">
-                        <span className="text-5xl sm:text-9xl font-black tracking-tighter tabular-nums" style={{ color: p.color }}>
-                          {p.score}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-4 w-full">
-                        <button
-                          onClick={() => decrementScore(p.id)}
-                          className="flex-1 h-12 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={isTimerRunning ? pauseTimer : startTimer}
+                          className="p-1 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border"
+                          style={{ borderColor: isTimerRunning ? player2.color : player1.color, color: isTimerRunning ? player2.color : player1.color }}
                         >
-                          <Minus className="w-6 h-6" />
+                          {isTimerRunning ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            incrementScore(p.id);
+                        <button 
+                          onClick={() => {
+                            resetTimer();
+                            if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
                           }}
-                          className="flex-[2] h-12 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
-                          style={{ 
-                            backgroundColor: p.color,
-                            boxShadow: `0 10px 15px -3px ${p.color}33`
-                          }}
+                          className="p-1 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border border-slate-700"
+                          style={{ color: player1.color }}
                         >
-                          <Plus className="w-8 h-8 font-bold" />
+                          <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                       </div>
                     </div>
-                  </motion.div>
-                ))}
+                  </div>
+                )}
               </div>
 
-              {/* Finish Match */}
-              <div className="flex flex-col sm:flex-row gap-4">
+              {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
+              <div className="relative flex-1 flex items-center justify-center">
+                {/* Team Names Display (Absolute to the card grid area) */}
+                <div 
+                  className="absolute inset-y-0 -left-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                  style={{ width: 'var(--sidebar-width)' }}
+                >
+                  <div 
+                    className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
+                    style={{ color: player1.color }}
+                  >
+                    {team1Name}
+                  </div>
+                </div>
+                <div 
+                  className="absolute inset-y-0 -right-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                  style={{ width: 'var(--sidebar-width)' }}
+                >
+                  <div 
+                    className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
+                    style={{ color: player2.color }}
+                  >
+                    {team2Name}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6 w-full">
+                  {[player1, player2].map((p, idx) => (
+                      <motion.div
+                        key={p.id}
+                        onClick={() => {
+                          if (!p.isTurn) {
+                            setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
+                            setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
+                            resetTimer();
+                          }
+                        }}
+                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center"
+                        style={{ 
+                          borderColor: p.color,
+                          backgroundColor: p.bgColor,
+                          boxShadow: `0 0 40px -15px ${p.color}66`
+                        }}
+                      >
+                        <div className="flex flex-col items-center gap-1 sm:gap-6">
+                        {isEditingNames ? (
+                          <input
+                            type="text"
+                            value={p.name}
+                            onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.5rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                            style={{ color: p.color }}
+                          />
+                        ) : (
+                          <h2 className="text-[min(4vw,1rem)] sm:text-[1.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
+                            {p.name}
+                          </h2>
+                        )}
+
+                        <div className="relative group">
+                          <span className="text-[min(20vw,64px)] sm:text-9xl font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
+                            {p.score}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
+                          <button
+                            onClick={() => decrementScore(p.id)}
+                            className="flex-1 h-8 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                          >
+                            <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              incrementScore(p.id);
+                            }}
+                            className="flex-[2] h-8 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                            style={{ 
+                              backgroundColor: p.color,
+                              boxShadow: `0 10px 15px -3px ${p.color}33`
+                            }}
+                          >
+                            <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Finish Match Footer */}
+              <div className="flex items-center justify-center shrink-0">
                 <button
                   onClick={finishMatch}
-                  className="flex-1 h-16 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="w-full max-w-md h-10 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
-                  <CheckCircle2 className="w-6 h-6 text-white" />
+                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   Finish Match
                 </button>
               </div>
