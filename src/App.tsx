@@ -639,10 +639,11 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-start pt-12 sm:pt-16' : 'justify-start pt-20 pb-24'} px-2 sm:px-4 mx-auto w-full responsive-zoom
-          ${(view === 'settings' || view === 'teams') ? 'sm:scale-[0.9] lg:scale-100' : ''}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-start sm:justify-center pt-12 sm:pt-0' : 'justify-start pt-20 pb-24'} px-2 sm:px-4 mx-auto w-full responsive-zoom
+          ${view === 'scoreboard' ? 'sm:scale-[1.2]' : ''}
+          ${(view === 'settings' || view === 'teams') ? 'scale-x-[1.1] lg:scale-100' : ''}
         `}
-        style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
+        style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '985px' }}
       >
         <AnimatePresence mode="wait">
           {view === 'scoreboard' && (
@@ -716,9 +717,9 @@ export default function App() {
 
               {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
               <div className="relative flex-initial sm:flex-1 flex items-center justify-center w-full">
-                {/* Team Names Display (Absolute to the card grid area) */}
+                {/* Team Names Display (Absolute to the card grid area) - Hidden on mobile portrait */}
                 <div 
-                  className="absolute inset-y-0 -left-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                  className="absolute inset-y-0 -left-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
                   style={{ width: 'var(--sidebar-width)' }}
                 >
                   <div 
@@ -729,7 +730,7 @@ export default function App() {
                   </div>
                 </div>
                 <div 
-                  className="absolute inset-y-0 -right-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
+                  className="absolute inset-y-0 -right-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
                   style={{ width: 'var(--sidebar-width)' }}
                 >
                   <div 
@@ -740,24 +741,31 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-6 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full">
                   {[player1, player2].map((p, idx) => (
-                      <motion.div
-                        key={p.id}
-                        onClick={() => {
-                          if (!p.isTurn) {
-                            setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
-                            setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
-                            resetTimer();
-                          }
-                        }}
-                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[100px] max-h-[22vh] sm:min-h-0 sm:max-h-none"
-                        style={{ 
-                          borderColor: p.color,
-                          backgroundColor: p.bgColor,
-                          boxShadow: `0 0 40px -15px ${p.color}66`
-                        }}
-                      >
+                      <div key={p.id} className="flex flex-col gap-1">
+                        {/* Mobile Portrait Team Name Header */}
+                        <div className="sm:hidden flex items-center justify-center py-1 bg-slate-900/50 rounded-t-xl border-x-2 border-t-2" style={{ borderColor: p.color }}>
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: p.color }}>
+                            {idx === 0 ? team1Name : team2Name}
+                          </span>
+                        </div>
+                        
+                        <motion.div
+                          onClick={() => {
+                            if (!p.isTurn) {
+                              setPlayer1(prev => ({ ...prev, isTurn: p.id === '1' }));
+                              setPlayer2(prev => ({ ...prev, isTurn: p.id === '2' }));
+                              resetTimer();
+                            }
+                          }}
+                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[100px] max-h-[45vh] sm:min-h-0 sm:max-h-none`}
+                          style={{ 
+                            borderColor: p.color,
+                            backgroundColor: p.bgColor,
+                            boxShadow: `0 0 40px -15px ${p.color}66`
+                          }}
+                        >
                         <div className="flex flex-col items-center gap-0 sm:gap-6">
                         {isEditingNames ? (
                           <input
@@ -802,9 +810,10 @@ export default function App() {
                         </div>
                       </div>
                     </motion.div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
+            </div>
 
               {/* Finish Match Footer */}
               <div className="flex items-center justify-center shrink-0">

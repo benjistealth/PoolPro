@@ -40,39 +40,39 @@
   /* Mobile Portrait */
   @media (max-width: 639px) and (orientation: portrait) {
     .responsive-zoom {
-      @apply scale-[0.95];
+      @apply scale-[1.0];
     }
     .nav-zoom {
-      @apply scale-[0.95] origin-top-left w-[105%];
+      @apply scale-[1.0] origin-top-left w-full;
     }
     .bar-zoom {
-      @apply scale-[0.95] origin-bottom;
+      @apply scale-[1.0] origin-bottom;
     }
   }
 
   /* Mobile Landscape */
   @media (max-width: 950px) and (orientation: landscape) {
     .responsive-zoom {
-      @apply scale-[0.65];
+      @apply scale-x-[0.95] scale-y-[0.7];
     }
     .nav-zoom {
-      @apply scale-[0.65] origin-top-left w-[154%];
+      @apply scale-x-[0.95] scale-y-[0.7] origin-top-left w-[105%];
     }
     .bar-zoom {
-      @apply scale-[0.65] origin-bottom;
+      @apply scale-x-[0.95] scale-y-[0.7] origin-bottom;
     }
   }
 
   /* Tablet Landscape */
   @media (min-width: 951px) and (max-width: 1180px) and (orientation: landscape) {
     .responsive-zoom {
-      @apply scale-[0.8];
+      @apply scale-x-[1.1] scale-y-[0.85];
     }
     .nav-zoom {
-      @apply scale-[0.8] origin-top-left w-[125%];
+      @apply scale-x-[1.1] scale-y-[0.85] origin-top-left w-[91%];
     }
     .bar-zoom {
-      @apply scale-[0.8] origin-bottom;
+      @apply scale-x-[1.1] scale-y-[0.85] origin-bottom;
     }
   }
 }
