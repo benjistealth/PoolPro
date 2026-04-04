@@ -9,14 +9,14 @@
 :root {
   --sidebar-width: 48px;
   --gameplay-width: calc(100vw - 96px);
-  --circle-offset: calc(100% + 1px);
+  --circle-offset: calc(100% + 1rem);
 }
 
 @media (min-width: 640px) {
   :root {
     --sidebar-width: 80px;
     --gameplay-width: calc(100vw - 160px);
-    --circle-offset: calc(100% + 1px);
+    --circle-offset: calc(100% + 1rem);
   }
 }
 
@@ -51,6 +51,9 @@
     .bar-zoom {
       @apply origin-bottom;
     }
+    .gameplay-card {
+      height: 38vh !important;
+    }
   }
 
   /* Mobile Landscape */
@@ -63,6 +66,10 @@
     }
     .bar-zoom {
       @apply origin-bottom;
+    }
+    .gameplay-card {
+      height: 28vh !important;
+      min-height: 120px !important;
     }
   }
 

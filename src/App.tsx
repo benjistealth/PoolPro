@@ -756,7 +756,7 @@ export default function App() {
                               resetTimer();
                             }
                           }}
-                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[80px] max-h-[22vh] sm:min-h-0 sm:max-h-none`}
+                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card sm:min-h-0 sm:max-h-none`}
                           style={{ 
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
