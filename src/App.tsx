@@ -847,63 +847,89 @@ export default function App() {
                             boxShadow: `0 0 40px -15px ${p.color}66`
                           }}
                         >
-                        <div className="flex flex-col items-center gap-0 sm:gap-6">
-                        {isEditingNames ? (
-                          <input
-                            type="text"
-                            value={p.name}
-                            onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
-                            style={{ color: p.color }}
-                          />
-                        ) : (
-                          <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[2.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
-                            {p.name}
-                          </h2>
-                        )}
-
-                        <div className="relative group">
-                          <span className="text-[min(16vw,48px)] sm:text-[10rem] lg:text-[12rem] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
-                            {p.score}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
-                          <button
-                            onClick={() => decrementScore(p.id)}
-                            className="flex-1 h-8 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
-                          >
-                            <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
+                          {/* Mobile Score Buttons - Absolute Positioned */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               incrementScore(p.id);
                             }}
-                            className="flex-[2] h-8 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                            className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
                             style={{ 
                               backgroundColor: p.color,
-                              boxShadow: `0 10px 15px -3px ${p.color}33`
+                              boxShadow: `0 4px 10px -2px ${p.color}66`
                             }}
                           >
-                            <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
+                            <Plus className="w-6 h-6 font-bold" />
                           </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              decrementScore(p.id);
+                            }}
+                            className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
+                          >
+                            <Minus className="w-5 h-5" />
+                          </button>
+
+                          <div className="flex flex-col items-center gap-0 sm:gap-6">
+                          {isEditingNames ? (
+                            <input
+                              type="text"
+                              value={p.name}
+                              onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                              style={{ color: p.color }}
+                            />
+                          ) : (
+                            <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[2.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
+                              {p.name}
+                            </h2>
+                          )}
+
+                          <div className="relative group">
+                            <span className="text-[min(16vw,48px)] sm:text-[10rem] lg:text-[12rem] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
+                              {p.score}
+                            </span>
+                          </div>
+
+                          {/* Desktop Score Buttons */}
+                          <div className="hidden sm:flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
+                            <button
+                              onClick={() => decrementScore(p.id)}
+                              className="flex-1 h-8 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                            >
+                              <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                incrementScore(p.id);
+                              }}
+                              className="flex-[2] h-8 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                              style={{ 
+                                backgroundColor: p.color,
+                                boxShadow: `0 10px 15px -3px ${p.color}33`
+                              }}
+                            >
+                              <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
+                      </motion.div>
                   </div>
                 ))}
               </div>
             </div>
 
               {/* Finish Match Footer */}
-              <div className="fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto flex items-center justify-center shrink-0 z-50 pb-[2px] sm:pb-0">
+              <div className="fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto flex items-center justify-center shrink-0 z-50 pb-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full sm:max-w-md h-auto py-[2px] sm:h-20 bg-black/90 hover:bg-black backdrop-blur-md rounded-none sm:rounded-2xl flex items-center justify-center gap-1 sm:gap-3 text-[11px] sm:text-xl font-bold transition-all shadow-xl border-t sm:border-2 active:scale-95"
+                  className="w-full sm:max-w-md h-8 sm:h-20 bg-black/90 hover:bg-black backdrop-blur-md rounded-none sm:rounded-2xl flex items-center justify-center gap-1 sm:gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-t sm:border-2 active:scale-95"
                   style={{ borderColor: player1.color }}
                 >
-                  <CheckCircle2 className="w-3 h-3 sm:w-6 sm:h-6 text-white" />
+                  <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                   <span className="leading-none uppercase tracking-wider">Finish Match</span>
                 </button>
               </div>
