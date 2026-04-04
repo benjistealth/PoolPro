@@ -580,7 +580,7 @@ export default function App() {
 
       {/* Navigation Bar */}
       <nav 
-        className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-between px-6 scale-[0.65] sm:scale-100 origin-top-left w-[154%] sm:w-full"
+        className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
@@ -639,9 +639,7 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-start pt-16 origin-top' : 'justify-start pt-20 pb-24 origin-top'} px-2 sm:px-4 mx-auto w-full transition-all duration-500
-          ${view === 'scoreboard' ? 'scale-[0.65]' : 'scale-[0.6]'}
-          sm:scale-100
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-start pt-12 sm:pt-16' : 'justify-start pt-20 pb-24'} px-2 sm:px-4 mx-auto w-full responsive-zoom
           ${(view === 'settings' || view === 'teams') ? 'sm:scale-[0.9] lg:scale-100' : ''}
         `}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
@@ -1591,7 +1589,7 @@ export default function App() {
 
       {/* Quick Actions Floating Bar (Mobile) */}
       <div 
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 scale-[0.65] sm:scale-100 origin-bottom"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 bar-zoom"
         style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
       >
         <button 
