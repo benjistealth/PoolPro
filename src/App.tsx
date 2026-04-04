@@ -652,7 +652,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="relative py-2 sm:py-8 flex flex-col gap-2 sm:gap-8 min-h-screen sm:min-h-0"
+              className="relative py-2 sm:py-8 flex flex-col gap-1 sm:gap-8 h-full sm:min-h-0"
             >
               {/* Game Info Header */}
               <div className="flex items-center justify-center shrink-0">
@@ -741,7 +741,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-6 w-full">
                   {[player1, player2].map((p, idx) => (
                       <motion.div
                         key={p.id}
@@ -752,14 +752,14 @@ export default function App() {
                             resetTimer();
                           }
                         }}
-                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[160px] max-h-[35vh] sm:min-h-0 sm:max-h-none"
+                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[140px] max-h-[30vh] sm:min-h-0 sm:max-h-none"
                         style={{ 
                           borderColor: p.color,
                           backgroundColor: p.bgColor,
                           boxShadow: `0 0 40px -15px ${p.color}66`
                         }}
                       >
-                        <div className="flex flex-col items-center gap-1 sm:gap-6">
+                        <div className="flex flex-col items-center gap-0 sm:gap-6">
                         {isEditingNames ? (
                           <input
                             type="text"
