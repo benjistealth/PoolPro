@@ -639,7 +639,7 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-start sm:justify-center pt-12 sm:pt-0' : 'justify-start pt-20 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center pt-4 sm:pt-0' : 'justify-start pt-20 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
       >
         <AnimatePresence mode="wait">
@@ -756,7 +756,7 @@ export default function App() {
                               resetTimer();
                             }
                           }}
-                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[100px] max-h-[45vh] sm:min-h-0 sm:max-h-none`}
+                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[80px] max-h-[22vh] sm:min-h-0 sm:max-h-none`}
                           style={{ 
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
@@ -816,7 +816,8 @@ export default function App() {
               <div className="flex items-center justify-center shrink-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full max-w-md h-12 sm:h-20 bg-black/80 hover:bg-black/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="w-full max-w-md h-12 sm:h-20 bg-black/80 hover:bg-black/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 active:scale-95"
+                  style={{ borderColor: player1.color }}
                 >
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   Finish Match
@@ -1265,11 +1266,11 @@ export default function App() {
                             />
                             {/* Screen Color Indicator Circle - 3rem (w-12 h-12) */}
                             <div 
-                              className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-4 ${idx === 0 ? 'left-0' : 'right-0'}`}
+                              className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-2 ${idx === 0 ? 'left-0' : 'right-0'}`}
                               style={{ 
                                 backgroundColor: p.screenColor,
                                 borderColor: p.color,
-                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * ((100vw - var(--gameplay-width)) / 4 + 4.5rem)))' : 'translateX(calc((100vw - var(--gameplay-width)) / 4 + 4.5rem))'}`,
+                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * var(--circle-offset)))' : 'translateX(var(--circle-offset))'}`,
                               } as any}
                               title="Screen Background Color"
                             />
@@ -1289,7 +1290,7 @@ export default function App() {
                   </h3>
                   <div 
                     className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
-                    style={{ borderColor: `${player1.color}33` }}
+                    style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
@@ -1354,7 +1355,7 @@ export default function App() {
                   </h3>
                   <div 
                     className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
-                    style={{ borderColor: `${player2.color}33` }}
+                    style={{ borderColor: player2.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
@@ -1413,7 +1414,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div 
                       className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
-                      style={{ borderColor: `${player1.color}33` }}
+                      style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1">
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Game</p>
@@ -1434,7 +1435,7 @@ export default function App() {
 
                     <div 
                       className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
-                      style={{ borderColor: `${player2.color}33` }}
+                      style={{ borderColor: player2.color }}
                     >
                       <div className="space-y-1">
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Clear History</p>
@@ -1452,8 +1453,7 @@ export default function App() {
 
                 <section className="pt-12">
                   <div 
-                    className="bg-slate-900/80 backdrop-blur-md border-2 rounded-3xl p-8 space-y-4 shadow-xl"
-                    style={{ borderColor: `${player1.color}33` }}
+                    className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-4 shadow-xl"
                   >
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Version</span>

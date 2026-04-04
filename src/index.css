@@ -9,12 +9,14 @@
 :root {
   --sidebar-width: 48px;
   --gameplay-width: calc(100vw - 96px);
+  --circle-offset: calc(100% + 1px);
 }
 
 @media (min-width: 640px) {
   :root {
     --sidebar-width: 80px;
     --gameplay-width: calc(100vw - 160px);
+    --circle-offset: calc(100% + 1px);
   }
 }
 
@@ -22,6 +24,7 @@
   :root {
     --sidebar-width: 120px;
     --gameplay-width: min(1100px, calc(100vw - 240px));
+    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 4.5rem);
   }
 }
 
