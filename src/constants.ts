@@ -25,6 +25,7 @@ export const THEME_COLORS = [
 ];
 
 export const BACKGROUND_COLORS = [
+  { name: 'Black', value: '#000000' },
   { name: 'Slate 900', value: '#0f172a' },
   { name: 'Slate 950', value: '#020617' },
   { name: 'Zinc 900', value: '#18181b' },
