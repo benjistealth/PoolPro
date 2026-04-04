@@ -52,7 +52,7 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 45vh !important;
+      height: 60vh !important;
     }
   }
 
@@ -68,7 +68,7 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 45vh !important;
+      height: 60vh !important;
       min-height: 120px !important;
     }
   }
