@@ -580,7 +580,7 @@ export default function App() {
 
       {/* Navigation Bar */}
       <nav 
-        className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-between px-6"
+        className="fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-between px-6 scale-[0.8] sm:scale-100 origin-top-left w-[125%] sm:w-full"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
@@ -639,7 +639,10 @@ export default function App() {
       </nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center' : 'justify-start pt-32 pb-24'} px-2 sm:px-4 mx-auto w-full transition-all duration-500`}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center origin-center' : 'justify-start pt-32 pb-24 origin-top'} px-2 sm:px-4 mx-auto w-full transition-all duration-500
+          scale-[0.8]
+          ${(view === 'settings' || view === 'teams') ? 'sm:scale-[0.9] lg:scale-100' : 'sm:scale-100'}
+        `}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : '896px' }}
       >
         <AnimatePresence mode="wait">
@@ -713,7 +716,7 @@ export default function App() {
               </div>
 
               {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
-              <div className="relative flex-1 flex items-center justify-center">
+              <div className="relative flex-initial sm:flex-1 flex items-center justify-center w-full">
                 {/* Team Names Display (Absolute to the card grid area) */}
                 <div 
                   className="absolute inset-y-0 -left-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-0 overflow-hidden"
@@ -749,7 +752,7 @@ export default function App() {
                             resetTimer();
                           }
                         }}
-                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center"
+                        className="relative p-2 sm:p-8 rounded-3xl border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center min-h-[160px] max-h-[35vh] sm:min-h-0 sm:max-h-none"
                         style={{ 
                           borderColor: p.color,
                           backgroundColor: p.bgColor,
@@ -808,7 +811,7 @@ export default function App() {
               <div className="flex items-center justify-center shrink-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full max-w-md h-10 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
+                  className="w-full max-w-md h-14 sm:h-20 bg-slate-900/80 hover:bg-slate-900/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 border-white/20 active:scale-95"
                 >
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   Finish Match
@@ -1587,7 +1590,7 @@ export default function App() {
 
       {/* Quick Actions Floating Bar (Mobile) */}
       <div 
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-900/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 scale-[0.8] sm:scale-100 origin-bottom"
         style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
       >
         <button 
