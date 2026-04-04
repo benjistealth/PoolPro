@@ -40,6 +40,36 @@ export default function App() {
   const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams'>('scoreboard');
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const navTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-hide nav logic for mobile
+  useEffect(() => {
+    const handleInteraction = () => {
+      setIsNavVisible(true);
+      
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+      navTimeoutRef.current = setTimeout(() => {
+        setIsNavVisible(false);
+      }, 5000);
+    };
+
+    // Hide initially after 5s
+    navTimeoutRef.current = setTimeout(() => {
+      setIsNavVisible(false);
+    }, 5000);
+    
+    window.addEventListener('scroll', handleInteraction, { passive: true });
+    window.addEventListener('touchstart', handleInteraction, { passive: true });
+    window.addEventListener('mousemove', handleInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('mousemove', handleInteraction);
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    };
+  }, [view]);
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
   const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
@@ -578,8 +608,33 @@ export default function App() {
         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
+      {/* Pull-down Tab (Visible when nav is hidden) */}
+      <motion.div
+        initial={false}
+        animate={{ 
+          y: !isNavVisible ? 0 : -20,
+          opacity: !isNavVisible ? 1 : 0
+        }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 50 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 10) setIsNavVisible(true);
+        }}
+        onClick={() => setIsNavVisible(true)}
+        className="fixed top-0 left-1/2 -translate-x-1/2 w-24 h-3 bg-slate-800/90 backdrop-blur-md rounded-b-2xl z-[60] cursor-pointer sm:hidden flex items-center justify-center border-x border-b border-white/10 shadow-lg"
+      >
+        <div className="w-10 h-1 bg-white/30 rounded-full" />
+      </motion.div>
+
       {/* Navigation Bar */}
-      <nav 
+      <motion.nav 
+        initial={false}
+        animate={{ 
+          y: !isNavVisible ? -100 : 0,
+          opacity: !isNavVisible ? 0 : 1
+        }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
         className="fixed top-0 left-0 right-0 h-16 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
@@ -636,10 +691,10 @@ export default function App() {
             <Settings className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
         </div>
-      </nav>
+      </motion.nav>
 
       <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center pt-4 sm:pt-0' : 'justify-start pt-20 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
+        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'justify-center pt-0' : 'justify-start pt-20 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
       >
         <AnimatePresence mode="wait">
@@ -649,7 +704,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="relative py-2 sm:py-8 flex flex-col gap-4 sm:gap-8 sm:min-h-0"
+              className="relative py-2 sm:py-8 flex flex-col gap-4 sm:gap-8 min-h-[calc(100vh-2rem)] sm:min-h-0"
             >
               {/* Game Info Header */}
               <div className="flex items-center justify-center shrink-0">
@@ -713,7 +768,7 @@ export default function App() {
               </div>
 
               {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
-              <div className="relative flex-initial sm:flex-1 flex items-center justify-center w-full">
+              <div className="relative flex-initial flex-1 flex items-center justify-center w-full my-auto">
                 {/* Team Names Display (Absolute to the card grid area) - Hidden on mobile portrait */}
                 <div 
                   className="absolute inset-y-0 -left-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
@@ -813,10 +868,10 @@ export default function App() {
             </div>
 
               {/* Finish Match Footer */}
-              <div className="flex items-center justify-center shrink-0">
+              <div className="flex items-center justify-center shrink-0 mt-auto pb-4 sm:pb-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full max-w-md h-12 sm:h-20 bg-black/80 hover:bg-black/90 backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-xl font-bold transition-all shadow-xl border-2 active:scale-95"
+                  className="w-full max-w-md h-10 sm:h-20 bg-black/80 hover:bg-black/90 backdrop-blur-md rounded-xl sm:rounded-2xl flex items-center justify-center gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-2 active:scale-95"
                   style={{ borderColor: player1.color }}
                 >
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />

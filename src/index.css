@@ -9,14 +9,14 @@
 :root {
   --sidebar-width: 48px;
   --gameplay-width: calc(100vw - 96px);
-  --circle-offset: calc(100% + 1rem);
+  --circle-offset: calc(100% + 2rem);
 }
 
 @media (min-width: 640px) {
   :root {
     --sidebar-width: 80px;
     --gameplay-width: calc(100vw - 160px);
-    --circle-offset: calc(100% + 1rem);
+    --circle-offset: calc(100% + 2rem);
   }
 }
 
@@ -52,7 +52,7 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 38vh !important;
+      height: 45vh !important;
     }
   }
 
@@ -68,7 +68,7 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 28vh !important;
+      height: 45vh !important;
       min-height: 120px !important;
     }
   }
