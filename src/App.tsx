@@ -733,7 +733,7 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="relative pt-2 pb-0 sm:py-8 flex flex-col gap-4 sm:gap-8 min-h-screen sm:min-h-0"
+              className="relative pt-1 pb-0 sm:py-8 flex flex-col gap-4 sm:gap-8 min-h-screen sm:min-h-0"
             >
               {/* Game Info Header */}
               <div className="flex items-center justify-center shrink-0">
@@ -897,14 +897,14 @@ export default function App() {
             </div>
 
               {/* Finish Match Footer */}
-              <div className="flex items-center justify-center shrink-0 mt-auto pb-0">
+              <div className="fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto flex items-center justify-center shrink-0 z-50 pb-[2px] sm:pb-0">
                 <button
                   onClick={finishMatch}
-                  className="w-full max-w-md h-8 sm:h-20 bg-black/80 hover:bg-black/90 backdrop-blur-md rounded-none sm:rounded-2xl flex items-center justify-center gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-2 active:scale-95"
+                  className="w-full sm:max-w-md h-auto py-[2px] sm:h-20 bg-black/90 hover:bg-black backdrop-blur-md rounded-none sm:rounded-2xl flex items-center justify-center gap-1 sm:gap-3 text-[11px] sm:text-xl font-bold transition-all shadow-xl border-t sm:border-2 active:scale-95"
                   style={{ borderColor: player1.color }}
                 >
-                  <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                  Finish Match
+                  <CheckCircle2 className="w-3 h-3 sm:w-6 sm:h-6 text-white" />
+                  <span className="leading-none uppercase tracking-wider">Finish Match</span>
                 </button>
               </div>
             </motion.div>
