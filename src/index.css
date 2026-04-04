@@ -7,21 +7,24 @@
 }
 
 :root {
-  --sidebar-width: 48px;
-  --gameplay-width: calc(100vw - 96px);
+  --gameplay-width: 60vw;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 480px) {
   :root {
-    --sidebar-width: 80px;
-    --gameplay-width: calc(100vw - 160px);
+    --gameplay-width: 75vw;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gameplay-width: 806px;
   }
 }
 
 @media (min-width: 1024px) {
   :root {
-    --sidebar-width: 120px;
-    --gameplay-width: min(900px, calc(100vw - 300px));
+    --gameplay-width: 1075px;
   }
 }
 
