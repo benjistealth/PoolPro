@@ -1,28 +1,90 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 512 512"
+   fill="none"
+   version="1.1"
+   id="svg6"
+   sodipodi:docname="favicon.svg"
+   inkscape:version="1.3.2 (091e20e, 2023-11-25, custom)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview6"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:zoom="1.5878906"
+     inkscape:cx="258.51907"
+     inkscape:cy="256"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg6" />
+  <defs
+     id="defs2">
     <!-- The signature purple-to-pink neon gradient -->
-    <linearGradient id="trophy_grad" x1="256" y1="140" x2="256" y2="400" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#4B00FF" />
-      <stop offset="100%" stop-color="#FF26B9" />
+    <linearGradient
+       id="trophy_grad"
+       x1="256"
+       y1="140"
+       x2="256"
+       y2="400"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         offset="0%"
+         stop-color="#4B00FF"
+         id="stop1" />
+      <stop
+         offset="100%"
+         stop-color="#FF26B9"
+         id="stop2" />
     </linearGradient>
   </defs>
-
   <!-- Dark Background Container -->
-  <rect width="512" height="512" rx="110" fill="#0B0E14" />
-  
+  <rect
+     width="267.02094"
+     height="252.5363"
+     rx="57.367775"
+     fill="#0b0e14"
+     id="rect2"
+     x="122.80443"
+     y="136.02953"
+     style="stroke-width:0.507183" />
   <!-- The Trophy Shape -->
-  <g stroke="url(#trophy_grad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+  <g
+     stroke="url(#trophy_grad)"
+     stroke-width="28"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="g6">
     <!-- Main Cup Body -->
-    <path d="M190 155H322V240C322 276.451 292.451 306 256 306C219.549 306 190 276.451 190 240V155Z" />
-    
+    <path
+       d="M190 155H322V240C322 276.451 292.451 306 256 306C219.549 306 190 276.451 190 240V155Z"
+       id="path2" />
     <!-- Left Handle -->
-    <path d="M190 190H170C153.431 190 140 203.431 140 220C140 236.569 153.431 250 170 250H190" />
-    
+    <path
+       d="M190 190H170C153.431 190 140 203.431 140 220C140 236.569 153.431 250 170 250H190"
+       id="path3" />
     <!-- Right Handle -->
-    <path d="M322 190H342C358.569 190 372 203.431 372 220C372 236.569 358.569 250 342 250H322" />
-    
+    <path
+       d="M322 190H342C358.569 190 372 203.431 372 220C372 236.569 358.569 250 342 250H322"
+       id="path4" />
     <!-- Legs/Base -->
-    <path d="M225 306C225 306 220 340 200 370" />
-    <path d="M287 306C287 306 292 340 312 370" />
+    <path
+       d="M225 306C225 306 220 340 200 370"
+       id="path5" />
+    <path
+       d="M287 306C287 306 292 340 312 370"
+       id="path6" />
   </g>
 </svg>
