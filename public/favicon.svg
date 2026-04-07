@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- The signature purple-to-pink neon gradient -->
+    <linearGradient id="trophy_grad" x1="256" y1="140" x2="256" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4B00FF" />
+      <stop offset="100%" stop-color="#FF26B9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Dark Background Container -->
+  <rect width="512" height="512" rx="110" fill="#0B0E14" />
+  
+  <!-- The Trophy Shape -->
+  <g stroke="url(#trophy_grad)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Main Cup Body -->
+    <path d="M190 155H322V240C322 276.451 292.451 306 256 306C219.549 306 190 276.451 190 240V155Z" />
+    
+    <!-- Left Handle -->
+    <path d="M190 190H170C153.431 190 140 203.431 140 220C140 236.569 153.431 250 170 250H190" />
+    
+    <!-- Right Handle -->
+    <path d="M322 190H342C358.569 190 372 203.431 372 220C372 236.569 358.569 250 342 250H322" />
+    
+    <!-- Legs/Base -->
+    <path d="M225 306C225 306 220 340 200 370" />
+    <path d="M287 306C287 306 292 340 312 370" />
+  </g>
+</svg>
