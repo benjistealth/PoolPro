@@ -756,7 +756,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ 
                 opacity: 1,
-                y: (window.innerWidth < 1024 && !isNavVisible) ? -12 : 0 
+                y: (window.innerWidth < 1024 && !isNavVisible) ? "-7vh" : 0 
               }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
