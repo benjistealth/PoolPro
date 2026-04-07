@@ -67,38 +67,73 @@ export default function App() {
     };
   }, []);
 
-  // Auto-hide nav logic for mobile
+  // Effect 1: Auto-hide timer for navigation bar
   useEffect(() => {
-    const handleInteraction = () => {
-      if (isKeyboardOpen) return;
-      setIsNavVisible(true);
-      
-      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
-      navTimeoutRef.current = setTimeout(() => {
-        setIsNavVisible(false);
-      }, 3000);
+    if (!isNavVisible || isKeyboardOpen || view !== 'scoreboard') return;
+
+    const timeout = setTimeout(() => {
+      setIsNavVisible(false);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [isNavVisible, isKeyboardOpen, view]);
+
+  // Effect 2: Show navigation bar on interaction
+  useEffect(() => {
+    const showNav = () => {
+      if (!isNavVisible && !isKeyboardOpen) {
+        setIsNavVisible(true);
+      }
     };
 
-    // Hide initially after 3s
-    if (!isKeyboardOpen) {
-      navTimeoutRef.current = setTimeout(() => {
-        setIsNavVisible(false);
-      }, 3000);
-    } else {
-      setIsNavVisible(false);
+    const handleInteraction = (e: Event) => {
+      if (isKeyboardOpen) return;
+      
+      // If nav is already visible, reset the timer on any interaction (handled by Effect 1)
+      if (isNavVisible) return;
+
+      // Specific triggers to SHOW the nav
+      if (e.type === 'click' || e.type === 'touchstart') {
+        const clientY = e.type === 'click' 
+          ? (e as MouseEvent).clientY 
+          : (e as TouchEvent).touches[0].clientY;
+        
+        // Show if tap in top 8% of screen
+        if (clientY <= window.innerHeight * 0.08) {
+          showNav();
+        }
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+      handleInteraction(e);
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchEndY = e.changedTouches[0].clientY;
+      // Swipe down from top area (top 100px) to show nav
+      if (touchStartY < 100 && touchEndY > touchStartY + 30) {
+        showNav();
+      }
+    };
+
+    window.addEventListener('click', handleInteraction, { passive: true });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    if (window.innerWidth >= 1024) {
+      window.addEventListener('mousemove', (e) => {
+        if (e.clientY <= window.innerHeight * 0.08) showNav();
+      }, { passive: true });
     }
-    
-    window.addEventListener('scroll', handleInteraction, { passive: true });
-    window.addEventListener('touchstart', handleInteraction, { passive: true });
-    window.addEventListener('mousemove', handleInteraction, { passive: true });
 
     return () => {
-      window.removeEventListener('scroll', handleInteraction);
-      window.removeEventListener('touchstart', handleInteraction);
-      window.removeEventListener('mousemove', handleInteraction);
-      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [view, isKeyboardOpen]);
+  }, [isNavVisible, isKeyboardOpen]);
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
   const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
@@ -112,6 +147,7 @@ export default function App() {
   const [showClearTeamsConfirm, setShowClearTeamsConfirm] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [showTeamTotals, setShowTeamTotals] = useState(false);
+  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
 
   // --- Refs ---
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -637,109 +673,107 @@ export default function App() {
         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
-      {/* Pull-down Tab (Visible when nav is hidden) */}
-      <motion.div
-        initial={false}
-        animate={{ 
-          y: (!isNavVisible && !isKeyboardOpen) ? 0 : -20,
-          opacity: (!isNavVisible && !isKeyboardOpen) ? 1 : 0
-        }}
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 50 }}
-        dragElastic={0.1}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 10) setIsNavVisible(true);
-        }}
-        onClick={() => setIsNavVisible(true)}
-        className="fixed top-0 left-1/2 -translate-x-1/2 w-24 h-3 bg-slate-800/90 backdrop-blur-md rounded-b-2xl z-[60] cursor-pointer sm:hidden flex items-center justify-center border-x border-b border-white/10 shadow-lg"
-      >
-        <div className="w-10 h-1 bg-white/30 rounded-full" />
-      </motion.div>
-
       {/* Navigation Bar */}
       <motion.nav 
         initial={false}
         animate={{ 
-          y: (!isNavVisible || (isKeyboardOpen && window.innerWidth < 1024)) ? -100 : 0,
-          opacity: (!isNavVisible || (isKeyboardOpen && window.innerWidth < 1024)) ? 0 : 1
+          y: (window.innerWidth < 1024 && (!isNavVisible || isKeyboardOpen)) ? -62 : 0,
+          opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 h-16 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
+        className="fixed top-0 left-0 right-0 h-16 lg:h-32 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:gap-4">
           <div 
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50"
+            className="w-8 h-8 lg:w-16 lg:h-16 rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50"
           >
             <Trophy 
-              className="w-5 h-5 transition-all duration-500" 
+              className="w-5 h-5 lg:w-10 lg:h-10 transition-all duration-500" 
               style={{ stroke: 'url(#cup-gradient)' }}
             />
           </div>
           <h1 
-            className="text-xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500"
+            className="text-xl lg:text-4xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500"
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
             PoolPro
           </h1>
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-8">
           <button 
             onClick={toggleFullscreen}
-            className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 hidden sm:flex"
+            className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 hidden sm:flex"
             title="Toggle Fullscreen"
           >
             {isFullscreen ? 
-              <Minimize className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} /> : 
-              <Maximize className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
+              <Minimize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} /> : 
+              <Maximize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
             }
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'scoreboard' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Trophy className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Trophy className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => setView('teams')}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'teams' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Users className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Users className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => setView('settings')}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'settings' ? { backgroundColor: `${player2.color}33` } : {}}
           >
-            <Settings className="w-5 h-5" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Settings className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
         </div>
       </motion.nav>
 
-      <main 
-        className={`relative z-10 min-h-screen flex flex-col ${view === 'scoreboard' ? 'sm:justify-center pt-0' : 'justify-start pt-20 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
+      <motion.main 
+        initial={false}
+        animate={{ 
+          paddingTop: (view === 'scoreboard' && window.innerWidth < 1024 && isNavVisible) ? 64 : (view === 'scoreboard' && window.innerWidth < 1024 ? 2 : 0),
+          paddingBottom: 0 
+        }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-end sm:justify-center sm:gap-4 lg:gap-6' : 'justify-start pt-20 lg:pt-40 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
       >
         <AnimatePresence mode="wait">
           {view === 'scoreboard' && (
             <motion.div
-              key="scoreboard"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="relative pt-1 pb-0 sm:py-8 flex flex-col gap-4 sm:gap-8 min-h-screen sm:min-h-0"
+              key="scoreboard-view"
+              initial={{ opacity: 0 }}
+              animate={{ 
+                opacity: 1,
+                y: (window.innerWidth < 1024 && !isNavVisible) ? -12 : 0 
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="flex flex-col sm:flex-none w-full"
             >
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="relative pt-1 sm:pb-8 sm:py-2 flex flex-col gap-1 sm:gap-4 min-h-0 flex-1 sm:flex-none justify-end sm:justify-start pb-0"
+              >
+                
               {/* Game Info Header */}
-              <div className="flex items-center justify-center shrink-0">
+              <div className="flex items-center justify-center shrink-0 mt-auto sm:mt-0">
                 {(isShotClockEnabled || isMatchClockEnabled) && (
                   <div 
-                    className="flex items-center justify-center bg-black/50 p-1 sm:p-4 rounded-2xl border-2 transition-all duration-500 w-full max-w-md"
+                    className="flex items-center justify-center bg-black/50 p-1 sm:p-2 lg:p-2 rounded-2xl border-2 transition-all duration-500 w-full max-w-md"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                       borderRadius: '1rem'
@@ -797,7 +831,7 @@ export default function App() {
               </div>
 
               {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
-              <div className="relative flex-initial flex-1 flex items-center justify-center w-full my-auto">
+              <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
                 {/* Team Names Display (Absolute to the card grid area) - Hidden on mobile portrait */}
                 <div 
                   className="absolute inset-y-0 -left-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
@@ -822,7 +856,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 lg:gap-5 w-full">
                   {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1">
                         {/* Mobile Portrait Team Name Header */}
@@ -840,37 +874,37 @@ export default function App() {
                               resetTimer();
                             }
                           }}
-                          className={`relative p-2 sm:p-8 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card sm:min-h-0 sm:max-h-none`}
+                          className={`relative p-2 sm:p-4 lg:p-6 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card sm:min-h-0 sm:max-h-none`}
                           style={{ 
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
                             boxShadow: `0 0 40px -15px ${p.color}66`
                           }}
                         >
-                          {/* Mobile Score Buttons - Absolute Positioned */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              incrementScore(p.id);
-                            }}
-                            className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
-                            style={{ 
-                              backgroundColor: p.color,
-                              boxShadow: `0 4px 10px -2px ${p.color}66`
-                            }}
-                          >
-                            <Plus className="w-6 h-6 font-bold" />
-                          </button>
+                            {/* Mobile Score Buttons - Absolute Positioned */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                incrementScore(p.id);
+                              }}
+                              className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
+                              style={{ 
+                                backgroundColor: p.color,
+                                boxShadow: `0 4px 10px -2px ${p.color}66`
+                              }}
+                            >
+                              <Plus className="w-6 h-6 font-bold" />
+                            </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              decrementScore(p.id);
-                            }}
-                            className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
-                          >
-                            <Minus className="w-5 h-5" />
-                          </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                decrementScore(p.id);
+                              }}
+                              className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
+                            >
+                              <Minus className="w-5 h-5" />
+                            </button>
 
                           <div className="flex flex-col items-center gap-0 sm:gap-6">
                           {isEditingNames ? (
@@ -882,13 +916,13 @@ export default function App() {
                               style={{ color: p.color }}
                             />
                           ) : (
-                            <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[2.8rem] font-bold uppercase truncate w-full text-center" style={{ color: p.color }}>
+                            <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
                               {p.name}
                             </h2>
                           )}
 
-                          <div className="relative group">
-                            <span className="text-[min(16vw,48px)] sm:text-[10rem] lg:text-[12rem] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
+                          <div className="relative group mt-[-4px] sm:mt-0">
+                            <span className="text-[min(16vw,48px)] sm:text-[min(10rem,25vh)] lg:text-[min(12rem,30vh)] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
                               {p.score}
                             </span>
                           </div>
@@ -897,7 +931,7 @@ export default function App() {
                           <div className="hidden sm:flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
                             <button
                               onClick={() => decrementScore(p.id)}
-                              className="flex-1 h-8 sm:h-16 bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                              className="flex-1 h-8 sm:h-[min(4rem,10vh)] bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
                             >
                               <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
@@ -906,7 +940,7 @@ export default function App() {
                                 e.stopPropagation();
                                 incrementScore(p.id);
                               }}
-                              className="flex-[2] h-8 sm:h-16 text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                              className="flex-[2] h-8 sm:h-[min(4rem,10vh)] text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
                               style={{ 
                                 backgroundColor: p.color,
                                 boxShadow: `0 10px 15px -3px ${p.color}33`
@@ -917,24 +951,35 @@ export default function App() {
                           </div>
                         </div>
                       </motion.div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-              {/* Finish Match Footer */}
-              <div className="fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto flex items-center justify-center shrink-0 z-50 pb-0">
-                <button
-                  onClick={finishMatch}
-                  className="w-full sm:max-w-md h-8 sm:h-20 bg-black/90 hover:bg-black backdrop-blur-md rounded-none sm:rounded-2xl flex items-center justify-center gap-1 sm:gap-3 text-xs sm:text-xl font-bold transition-all shadow-xl border-t sm:border-2 active:scale-95"
-                  style={{ borderColor: player1.color }}
-                >
-                  <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-                  <span className="leading-none uppercase tracking-wider">Finish Match</span>
-                </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </motion.div>
-          )}
+
+            {/* Finish Match Button - Now inside main to scale with content and stay visible on desktop */}
+            <motion.div 
+              key="finish-button"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ 
+                y: (window.innerWidth < 1024 && isNavVisible) ? 100 : 0,
+                opacity: (window.innerWidth < 1024 && isNavVisible) ? 0 : 1
+              }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="w-full flex items-center justify-center shrink-0 z-50 mt-[5vh] sm:mt-6 lg:mt-8 mb-6 sm:mb-6 lg:mb-6"
+            >
+              <button
+                onClick={finishMatch}
+                className="w-full sm:max-w-md h-12 bg-black/95 hover:bg-black backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-lg font-bold transition-all shadow-2xl border-2 active:scale-95"
+                style={{ borderColor: player1.color }}
+              >
+                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                <span className="leading-none uppercase tracking-wider">Finish Match</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
 
           {view === 'teams' && (
             <motion.div
@@ -1517,45 +1562,25 @@ export default function App() {
                 <section className="space-y-6">
                   <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: '#ef4444' }}
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
-                    Danger Zone
+                    System Settings
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
                       style={{ borderColor: player1.color }}
                     >
-                      <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Game</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets scores without saving.</p>
+                      <div className="space-y-1 text-center sm:text-left">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Restore Default Settings</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets all color selections to default.</p>
                       </div>
                       <button 
-                        onClick={() => {
-                          setPlayer1(prev => ({ ...prev, score: 0 }));
-                          setPlayer2(prev => ({ ...prev, score: 0 }));
-                          resetTimer();
-                          setView('scoreboard');
-                        }}
-                        className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+                        onClick={() => setShowRestoreDefaultsConfirm(true)}
+                        className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
-                        Reset Now
-                      </button>
-                    </div>
-
-                    <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col justify-between gap-6 shadow-xl"
-                      style={{ borderColor: player2.color }}
-                    >
-                      <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Clear History</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Permanently delete all results.</p>
-                      </div>
-                      <button 
-                        onClick={() => setShowClearHistoryConfirm(true)}
-                        className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
-                      >
-                        Clear History
+                        <RotateCcw className="w-4 h-4" />
+                        Restore Defaults
                       </button>
                     </div>
                   </div>
@@ -1608,6 +1633,42 @@ export default function App() {
                     className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all"
                   >
                     Clear All
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {showRestoreDefaultsConfirm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-black border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+              >
+                <div className="flex items-center gap-4 text-blue-500">
+                  <RotateCcw className="w-8 h-8" />
+                  <h3 className="text-xl font-bold">Restore Defaults?</h3>
+                </div>
+                <p className="text-slate-400">This will reset all player colors to their original defaults. Your scores and history will not be affected.</p>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setShowRestoreDefaultsConfirm(false)}
+                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setPlayer1(prev => ({ ...prev, color: '#FFFFFF', bgColor: '#881337', screenColor: '#000000' }));
+                      setPlayer2(prev => ({ ...prev, color: '#FFFFFF', bgColor: '#1e3a8a', screenColor: '#000000' }));
+                      setShowRestoreDefaultsConfirm(false);
+                    }}
+                    className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
+                  >
+                    Restore
                   </button>
                 </div>
               </motion.div>
@@ -1701,35 +1762,45 @@ export default function App() {
             </div>
           )}
         </AnimatePresence>
-      </main>
+      </motion.main>
+
+      {/* Navigation Bar Spacing for history view */}
+      {view !== 'scoreboard' && <div className="h-16 lg:h-32" />}
 
       {/* Quick Actions Floating Bar (Mobile) */}
-      <div 
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 bar-zoom"
-        style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
-      >
-        <button 
-          onClick={navigateToScoreboard}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
-          style={view === 'scoreboard' ? { backgroundColor: player1.color } : {}}
-        >
-          Score
-        </button>
-        <button 
-          onClick={() => setView('teams')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
-          style={view === 'teams' ? { backgroundColor: player1.color } : {}}
-        >
-          Teams
-        </button>
-        <button 
-          onClick={() => setView('settings')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
-          style={view === 'settings' ? { backgroundColor: player2.color } : {}}
-        >
-          Settings
-        </button>
-      </div>
+      <AnimatePresence>
+        {view !== 'scoreboard' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 bar-zoom"
+            style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+          >
+            <button 
+              onClick={navigateToScoreboard}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
+              style={view === 'scoreboard' ? { backgroundColor: player1.color } : {}}
+            >
+              Score
+            </button>
+            <button 
+              onClick={() => setView('teams')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
+              style={view === 'teams' ? { backgroundColor: player1.color } : {}}
+            >
+              Teams
+            </button>
+            <button 
+              onClick={() => setView('settings')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
+              style={view === 'settings' ? { backgroundColor: player2.color } : {}}
+            >
+              Settings
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
