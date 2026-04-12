@@ -20,10 +20,14 @@ import {
   Download,
   Upload,
   X,
-  PlusCircle
+  PlusCircle,
+  Share2,
+  Mail,
+  Server,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Player, MatchHistoryEntry } from './types';
+import { Player, MatchHistoryEntry, MatchupSettings } from './types';
 import { THEME_COLORS, BACKGROUND_COLORS } from './constants';
 import { ColorPicker } from './components/ColorPicker';
 
@@ -31,10 +35,12 @@ const SHOT_CLOCK_DEFAULT = 30;
 
 export default function App() {
   // --- State ---
-  const [player1, setPlayer1] = useState<Player>({ id: '1', name: 'Player 1', score: 0, isTurn: true, color: '#FFFFFF', bgColor: '#881337', screenColor: '#000000' });
-  const [player2, setPlayer2] = useState<Player>({ id: '2', name: 'Player 2', score: 0, isTurn: false, color: '#FFFFFF', bgColor: '#1e3a8a', screenColor: '#000000' });
-  const [team1Name, setTeam1Name] = useState<string>('TEAM 1');
-  const [team2Name, setTeam2Name] = useState<string>('TEAM 2');
+  const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFFFF', bgColor: '#881337', screenColor: '#000000' });
+  const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FFFFFF', bgColor: '#1e3a8a', screenColor: '#000000' });
+  const [matchupSettings, setMatchupSettings] = useState<Record<number, MatchupSettings>>({});
+  const [playerPreferences, setPlayerPreferences] = useState<Record<string, { color: string, bgColor: string, screenColor: string }>>({});
+  const [team1Name, setTeam1Name] = useState<string>('');
+  const [team2Name, setTeam2Name] = useState<string>('');
   const [team1Players, setTeam1Players] = useState<string[]>([]);
   const [team2Players, setTeam2Players] = useState<string[]>([]);
   const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>([]);
@@ -43,6 +49,21 @@ export default function App() {
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const navTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Robust device detection based on User-Agent and screen width
+  const deviceInfo = useMemo(() => {
+    const ua = navigator.userAgent.toLowerCase();
+    const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
+    const isMobileUA = /iphone|ipod|android|iemobile|blackberry|opera mini|palm|windows ce/.test(ua);
+    
+    // A device is a phone if it's mobile but NOT a tablet, or if the screen is very narrow
+    const isPhone = (isMobileUA && !isTabletUA) || window.innerWidth < 640;
+    // A device is a tablet if it matches the tablet UA or falls in the tablet width range
+    const isTablet = isTabletUA || (window.innerWidth >= 640 && window.innerWidth < 1024);
+    const isDesktop = !isPhone && !isTablet;
+
+    return { isPhone, isTablet, isDesktop };
+  }, [view]); // Re-evaluate on view change as a proxy for layout shifts, but mostly static
 
   // Keyboard detection for mobile
   useEffect(() => {
@@ -67,40 +88,45 @@ export default function App() {
     };
   }, []);
 
-  // Effect 1: Auto-hide timer for navigation bar
+  // Unified Navigation Logic
   useEffect(() => {
-    if (!isNavVisible || isKeyboardOpen || view !== 'scoreboard') return;
-
-    const timeout = setTimeout(() => {
-      setIsNavVisible(false);
-    }, 3000);
-
-    return () => clearTimeout(timeout);
-  }, [isNavVisible, isKeyboardOpen, view]);
-
-  // Effect 2: Show navigation bar on interaction
-  useEffect(() => {
-    const showNav = () => {
-      if (!isNavVisible && !isKeyboardOpen) {
-        setIsNavVisible(true);
+    const { isPhone, isTablet, isDesktop } = deviceInfo;
+    
+    const startHideTimer = () => {
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+      // Auto-hide ONLY on phones when nav is visible and keyboard is closed
+      if (isPhone && isNavVisible && !isKeyboardOpen) {
+        navTimeoutRef.current = setTimeout(() => {
+          setIsNavVisible(false);
+        }, 3000);
       }
+    };
+
+    const showNav = () => {
+      if (isKeyboardOpen) return;
+      setIsNavVisible(true);
+      startHideTimer();
     };
 
     const handleInteraction = (e: Event) => {
       if (isKeyboardOpen) return;
       
-      // If nav is already visible, reset the timer on any interaction (handled by Effect 1)
-      if (isNavVisible) return;
+      // If nav is already visible, reset the timer on any interaction
+      if (isNavVisible) {
+        startHideTimer();
+      }
 
-      // Specific triggers to SHOW the nav
-      if (e.type === 'click' || e.type === 'touchstart') {
-        const clientY = e.type === 'click' 
-          ? (e as MouseEvent).clientY 
-          : (e as TouchEvent).touches[0].clientY;
-        
-        // Show if tap in top 8% of screen
-        if (clientY <= window.innerHeight * 0.08) {
-          showNav();
+      // Specific triggers to SHOW the nav if it's hidden
+      if (!isNavVisible && (e.type === 'click' || e.type === 'touchstart' || e.type === 'scroll')) {
+        if (e.type === 'click' || e.type === 'touchstart') {
+          const clientY = e.type === 'click' 
+            ? (e as MouseEvent).clientY 
+            : (e as TouchEvent).touches[0].clientY;
+          
+          // Show if tap in top 8% of screen
+          if (clientY <= window.innerHeight * 0.08) {
+            showNav();
+          }
         }
       }
     };
@@ -119,12 +145,31 @@ export default function App() {
       }
     };
 
+    // Initial timer setup
+    startHideTimer();
+
+    // Navigation Visibility Logic
+    if (isDesktop) {
+      // Desktop: Always visible
+      if (!isNavVisible) setIsNavVisible(true);
+    } else if (isTablet) {
+      // Tablet: Visible unless keyboard is open
+      if (isKeyboardOpen && isNavVisible) setIsNavVisible(false);
+      if (!isKeyboardOpen && !isNavVisible) setIsNavVisible(true);
+    } else if (isPhone) {
+      // Phone: Hide if keyboard is open
+      if (isKeyboardOpen && isNavVisible) setIsNavVisible(false);
+    }
+
     window.addEventListener('click', handleInteraction, { passive: true });
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchend', handleTouchEnd, { passive: true });
-    if (window.innerWidth >= 1024) {
+    window.addEventListener('scroll', handleInteraction, { passive: true });
+    
+    if (isDesktop) {
       window.addEventListener('mousemove', (e) => {
         if (e.clientY <= window.innerHeight * 0.08) showNav();
+        else if (isNavVisible) startHideTimer();
       }, { passive: true });
     }
 
@@ -132,8 +177,10 @@ export default function App() {
       window.removeEventListener('click', handleInteraction);
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('scroll', handleInteraction);
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
     };
-  }, [isNavVisible, isKeyboardOpen]);
+  }, [isNavVisible, isKeyboardOpen, view, deviceInfo]);
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
   const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
@@ -148,6 +195,18 @@ export default function App() {
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [showTeamTotals, setShowTeamTotals] = useState(false);
   const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'email' | 'server'>('download');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exportEmail, setExportEmail] = useState('');
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  const [apiConfig, setApiConfig] = useState({ url: '', key: '' });
+  const [isApiLocked, setIsApiLocked] = useState(true);
+  const [pinInput, setPinInput] = useState('');
+  const [isApiSending, setIsApiSending] = useState(false);
+  const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // --- Refs ---
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -197,57 +256,189 @@ export default function App() {
   // --- Initialization ---
   useEffect(() => {
     try {
-      const savedHistory = localStorage.getItem('pool_match_history');
-      if (savedHistory) {
-        setMatchHistory(JSON.parse(savedHistory));
-      }
-      const savedTeam1Name = localStorage.getItem('pool_team1_name');
-      const savedTeam2Name = localStorage.getItem('pool_team2_name');
-      const savedTeam1Players = localStorage.getItem('pool_team1_players');
-      const savedTeam2Players = localStorage.getItem('pool_team2_players');
-      const savedPlayer1 = localStorage.getItem('pool_player1_settings');
-      const savedPlayer2 = localStorage.getItem('pool_player2_settings');
+      const savedState = localStorage.getItem('pool_app_state');
+      const state = savedState ? JSON.parse(savedState) : {};
       
-      if (savedTeam1Name) setTeam1Name(savedTeam1Name);
-      if (savedTeam2Name) setTeam2Name(savedTeam2Name);
-      if (savedTeam1Players) setTeam1Players(JSON.parse(savedTeam1Players));
-      if (savedTeam2Players) setTeam2Players(JSON.parse(savedTeam2Players));
-      if (savedPlayer1) setPlayer1(JSON.parse(savedPlayer1));
-      if (savedPlayer2) setPlayer2(JSON.parse(savedPlayer2));
+      // Helper to get legacy or state value
+      const getVal = (key: string, stateVal: any, legacyKey: string) => {
+        return stateVal !== undefined ? stateVal : (localStorage.getItem(legacyKey) || undefined);
+      };
+
+      // Load Team Data
+      const t1Name = getVal('team1Name', state.teamData?.team1Name, 'pool_team1_name');
+      const t2Name = getVal('team2Name', state.teamData?.team2Name, 'pool_team2_name');
+      if (t1Name !== undefined) setTeam1Name(t1Name);
+      if (t2Name !== undefined) setTeam2Name(t2Name);
+
+      const t1Players = state.teamData?.team1Players || JSON.parse(localStorage.getItem('pool_team1_players') || 'null');
+      const t2Players = state.teamData?.team2Players || JSON.parse(localStorage.getItem('pool_team2_players') || 'null');
+      if (t1Players) setTeam1Players(t1Players);
+      if (t2Players) setTeam2Players(t2Players);
+
+      // Load Game Data
+      const history = state.gameData?.matchHistory || JSON.parse(localStorage.getItem('pool_match_history') || 'null');
+      if (history) setMatchHistory(history);
+      
+      if (state.gameData?.selectedMatchIndex !== undefined) setSelectedMatchIndex(state.gameData.selectedMatchIndex);
+      if (state.gameData?.shotClock !== undefined) setShotClock(state.gameData.shotClock);
+      if (state.gameData?.matchClock !== undefined) setMatchClock(state.gameData.matchClock);
+      if (state.gameData?.player1Score !== undefined) setPlayer1(prev => ({ ...prev, score: state.gameData.player1Score }));
+      if (state.gameData?.player2Score !== undefined) setPlayer2(prev => ({ ...prev, score: state.gameData.player2Score }));
+
+      // Load User Preferences
+      if (state.userPreferences) {
+        if (state.userPreferences.shotClockDuration !== undefined) setShotClockDuration(state.userPreferences.shotClockDuration);
+        if (state.userPreferences.isShotClockEnabled !== undefined) setIsShotClockEnabled(state.userPreferences.isShotClockEnabled);
+        if (state.userPreferences.matchClockDuration !== undefined) setMatchClockDuration(state.userPreferences.matchClockDuration);
+        if (state.userPreferences.isMatchClockEnabled !== undefined) setIsMatchClockEnabled(state.userPreferences.isMatchClockEnabled);
+        
+        if (state.userPreferences.player1) {
+          setPlayer1(prev => ({ 
+            ...prev, 
+            ...state.userPreferences.player1,
+            color: state.userPreferences.player1.borderColor || state.userPreferences.player1.color || prev.color
+          }));
+        }
+        if (state.userPreferences.player2) {
+          setPlayer2(prev => ({ 
+            ...prev, 
+            ...state.userPreferences.player2,
+            color: state.userPreferences.player2.borderColor || state.userPreferences.player2.color || prev.color
+          }));
+        }
+      } else {
+        // Legacy Player Settings
+        const p1Settings = JSON.parse(localStorage.getItem('pool_player1_settings') || 'null');
+        const p2Settings = JSON.parse(localStorage.getItem('pool_player2_settings') || 'null');
+        if (p1Settings) setPlayer1(p1Settings);
+        if (p2Settings) setPlayer2(p2Settings);
+      }
+
+      // Load Other Data
+      if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
+      if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
+      if (state.apiConfig) setApiConfig(state.apiConfig);
+
+      // Finalize loading
+      setTimeout(() => setIsLoaded(true), 100);
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
-      // Fallback to defaults is already handled by initial state
+      setIsLoaded(true);
     }
   }, []);
 
-  // --- Persistence ---
+  // --- Persistence (Single JSON Source) ---
   useEffect(() => {
-    localStorage.setItem('pool_player1_settings', JSON.stringify(player1));
-  }, [player1]);
+    if (!isLoaded) return;
+
+    const state = {
+      teamData: { team1Name, team2Name, team1Players, team2Players },
+      gameData: { 
+        matchHistory, 
+        player1Score: player1.score, 
+        player2Score: player2.score, 
+        selectedMatchIndex, 
+        shotClock, 
+        matchClock 
+      },
+      userPreferences: {
+        player1: { 
+          name: player1.name, 
+          borderColor: player1.color,
+          bgColor: player1.bgColor,
+          screenColor: player1.screenColor
+        },
+        player2: { 
+          name: player2.name, 
+          borderColor: player2.color,
+          bgColor: player2.bgColor,
+          screenColor: player2.screenColor
+        },
+        shotClockDuration,
+        isShotClockEnabled,
+        matchClockDuration,
+        isMatchClockEnabled
+      },
+      matchupSettings,
+      playerPreferences,
+      apiConfig
+    };
+    localStorage.setItem('pool_app_state', JSON.stringify(state));
+  }, [
+    isLoaded,
+    team1Name, team2Name, team1Players, team2Players,
+    matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
+    shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
+    matchupSettings, playerPreferences, apiConfig
+  ]);
+
+  // Sync current settings to matchupSettings and playerPreferences when they change
+  useEffect(() => {
+    if (selectedMatchIndex !== null) {
+      setMatchupSettings(prev => ({
+        ...prev,
+        [selectedMatchIndex]: {
+          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor },
+          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor },
+          shotClockDuration,
+          isShotClockEnabled,
+          matchClockDuration,
+          isMatchClockEnabled
+        }
+      }));
+    }
+
+    // Always sync player colors to playerPreferences if they have names
+    if (player1.name) {
+      setPlayerPreferences(prev => ({
+        ...prev,
+        [player1.name]: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor }
+      }));
+    }
+    if (player2.name) {
+      setPlayerPreferences(prev => ({
+        ...prev,
+        [player2.name]: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor }
+      }));
+    }
+  }, [
+    selectedMatchIndex, 
+    player1.name, player1.color, player1.bgColor, player1.screenColor,
+    player2.name, player2.color, player2.bgColor, player2.screenColor,
+    shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled
+  ]);
+
+  // Focus email input when email method is selected
+  useEffect(() => {
+    if (exportMethod === 'email' && showExportMenu) {
+      setTimeout(() => emailInputRef.current?.focus(), 100);
+    }
+  }, [exportMethod, showExportMenu]);
+
+  // Load player preferences when names change (e.g. typed in scoreboard)
+  useEffect(() => {
+    if (player1.name && playerPreferences[player1.name]) {
+      const pref = playerPreferences[player1.name];
+      setPlayer1(prev => ({
+        ...prev,
+        color: pref.color,
+        bgColor: pref.bgColor,
+        screenColor: pref.screenColor
+      }));
+    }
+  }, [player1.name]);
 
   useEffect(() => {
-    localStorage.setItem('pool_player2_settings', JSON.stringify(player2));
-  }, [player2]);
-
-  useEffect(() => {
-    localStorage.setItem('pool_team1_name', team1Name);
-  }, [team1Name]);
-
-  useEffect(() => {
-    localStorage.setItem('pool_team2_name', team2Name);
-  }, [team2Name]);
-
-  useEffect(() => {
-    localStorage.setItem('pool_team1_players', JSON.stringify(team1Players));
-  }, [team1Players]);
-
-  useEffect(() => {
-    localStorage.setItem('pool_team2_players', JSON.stringify(team2Players));
-  }, [team2Players]);
-
-  useEffect(() => {
-    localStorage.setItem('pool_match_history', JSON.stringify(matchHistory));
-  }, [matchHistory]);
+    if (player2.name && playerPreferences[player2.name]) {
+      const pref = playerPreferences[player2.name];
+      setPlayer2(prev => ({
+        ...prev,
+        color: pref.color,
+        bgColor: pref.bgColor,
+        screenColor: pref.screenColor
+      }));
+    }
+  }, [player2.name]);
 
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
@@ -324,7 +515,6 @@ export default function App() {
 
     const updatedHistory = [newEntry, ...matchHistory];
     setMatchHistory(updatedHistory);
-    localStorage.setItem('pool_match_history', JSON.stringify(updatedHistory));
     
     // Move to next matchup if available
     if (selectedMatchIndex !== null) {
@@ -356,15 +546,59 @@ export default function App() {
       !((m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1))
     );
     setMatchHistory(updatedHistory);
-    localStorage.setItem('pool_match_history', JSON.stringify(updatedHistory));
   };
 
   const selectTeamMatch = (index: number) => {
     const p1Name = team1Players[index] || `PLAYER ${index + 1}`;
     const p2Name = team2Players[index] || `PLAYER ${index + 1}`;
     
-    setPlayer1(prev => ({ ...prev, name: p1Name, score: 0 }));
-    setPlayer2(prev => ({ ...prev, name: p2Name, score: 0 }));
+    // Load individual player preferences if they exist
+    const p1Pref = playerPreferences[p1Name];
+    const p2Pref = playerPreferences[p2Name];
+    
+    // Load matchup-specific settings (clocks)
+    const settings = matchupSettings[index];
+
+    // Load existing scores if available
+    const existingResult = getMatchResult(p1Name, p2Name);
+    let p1Score = 0;
+    let p2Score = 0;
+
+    if (existingResult) {
+      if (existingResult.player1 === p1Name) {
+        p1Score = existingResult.score1;
+        p2Score = existingResult.score2;
+      } else {
+        p1Score = existingResult.score2;
+        p2Score = existingResult.score1;
+      }
+    }
+    
+    setPlayer1(prev => ({ 
+      ...prev, 
+      name: p1Name, 
+      score: p1Score,
+      color: p1Pref?.color || (settings?.player1.color) || '#FFFFFF',
+      bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#881337',
+      screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000'
+    }));
+    
+    setPlayer2(prev => ({ 
+      ...prev, 
+      name: p2Name, 
+      score: p2Score,
+      color: p2Pref?.color || (settings?.player2.color) || '#FFFFFF',
+      bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#1e3a8a',
+      screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000'
+    }));
+
+    if (settings) {
+      setShotClockDuration(settings.shotClockDuration);
+      setIsShotClockEnabled(settings.isShotClockEnabled);
+      setMatchClockDuration(settings.matchClockDuration);
+      setIsMatchClockEnabled(settings.isMatchClockEnabled);
+    }
+    
     setSelectedMatchIndex(index);
     setView('scoreboard');
     resetTimer();
@@ -397,15 +631,21 @@ export default function App() {
   };
 
   const clearTeams = () => {
-    setTeam1Name('TEAM 1');
-    setTeam2Name('TEAM 2');
+    // Clear Team Data
+    setTeam1Name('');
+    setTeam2Name('');
     setTeam1Players([]);
     setTeam2Players([]);
+    
+    // Clear Game Data
+    setPlayer1(prev => ({ ...prev, score: 0 }));
+    setPlayer2(prev => ({ ...prev, score: 0 }));
+    setMatchHistory([]);
+    setMatchupSettings({});
     setSelectedMatchIndex(null);
-    localStorage.removeItem('pool_team1_name');
-    localStorage.removeItem('pool_team2_name');
-    localStorage.removeItem('pool_team1_players');
-    localStorage.removeItem('pool_team2_players');
+    setShotClock(shotClockDuration);
+    setMatchClock(matchClockDuration);
+    
     setShowClearTeamsConfirm(false);
   };
 
@@ -419,11 +659,6 @@ export default function App() {
     setTeam1Players(t1Players);
     setTeam2Name(t2Name);
     setTeam2Players(t2Players);
-    
-    localStorage.setItem('pool_team1_name', t1Name);
-    localStorage.setItem('pool_team2_name', t2Name);
-    localStorage.setItem('pool_team1_players', JSON.stringify(t1Players));
-    localStorage.setItem('pool_team2_players', JSON.stringify(t2Players));
   };
 
   const parseTime = (timeStr: string) => {
@@ -435,53 +670,131 @@ export default function App() {
     return parseInt(timeStr);
   };
 
-  const downloadData = () => {
-    if (matchHistory.length === 0) {
-      // If no history, just download team info
-      const headers = ['Team', 'Player Name'];
-      let csvContent = headers.join(',') + '\n';
-      
-      team1Players.forEach(p => csvContent += `${team1Name},${p}\n`);
-      team2Players.forEach(p => csvContent += `${team2Name},${p}\n`);
-      
-      const now = new Date();
-      const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
-      const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.csv`;
-      
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    const headers = ['Date', 'Team 1', 'Player 1', 'Score 1', 'Team 2', 'Player 2', 'Score 2', 'Winner', 'Shot Clock Setting', 'Match Clock Remaining'];
-    const rows = matchHistory.map(entry => [
-      new Date(entry.date).toLocaleString('en-GB'),
-      entry.team1 || 'N/A',
-      entry.player1,
-      entry.score1,
-      entry.team2 || 'N/A',
-      entry.player2,
-      entry.score2,
-      entry.winner,
-      entry.shotClockSetting ? `${entry.shotClockSetting}s` : 'OFF',
-      entry.matchClockRemaining !== undefined ? formatTime(entry.matchClockRemaining) : 'OFF'
-    ]);
-
-    let csvContent = headers.join(',') + '\n' + 
-                     rows.map(e => e.map(val => `"${val}"`).join(',')).join('\n');
+  const generateCSV = () => {
+    let csvContent = "SECTION: TEAM SETUP\n";
+    csvContent += "Team,Player Name,Highlight Color\n";
     
+    team1Players.forEach(p => {
+      const pref = playerPreferences[p];
+      csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFFFF'}"\n`;
+    });
+    team2Players.forEach(p => {
+      const pref = playerPreferences[p];
+      csvContent += `"${team2Name}","${p}","${pref?.color || '#FFFFFF'}"\n`;
+    });
+
+    csvContent += "\nSECTION: MATCH HISTORY\n";
+    csvContent += "Date,Team 1,Player 1,Score 1,Team 2,Player 2,Score 2,Winner,Shot Clock Setting,Match Clock Remaining\n";
+    matchHistory.forEach(entry => {
+      const dateObj = new Date(entry.date);
+      const formattedDate = dateObj.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }) + ', ' + dateObj.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      const row = [
+        formattedDate,
+        entry.team1 || team1Name,
+        entry.player1,
+        entry.score1,
+        entry.team2 || team2Name,
+        entry.player2,
+        entry.score2,
+        entry.winner,
+        entry.shotClockSetting ? `${entry.shotClockSetting}s` : 'OFF',
+        entry.matchClockRemaining !== undefined && entry.matchClockRemaining !== null ? formatTime(entry.matchClockRemaining) : 'OFF'
+      ];
+      csvContent += row.map(val => `"${val}"`).join(',') + '\n';
+    });
+
+    csvContent += "\nSECTION: TEAM TOTALS\n";
+    csvContent += "Team,Total Score\n";
+    csvContent += `"${team1Name}","${teamTotals.t1}"\n`;
+    csvContent += `"${team2Name}","${teamTotals.t2}"\n`;
+
+    csvContent += "\nSECTION: SETTINGS\n";
+    csvContent += "Setting,Value\n";
+    csvContent += `Shot Clock Enabled,"${isShotClockEnabled}"\n`;
+    csvContent += `Shot Clock Duration,"${shotClockDuration}s"\n`;
+    csvContent += `Match Clock Enabled,"${isMatchClockEnabled}"\n`;
+    csvContent += `Match Clock Duration,"${formatTime(matchClockDuration)}"\n`;
+    csvContent += `Player 1 Highlight Color,"${player1.color}"\n`;
+    csvContent += `Player 2 Highlight Color,"${player2.color}"\n`;
+    csvContent += `Selected Match Index,"${selectedMatchIndex}"\n`;
+
+    csvContent += "\nSECTION: PLAYER PREFERENCES\n";
+    csvContent += "Player Name,Highlight Color\n";
+    // Include current active player names if they have colors
+    csvContent += `"Player 1","${player1.color}"\n`;
+    csvContent += `"Player 2","${player2.color}"\n`;
+    
+    Object.entries(playerPreferences).forEach(([name, pref]: [string, any]) => {
+      csvContent += `"${name}","${pref.color}"\n`;
+    });
+
+    return csvContent;
+  };
+
+  const generateJSON = () => {
+    const state = {
+      settings: {
+        player1: {
+          id: player1.id,
+          name: player1.name,
+          score: player1.score,
+          isTurn: player1.isTurn,
+          highlightColor: player1.color
+        },
+        player2: {
+          id: player2.id,
+          name: player2.name,
+          score: player2.score,
+          isTurn: player2.isTurn,
+          highlightColor: player2.color
+        },
+        shotClockDuration,
+        isShotClockEnabled,
+        matchClockDuration,
+        isMatchClockEnabled
+      },
+      teams: {
+        team1Name,
+        team2Name,
+        team1Players,
+        team2Players,
+        selectedMatchIndex,
+        totals: teamTotals
+      },
+      playerPreferences: Object.entries(playerPreferences).reduce((acc, [name, pref]: [string, any]) => {
+        acc[name] = pref.color;
+        return acc;
+      }, {} as Record<string, string>),
+      history: matchHistory,
+      lastUpdated: new Date().toISOString()
+    };
+    return JSON.stringify(state, null, 2);
+  };
+
+  const downloadData = (format: 'csv' | 'json' = 'csv') => {
     const now = new Date();
     const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
-    const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.csv`;
+    const extension = format === 'json' ? 'json' : 'csv';
+    const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.${extension}`;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let content: string | Blob;
+    if (format === 'json') {
+      content = generateJSON();
+    } else {
+      content = generateCSV();
+    }
+
+    const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
@@ -492,10 +805,93 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const shareData = async (format: 'csv' | 'json' = 'csv') => {
+    const now = new Date();
+    const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    const extension = format === 'json' ? 'json' : 'csv';
+    const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.${extension}`;
+
+    let content: string;
+    if (format === 'json') {
+      content = generateJSON();
+    } else {
+      content = generateCSV();
+    }
+
+    const file = new File([content], fileName, { type: format === 'json' ? 'application/json' : 'text/csv' });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Pool Tournament Data',
+          text: `Tournament data for ${team1Name} vs ${team2Name}`
+        });
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      alert('Sharing is not supported on this device/browser.');
+    }
+  };
+
+  const handleExportAction = async () => {
+    if (exportMethod === 'download') {
+      downloadData(exportFormat);
+    } else if (exportMethod === 'share') {
+      shareData(exportFormat);
+    } else if (exportMethod === 'email') {
+      // Placeholder for email
+      console.log('Emailing to:', exportEmail);
+    } else if (exportMethod === 'server') {
+      if (!apiConfig.url) {
+        alert('API URL not configured. Please set it in Settings.');
+        return;
+      }
+      
+      setIsApiSending(true);
+      try {
+        const body = generateJSON();
+        
+        console.log('--- API POST REQUEST START ---');
+        console.log('URL:', apiConfig.url);
+        console.log('Headers:', {
+          'Content-Type': 'application/json',
+          'x-api-key': apiConfig.key.substring(0, 4) + '...' // Log partial key for safety
+        });
+        console.log('Payload:', JSON.parse(body));
+        
+        const response = await fetch(apiConfig.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiConfig.key
+          },
+          body
+        });
+
+        console.log('Response Status:', response.status);
+        console.log('--- API POST REQUEST END ---');
+
+        if (response.ok) {
+          alert('Data sent to server successfully!');
+        } else {
+          throw new Error(`Server responded with ${response.status}`);
+        }
+      } catch (err) {
+        console.error('API Error:', err);
+        alert('Failed to send data to server. Check console for details.');
+      } finally {
+        setIsApiSending(false);
+      }
+    }
+    setShowExportMenu(false);
+  };
+
   const uploadData = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv';
+    input.accept = '.json,.csv';
     input.onchange = (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -506,6 +902,106 @@ export default function App() {
         if (!content) return;
 
         try {
+          // Check if it's JSON
+          if (file.name.endsWith('.json')) {
+            const state = JSON.parse(content) as any;
+            
+            // Support new structure
+            if (state.settings) {
+              setShotClockDuration(state.settings.shotClockDuration || SHOT_CLOCK_DEFAULT);
+              setIsShotClockEnabled(!!state.settings.isShotClockEnabled);
+              setMatchClockDuration(state.settings.matchClockDuration || 600);
+              setIsMatchClockEnabled(!!state.settings.isMatchClockEnabled);
+              
+              if (state.settings.player1) {
+                setPlayer1(prev => ({ 
+                  ...prev, 
+                  name: state.settings.player1.name || prev.name,
+                  score: state.settings.player1.score ?? prev.score,
+                  isTurn: state.settings.player1.isTurn ?? prev.isTurn,
+                  color: state.settings.player1.highlightColor || prev.color 
+                }));
+              }
+              if (state.settings.player2) {
+                setPlayer2(prev => ({ 
+                  ...prev, 
+                  name: state.settings.player2.name || prev.name,
+                  score: state.settings.player2.score ?? prev.score,
+                  isTurn: state.settings.player2.isTurn ?? prev.isTurn,
+                  color: state.settings.player2.highlightColor || prev.color 
+                }));
+              }
+            }
+
+            if (state.teams) {
+              setTeam1Name(state.teams.team1Name || '');
+              setTeam2Name(state.teams.team2Name || '');
+              setTeam1Players(state.teams.team1Players || []);
+              setTeam2Players(state.teams.team2Players || []);
+              setSelectedMatchIndex(state.teams.selectedMatchIndex ?? 0);
+            }
+
+            if (state.history) {
+              setMatchHistory(state.history || []);
+            }
+
+            if (state.playerPreferences) {
+              const mappedPrefs: Record<string, { color: string, bgColor: string, screenColor: string }> = {};
+              Object.entries(state.playerPreferences).forEach(([name, pref]: [string, any]) => {
+                // Handle both new (string) and old ({borderColor}) formats
+                const color = typeof pref === 'string' ? pref : (pref.borderColor || '#FFFFFF');
+                mappedPrefs[name] = {
+                  color: color,
+                  bgColor: '#000000',
+                  screenColor: '#000000'
+                };
+              });
+              setPlayerPreferences(mappedPrefs);
+            }
+
+            // Legacy support
+            if (state.teamData) {
+              setTeam1Name(state.teamData.team1Name || '');
+              setTeam2Name(state.teamData.team2Name || '');
+              setTeam1Players(state.teamData.team1Players || []);
+              setTeam2Players(state.teamData.team2Players || []);
+            }
+            if (state.gameData) {
+              setMatchHistory(state.gameData.matchHistory || []);
+              setSelectedMatchIndex(state.gameData.selectedMatchIndex);
+              setShotClock(state.gameData.shotClock ?? SHOT_CLOCK_DEFAULT);
+              setMatchClock(state.gameData.matchClock ?? 600);
+              setPlayer1(prev => ({ ...prev, score: state.gameData.player1Score || 0 }));
+              setPlayer2(prev => ({ ...prev, score: state.gameData.player2Score || 0 }));
+            }
+            if (state.userPreferences) {
+              setShotClockDuration(state.userPreferences.shotClockDuration || SHOT_CLOCK_DEFAULT);
+              setIsShotClockEnabled(!!state.userPreferences.isShotClockEnabled);
+              setMatchClockDuration(state.userPreferences.matchClockDuration || 600);
+              setIsMatchClockEnabled(!!state.userPreferences.isMatchClockEnabled);
+              if (state.userPreferences.player1) {
+                setPlayer1(prev => ({ 
+                  ...prev, 
+                  name: state.userPreferences.player1.name || prev.name,
+                  color: state.userPreferences.player1.borderColor || prev.color 
+                }));
+              }
+              if (state.userPreferences.player2) {
+                setPlayer2(prev => ({ 
+                  ...prev, 
+                  name: state.userPreferences.player2.name || prev.name,
+                  color: state.userPreferences.player2.borderColor || prev.color 
+                }));
+              }
+            }
+            if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
+            if (state.apiConfig) setApiConfig(state.apiConfig);
+            
+            alert('Tournament data loaded successfully!');
+            return;
+          }
+
+          // Fallback to legacy CSV parsing
           const lines = content.split('\n').map(l => l.trim()).filter(l => l);
           if (lines.length < 2) return;
 
@@ -528,13 +1024,110 @@ export default function App() {
             return values;
           };
 
+          const parseUKDate = (dateStr: string) => {
+            const parts = dateStr.split(', ');
+            if (parts.length !== 2) return new Date(dateStr);
+            const dateParts = parts[0].split('/');
+            const timeParts = parts[1].split(':');
+            if (dateParts.length === 3 && timeParts.length === 3) {
+              return new Date(
+                parseInt(dateParts[2]),
+                parseInt(dateParts[1]) - 1,
+                parseInt(dateParts[0]),
+                parseInt(timeParts[0]),
+                parseInt(timeParts[1]),
+                parseInt(timeParts[2])
+              );
+            }
+            return new Date(dateStr);
+          };
+
+          // Check if it's the new multi-section format
+          if (lines[0].startsWith('SECTION:')) {
+            let currentSection = '';
+            let t1Players: string[] = [];
+            let t2Players: string[] = [];
+            let t1Name = '';
+            let t2Name = '';
+            let importedHistory: MatchHistoryEntry[] = [];
+            let importedPlayerPreferences: Record<string, { color: string, bgColor: string, screenColor: string }> = { ...playerPreferences };
+
+            lines.forEach(line => {
+              if (line.startsWith('SECTION:')) {
+                currentSection = line.replace('SECTION:', '').trim();
+                return;
+              }
+              if (!line || line.trim() === '') return;
+
+              const values = parseCSVLine(line);
+              
+              if (currentSection === 'TEAM SETUP') {
+                if (values[0] === 'Team') return;
+                const team = values[0];
+                const player = values[1];
+                const color = values[2];
+                if (team && player) {
+                  if (!t1Name) t1Name = team;
+                  if (team === t1Name) {
+                    if (!t1Players.includes(player)) t1Players.push(player);
+                  } else {
+                    if (!t2Name) t2Name = team;
+                    if (!t2Players.includes(player)) t2Players.push(player);
+                  }
+                  if (color) {
+                    importedPlayerPreferences[player] = { color, bgColor: '#000000', screenColor: '#000000' };
+                  }
+                }
+              } else if (currentSection === 'MATCH HISTORY') {
+                if (values[0] === 'Date') return;
+                importedHistory.push({
+                  id: `imported-${Date.now()}-${Math.random()}`,
+                  date: parseUKDate(values[0]).toISOString(),
+                  team1: values[1],
+                  player1: values[2],
+                  score1: parseInt(values[3]) || 0,
+                  team2: values[4],
+                  player2: values[5],
+                  score2: parseInt(values[6]) || 0,
+                  winner: values[7],
+                  shotClockSetting: values[8] !== 'OFF' ? parseInt(values[8].replace('s', '')) : undefined,
+                  matchClockRemaining: values[9] !== 'OFF' ? parseTime(values[9]) : undefined
+                });
+              } else if (currentSection === 'SETTINGS') {
+                if (values[0] === 'Setting') return;
+                const key = values[0];
+                const val = values[1];
+                if (key === 'Shot Clock Enabled') setIsShotClockEnabled(val === 'true');
+                if (key === 'Shot Clock Duration') setShotClockDuration(parseInt(val.replace('s', '')));
+                if (key === 'Match Clock Enabled') setIsMatchClockEnabled(val === 'true');
+                if (key === 'Match Clock Duration') setMatchClockDuration(parseTime(val) || 600);
+                if (key === 'Player 1 Highlight Color') setPlayer1(p => ({ ...p, color: val }));
+                if (key === 'Player 2 Highlight Color') setPlayer2(p => ({ ...p, color: val }));
+                if (key === 'Selected Match Index') setSelectedMatchIndex(val === 'NULL' ? null : parseInt(val));
+              } else if (currentSection === 'PLAYER PREFERENCES') {
+                if (values[0] === 'Player Name') return;
+                const name = values[0];
+                const color = values[1];
+                if (name && color) {
+                  importedPlayerPreferences[name] = { color, bgColor: '#000000', screenColor: '#000000' };
+                }
+              }
+            });
+
+            setMatchHistory(importedHistory);
+            setPlayerPreferences(importedPlayerPreferences);
+            updateTeamData(t1Name, t1Players, t2Name, t2Players);
+            alert('Tournament data loaded successfully!');
+            return;
+          }
+
           const headers = parseCSVLine(lines[0]);
           
           if (headers[0] === 'Team' && headers[1] === 'Player Name') {
             const t1Players: string[] = [];
             const t2Players: string[] = [];
-            let t1Name = 'TEAM 1';
-            let t2Name = 'TEAM 2';
+            let t1Name = '';
+            let t2Name = '';
 
             lines.slice(1).forEach(line => {
               const values = parseCSVLine(line);
@@ -561,8 +1154,8 @@ export default function App() {
             const history: MatchHistoryEntry[] = [];
             const t1PlayersSet = new Set<string>();
             const t2PlayersSet = new Set<string>();
-            let t1Name = 'TEAM 1';
-            let t2Name = 'TEAM 2';
+            let t1Name = '';
+            let t2Name = '';
 
             lines.slice(1).forEach((line, idx) => {
               const values = parseCSVLine(line);
@@ -621,7 +1214,6 @@ export default function App() {
 
   const clearHistory = () => {
     setMatchHistory([]);
-    localStorage.removeItem('pool_match_history');
   };
 
   const toggleFullscreen = () => {
@@ -677,17 +1269,20 @@ export default function App() {
       <motion.nav 
         initial={false}
         animate={{ 
-          y: (window.innerWidth < 1024 && (!isNavVisible || isKeyboardOpen)) ? -62 : 0,
+          y: (!deviceInfo.isDesktop && (
+            (!isNavVisible && deviceInfo.isPhone) || 
+            (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
+          )) ? (deviceInfo.isPhone ? -36 : -64) : 0,
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 h-16 lg:h-32 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
+        className="fixed top-0 left-0 right-0 h-9 md:h-16 lg:h-24 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
         }}
       >
-        <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex items-center gap-2 lg:gap-4 shrink-0">
           <div 
             className="w-8 h-8 lg:w-16 lg:h-16 rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50"
           >
@@ -697,14 +1292,66 @@ export default function App() {
             />
           </div>
           <h1 
-            className="text-xl lg:text-4xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500"
+            className={`text-xl lg:text-4xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
             PoolPro
           </h1>
         </div>
+
+        {/* Centered Clocks */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-auto">
+          {(isShotClockEnabled || isMatchClockEnabled) && (
+            <div className="flex items-center gap-2 sm:gap-6 bg-slate-900/60 backdrop-blur-xl px-3 py-1.5 sm:px-6 sm:py-2 rounded-2xl border border-slate-800/50 shadow-2xl">
+              {isMatchClockEnabled && (
+                <div className="flex flex-col items-center">
+                  <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Match</span>
+                  <div 
+                    className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : ''}`}
+                    style={matchClock > 60 ? { color: player1.color } : {}}
+                  >
+                    <Timer className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                    {formatTime(matchClock)}
+                  </div>
+                </div>
+              )}
+
+              {isShotClockEnabled && (
+                <div className="flex flex-col items-center">
+                  <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Shot</span>
+                  <div 
+                    className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : ''}`}
+                    style={shotClock > 5 ? { color: player2.color } : {}}
+                  >
+                    <Timer className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
+                    {shotClock}s
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-1.5 ml-1 sm:ml-2">
+                <button 
+                  onClick={isTimerRunning ? pauseTimer : startTimer}
+                  className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all border border-slate-700/50 active:scale-90"
+                  style={{ color: isTimerRunning ? player2.color : player1.color }}
+                >
+                  {isTimerRunning ? <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                </button>
+                <button 
+                  onClick={() => {
+                    resetTimer();
+                    if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
+                  }}
+                  className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all border border-slate-700/50 text-slate-400 active:scale-90"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         
-        <div className="flex items-center gap-2 sm:gap-4 lg:gap-8">
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-8 shrink-0">
           <button 
             onClick={toggleFullscreen}
             className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 hidden sm:flex"
@@ -723,14 +1370,20 @@ export default function App() {
             <Trophy className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
-            onClick={() => setView('teams')}
+            onClick={() => {
+              setView('teams');
+              if (deviceInfo.isPhone) setIsNavVisible(false);
+            }}
             className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'teams' ? { backgroundColor: `${player1.color}33` } : {}}
           >
             <Users className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
-            onClick={() => setView('settings')}
+            onClick={() => {
+              setView('settings');
+              if (deviceInfo.isPhone) setIsNavVisible(false);
+            }}
             className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'settings' ? { backgroundColor: `${player2.color}33` } : {}}
           >
@@ -739,14 +1392,59 @@ export default function App() {
         </div>
       </motion.nav>
 
+      {/* Vertical Team Names (Desktop/Tablet) - Moved to root for stability */}
+      <AnimatePresence>
+        {view === 'scoreboard' && !deviceInfo.isPhone && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 0.7, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+            >
+              <h2 
+                className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap" 
+                style={{ 
+                  color: player1.color,
+                  fontSize: `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                }}
+              >
+                {team1Name}
+              </h2>
+            </motion.div>
+            <motion.div 
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 0.7, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
+              className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+            >
+              <h2 
+                className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180" 
+                style={{ 
+                  color: player2.color,
+                  fontSize: `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                }}
+              >
+                {team2Name}
+              </h2>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <motion.main 
         initial={false}
         animate={{ 
-          paddingTop: (view === 'scoreboard' && window.innerWidth < 1024 && isNavVisible) ? 64 : (view === 'scoreboard' && window.innerWidth < 1024 ? 2 : 0),
+          paddingTop: (view === 'teams' || view === 'settings')
+            ? `calc(${deviceInfo.isPhone ? '36px' : (deviceInfo.isTablet ? '64px' : '96px')} + 8vh)`
+            : (view === 'scoreboard' 
+                ? (deviceInfo.isPhone ? 36 : (deviceInfo.isTablet ? 64 : 96)) 
+                : 0),
+          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -36 : 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-end sm:justify-center sm:gap-4 lg:gap-6' : 'justify-start pt-20 lg:pt-40 pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-start sm:justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
       >
         <AnimatePresence mode="wait">
@@ -754,10 +1452,7 @@ export default function App() {
             <motion.div
               key="scoreboard-view"
               initial={{ opacity: 0 }}
-              animate={{ 
-                opacity: 1,
-                y: (window.innerWidth < 1024 && !isNavVisible) ? "-7vh" : 0 
-              }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
               className="flex flex-col sm:flex-none w-full"
@@ -766,105 +1461,13 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="relative pt-1 sm:pb-8 sm:py-2 flex flex-col gap-1 sm:gap-4 min-h-0 flex-1 sm:flex-none justify-end sm:justify-start pb-0"
+                className="relative pt-1 sm:pb-8 sm:py-2 flex flex-col gap-1 sm:gap-2 min-h-0 flex-1 sm:flex-none justify-end sm:justify-start pb-0"
               >
-                
-              {/* Game Info Header */}
-              <div className="flex items-center justify-center shrink-0 mt-auto sm:mt-0">
-                {(isShotClockEnabled || isMatchClockEnabled) && (
-                  <div 
-                    className="flex items-center justify-center bg-black/50 p-1 sm:p-2 lg:p-2 rounded-2xl border-2 transition-all duration-500 w-full max-w-md"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                      borderRadius: '1rem'
-                    }}
-                  >
-                    <div className="flex items-center gap-4 sm:gap-8">
-                      {isMatchClockEnabled && (
-                        <div className="flex flex-col items-center">
-                          <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Match Clock</span>
-                          <div 
-                            className={`flex items-center gap-2 text-lg sm:text-2xl font-mono font-bold transition-colors duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse' : ''}`}
-                            style={matchClock > 60 ? { color: player1.color } : {}}
-                          >
-                            <Timer className="w-4 h-4 sm:w-5 sm:h-5" />
-                            {formatTime(matchClock)}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {isShotClockEnabled && (
-                        <div className="flex flex-col items-center">
-                          <span className="hidden sm:block text-[10px] font-bold uppercase tracking-tighter text-slate-500 mb-1">Shot Clock</span>
-                          <div 
-                            className={`flex items-center gap-2 text-lg sm:text-2xl font-mono font-bold transition-colors duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse' : ''}`}
-                            style={shotClock > 5 ? { color: player2.color } : {}}
-                          >
-                            <Timer className="w-4 h-4 sm:w-5 sm:h-5" />
-                            {shotClock}s
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={isTimerRunning ? pauseTimer : startTimer}
-                          className="p-1 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border"
-                          style={{ borderColor: isTimerRunning ? player2.color : player1.color, color: isTimerRunning ? player2.color : player1.color }}
-                        >
-                          {isTimerRunning ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
-                        </button>
-                        <button 
-                          onClick={() => {
-                            resetTimer();
-                            if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
-                          }}
-                          className="p-1 sm:p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all duration-500 border border-slate-700"
-                          style={{ color: player1.color }}
-                        >
-                          <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Score Cards Grid & Sidebars (Grouped for perfect alignment) */}
+              {/* Score Cards Grid */}
               <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
-                {/* Team Names Display (Absolute to the card grid area) - Hidden on mobile portrait */}
-                <div 
-                  className="absolute inset-y-0 -left-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
-                  style={{ width: 'var(--sidebar-width)' }}
-                >
-                  <div 
-                    className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text rotate-180 h-full flex items-center justify-center"
-                    style={{ color: player1.color }}
-                  >
-                    {team1Name}
-                  </div>
-                </div>
-                <div 
-                  className="absolute inset-y-0 -right-[var(--sidebar-width)] hidden sm:flex items-center justify-center pointer-events-none z-0 overflow-hidden"
-                  style={{ width: 'var(--sidebar-width)' }}
-                >
-                  <div 
-                    className="text-[min(4vw,14px)] sm:text-[32px] lg:text-[48px] font-black uppercase tracking-[0.2em] vertical-text h-full flex items-center justify-center"
-                    style={{ color: player2.color }}
-                  >
-                    {team2Name}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 lg:gap-5 w-full">
                   {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1">
-                        {/* Mobile Portrait Team Name Header */}
-                        <div className="sm:hidden flex items-center justify-center py-1 bg-black/50 rounded-t-xl border-x-2 border-t-2" style={{ borderColor: p.color }}>
-                          <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: p.color }}>
-                            {idx === 0 ? team1Name : team2Name}
-                          </span>
-                        </div>
                         
                         <motion.div
                           onClick={() => {
@@ -911,14 +1514,17 @@ export default function App() {
                             <input
                               type="text"
                               value={p.name}
+                              placeholder={`PLAYER ${idx + 1} NAME`}
                               onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
                               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
                               style={{ color: p.color }}
                             />
                           ) : (
-                            <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
-                              {p.name}
-                            </h2>
+                            p.name && (
+                              <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
+                                {p.name}
+                              </h2>
+                            )
                           )}
 
                           <div className="relative group mt-[-4px] sm:mt-0">
@@ -961,10 +1567,7 @@ export default function App() {
             <motion.div 
               key="finish-button"
               initial={{ y: 100, opacity: 0 }}
-              animate={{ 
-                y: (window.innerWidth < 1024 && isNavVisible) ? 100 : 0,
-                opacity: (window.innerWidth < 1024 && isNavVisible) ? 0 : 1
-              }}
+              animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
               className="w-full flex items-center justify-center shrink-0 z-50 mt-[5vh] sm:mt-6 lg:mt-8 mb-6 sm:mb-6 lg:mb-6"
@@ -1002,7 +1605,7 @@ export default function App() {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button 
-                    onClick={downloadData}
+                    onClick={() => setShowExportMenu(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
                     style={{ 
                       borderColor: player2.color,
@@ -1035,7 +1638,7 @@ export default function App() {
                     }}
                   >
                     <Trash2 className="w-4 h-4" style={{ color: player2.color }} />
-                    Clear All
+                    Clear Team Data
                   </button>
                 </div>
               </div>
@@ -1369,20 +1972,13 @@ export default function App() {
                         <input
                           type="text"
                           value={p.name}
-                          onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                          className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all"
+                          placeholder={`PLAYER ${idx + 1} NAME`}
+                          readOnly
+                          className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all cursor-not-allowed opacity-70"
                           style={{ 
                             borderColor: 'transparent',
                             outline: 'none',
                             boxShadow: 'none'
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.borderColor = p.color;
-                            e.target.style.boxShadow = `0 0 0 2px ${p.color}33`;
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.borderColor = 'transparent';
-                            e.target.style.boxShadow = 'none';
                           }}
                         />
                         <div className="space-y-6">
@@ -1572,17 +2168,152 @@ export default function App() {
                       style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1 text-center sm:text-left">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Restore Default Settings</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets all color selections to default.</p>
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Settings</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
                       </div>
                       <button 
                         onClick={() => setShowRestoreDefaultsConfirm(true)}
                         className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        Restore Defaults
+                        Reset Settings
                       </button>
                     </div>
+                  </div>
+                </section>
+
+                <section className="pt-8">
+                  <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-6 shadow-xl relative overflow-hidden">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                        <Server className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-black uppercase tracking-tight text-white">API Configuration</h3>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Outbound Tournament Data Sync</p>
+                      </div>
+                      {isApiLocked ? (
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="password"
+                            value={pinInput}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPinInput(val);
+                              if (val === '90210') {
+                                setIsApiLocked(false);
+                                setPinInput('');
+                              }
+                            }}
+                            placeholder="PIN"
+                            className="w-20 bg-black border border-slate-800 rounded-xl px-3 py-2 text-center text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-mono text-sm"
+                          />
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setIsApiLocked(true)}
+                          className="p-2 text-slate-500 hover:text-slate-300 transition-colors"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {!isApiLocked ? (
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target URL</label>
+                          <input 
+                            type="url"
+                            value={apiConfig.url}
+                            onChange={(e) => setApiConfig(prev => ({ ...prev, url: e.target.value }))}
+                            placeholder="https://api.yourserver.com/sync"
+                            className="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-bold"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</label>
+                          <input 
+                            type="password"
+                            value={apiConfig.key}
+                            onChange={(e) => setApiConfig(prev => ({ ...prev, key: e.target.value }))}
+                            placeholder="Secret API Key"
+                            className="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-mono"
+                          />
+                        </div>
+                        <div className="pt-2 flex flex-col gap-3">
+                          <button
+                            onClick={async () => {
+                              console.log('Test Connection clicked');
+                              if (!apiConfig.url) {
+                                setApiTestStatus({ type: 'error', message: 'Please enter a URL first.' });
+                                return;
+                              }
+                              setIsApiSending(true);
+                              setApiTestStatus({ type: 'idle', message: 'Testing...' });
+                              try {
+                                const testBody = JSON.stringify({ test: true, timestamp: new Date().toISOString(), type: 'connection_test' });
+                                console.log('Testing connection to:', apiConfig.url);
+                                const res = await fetch(apiConfig.url, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-api-key': apiConfig.key },
+                                  body: testBody
+                                });
+                                if (res.ok) {
+                                  setApiTestStatus({ type: 'success', message: 'Success! Server responded with 200 OK.' });
+                                } else {
+                                  setApiTestStatus({ type: 'error', message: `Failed. Server responded with ${res.status}.` });
+                                }
+                              } catch (err) {
+                                console.error('Test Connection Error:', err);
+                                setApiTestStatus({ type: 'error', message: 'Connection failed. Check console for CORS/Network errors.' });
+                              } finally {
+                                setIsApiSending(false);
+                              }
+                            }}
+                            disabled={isApiSending}
+                            className="w-full h-10 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all border border-slate-700 flex items-center justify-center gap-2"
+                          >
+                            {isApiSending ? (
+                              <>
+                                <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                                Testing...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-3 h-3 text-amber-400" />
+                                Test Connection
+                              </>
+                            )}
+                          </button>
+
+                          {apiTestStatus.type !== 'idle' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className={`p-3 rounded-xl text-[10px] font-bold border ${
+                                apiTestStatus.type === 'success' 
+                                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
+                                  : 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+                              }`}
+                            >
+                              {apiTestStatus.message}
+                            </motion.div>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
+                          This configuration enables the "Send to Server" option in the export menu. 
+                          The payload is a full JSON representation of the current tournament state.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-8 space-y-4 opacity-50">
+                        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
+                          <Layout className="w-8 h-8 text-slate-600" />
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Enter PIN to unlock API settings</p>
+                      </div>
+                    )}
                   </div>
                 </section>
 
@@ -1592,7 +2323,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Version</span>
-                      <span className="font-mono" style={{ color: player1.color }}>1.0.0-pro</span>
+                      <span className="font-mono" style={{ color: player1.color }}>0.6.9-pro</span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Developer</span>
@@ -1618,9 +2349,9 @@ export default function App() {
               >
                 <div className="flex items-center gap-4 text-red-500">
                   <Trash2 className="w-8 h-8" />
-                  <h3 className="text-xl font-bold">Clear All Team Data?</h3>
+                  <h3 className="text-xl font-bold">Clear Team Data?</h3>
                 </div>
-                <p className="text-slate-400">This will permanently delete team names and all player lists. This action cannot be undone.</p>
+                <p className="text-slate-400">This will permanently delete team names, player lists, current scores, and match history. This action cannot be undone.</p>
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowClearTeamsConfirm(false)}
@@ -1632,9 +2363,140 @@ export default function App() {
                     onClick={clearTeams}
                     className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all"
                   >
-                    Clear All
+                    Clear Team Data
                   </button>
                 </div>
+              </motion.div>
+            </div>
+          )}
+
+          {showExportMenu && (
+            <div 
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowExportMenu(false)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-black border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 text-emerald-500">
+                    <Download className="w-8 h-8" />
+                    <h3 className="text-xl font-bold uppercase tracking-tight">Export Tournament</h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowExportMenu(false)}
+                    className="p-2 hover:bg-slate-800 rounded-full transition-all"
+                  >
+                    <X className="w-6 h-6 text-slate-500" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Format Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                    <span className="font-bold uppercase tracking-widest text-xs text-slate-400">File Format</span>
+                    <div className="flex bg-black p-1 rounded-xl border border-slate-800">
+                      <button 
+                        onClick={() => setExportFormat('csv')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${exportFormat === 'csv' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500'}`}
+                      >
+                        CSV
+                      </button>
+                      <button 
+                        onClick={() => setExportFormat('json')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${exportFormat === 'json' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500'}`}
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Export Methods */}
+                  <div className="grid grid-cols-1 gap-3">
+                    {[
+                      { id: 'download', label: 'Download', icon: Download, desc: 'Save to device' },
+                      { id: 'share', label: 'Share', icon: Share2, desc: 'Open system share' },
+                      { id: 'email', label: 'Email', icon: Mail, desc: 'Send via email' },
+                      { id: 'server', label: 'Send to Server', icon: Server, desc: 'Upload to tournament server' }
+                    ].map((method) => (
+                      <button 
+                        key={method.id}
+                        onClick={() => {
+                          const id = method.id as 'download' | 'share' | 'email' | 'server';
+                          setExportMethod(id);
+                          if (id === 'server') {
+                            setExportFormat('json');
+                          } else if (id === 'email' || id === 'download') {
+                            setExportFormat('csv');
+                          } else if (id === 'share') {
+                            shareData(exportFormat);
+                          }
+                        }}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${exportMethod === method.id ? 'bg-emerald-500/10 border-emerald-500' : 'bg-slate-900/30 border-slate-800 hover:border-slate-700'}`}
+                      >
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${exportMethod === method.id ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
+                          <method.icon className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <div className={`font-black uppercase tracking-tight ${exportMethod === method.id ? 'text-emerald-500' : 'text-slate-200'}`}>{method.label}</div>
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{method.desc}</div>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${exportMethod === method.id ? 'border-emerald-500' : 'border-slate-700'}`}>
+                          {exportMethod === method.id && <div className="w-3 h-3 bg-emerald-500 rounded-full" />}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Email Input */}
+                  <AnimatePresence>
+                    {exportMethod === 'email' && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Recipient Email</label>
+                          <input 
+                            ref={emailInputRef}
+                            type="email"
+                            value={exportEmail}
+                            onChange={(e) => setExportEmail(e.target.value)}
+                            placeholder="Enter email address"
+                            className="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-bold"
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <button 
+                  onClick={handleExportAction}
+                  disabled={isApiSending}
+                  className={`w-full h-16 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-3 ${isApiSending ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'}`}
+                >
+                  {isApiSending ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      {exportMethod === 'download' && 'Download'}
+                      {exportMethod === 'share' && 'Share'}
+                      {exportMethod === 'email' && 'Send Email'}
+                      {exportMethod === 'server' && 'Upload to Server'}
+                    </>
+                  )}
+                </button>
               </motion.div>
             </div>
           )}
@@ -1650,9 +2512,9 @@ export default function App() {
               >
                 <div className="flex items-center gap-4 text-blue-500">
                   <RotateCcw className="w-8 h-8" />
-                  <h3 className="text-xl font-bold">Restore Defaults?</h3>
+                  <h3 className="text-xl font-bold">Reset Settings?</h3>
                 </div>
-                <p className="text-slate-400">This will reset all player colors to their original defaults. Your scores and history will not be affected.</p>
+                <p className="text-slate-400">This will reset all player colors and clock settings to their original defaults. Your names, scores, and history will not be affected.</p>
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowRestoreDefaultsConfirm(false)}
@@ -1662,13 +2524,30 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      setPlayer1(prev => ({ ...prev, color: '#FFFFFF', bgColor: '#881337', screenColor: '#000000' }));
-                      setPlayer2(prev => ({ ...prev, color: '#FFFFFF', bgColor: '#1e3a8a', screenColor: '#000000' }));
+                      // Restore User Preferences Only (Colors and Clocks)
+                      setPlayer1(prev => ({ 
+                        ...prev, 
+                        color: '#FFFFFF', 
+                        bgColor: '#881337', 
+                        screenColor: '#000000' 
+                      }));
+                      setPlayer2(prev => ({ 
+                        ...prev, 
+                        color: '#FFFFFF', 
+                        bgColor: '#1e3a8a', 
+                        screenColor: '#000000' 
+                      }));
+                      setShotClockDuration(SHOT_CLOCK_DEFAULT);
+                      setIsShotClockEnabled(false);
+                      setMatchClockDuration(600);
+                      setIsMatchClockEnabled(false);
+                      setPlayerPreferences({});
+                      setMatchupSettings({});
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
                   >
-                    Restore
+                    Reset
                   </button>
                 </div>
               </motion.div>
@@ -1732,13 +2611,13 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-8 items-center">
                   <div className="space-y-4">
-                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player1.color }}>{team1Name}</p>
+                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player1.color }}>{team1Name || 'TEAM 1'}</p>
                     <p className="text-8xl font-black text-white tabular-nums">
                       {teamTotals.t1}
                     </p>
                   </div>
                   <div className="space-y-4">
-                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player2.color }}>{team2Name}</p>
+                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player2.color }}>{team2Name || 'TEAM 2'}</p>
                     <p className="text-8xl font-black text-white tabular-nums">
                       {teamTotals.t2}
                     </p>
