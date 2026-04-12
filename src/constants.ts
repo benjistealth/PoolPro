@@ -1,4 +1,6 @@
 export const THEME_COLORS = [
+  { name: 'Pool Yellow', value: '#FFFF33' },
+  { name: 'Pool Red', value: '#FF001C' },
   { name: 'White', value: '#FFFFFF' },
   { name: 'Slate 200', value: '#E2E8F0' },
   { name: 'Red 400', value: '#F87171' },

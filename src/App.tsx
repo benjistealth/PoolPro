@@ -10,7 +10,6 @@ import {
   Plus, 
   Minus, 
   Trash2,
-  CheckCircle2,
   Circle,
   Palette,
   Maximize,
@@ -22,7 +21,6 @@ import {
   X,
   PlusCircle,
   Share2,
-  Mail,
   Server,
   Zap
 } from 'lucide-react';
@@ -35,8 +33,8 @@ const SHOT_CLOCK_DEFAULT = 30;
 
 export default function App() {
   // --- State ---
-  const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFFFF', bgColor: '#881337', screenColor: '#000000' });
-  const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FFFFFF', bgColor: '#1e3a8a', screenColor: '#000000' });
+  const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFF33', bgColor: '#000000', screenColor: '#000000' });
+  const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FF001C', bgColor: '#000000', screenColor: '#000000' });
   const [matchupSettings, setMatchupSettings] = useState<Record<number, MatchupSettings>>({});
   const [playerPreferences, setPlayerPreferences] = useState<Record<string, { color: string, bgColor: string, screenColor: string }>>({});
   const [team1Name, setTeam1Name] = useState<string>('');
@@ -48,7 +46,6 @@ export default function App() {
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams'>('scoreboard');
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const navTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
@@ -90,97 +87,13 @@ export default function App() {
 
   // Unified Navigation Logic
   useEffect(() => {
-    const { isPhone, isTablet, isDesktop } = deviceInfo;
-    
-    const startHideTimer = () => {
-      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
-      // Auto-hide ONLY on phones when nav is visible and keyboard is closed
-      if (isPhone && isNavVisible && !isKeyboardOpen) {
-        navTimeoutRef.current = setTimeout(() => {
-          setIsNavVisible(false);
-        }, 3000);
-      }
-    };
-
-    const showNav = () => {
-      if (isKeyboardOpen) return;
-      setIsNavVisible(true);
-      startHideTimer();
-    };
-
-    const handleInteraction = (e: Event) => {
-      if (isKeyboardOpen) return;
-      
-      // If nav is already visible, reset the timer on any interaction
-      if (isNavVisible) {
-        startHideTimer();
-      }
-
-      // Specific triggers to SHOW the nav if it's hidden
-      if (!isNavVisible && (e.type === 'click' || e.type === 'touchstart' || e.type === 'scroll')) {
-        if (e.type === 'click' || e.type === 'touchstart') {
-          const clientY = e.type === 'click' 
-            ? (e as MouseEvent).clientY 
-            : (e as TouchEvent).touches[0].clientY;
-          
-          // Show if tap in top 8% of screen
-          if (clientY <= window.innerHeight * 0.08) {
-            showNav();
-          }
-        }
-      }
-    };
-
-    let touchStartY = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-      handleInteraction(e);
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touchEndY = e.changedTouches[0].clientY;
-      // Swipe down from top area (top 100px) to show nav
-      if (touchStartY < 100 && touchEndY > touchStartY + 30) {
-        showNav();
-      }
-    };
-
-    // Initial timer setup
-    startHideTimer();
-
-    // Navigation Visibility Logic
-    if (isDesktop) {
-      // Desktop: Always visible
+    // Keep nav visible unless keyboard is open
+    if (isKeyboardOpen) {
+      if (isNavVisible) setIsNavVisible(false);
+    } else {
       if (!isNavVisible) setIsNavVisible(true);
-    } else if (isTablet) {
-      // Tablet: Visible unless keyboard is open
-      if (isKeyboardOpen && isNavVisible) setIsNavVisible(false);
-      if (!isKeyboardOpen && !isNavVisible) setIsNavVisible(true);
-    } else if (isPhone) {
-      // Phone: Hide if keyboard is open
-      if (isKeyboardOpen && isNavVisible) setIsNavVisible(false);
     }
-
-    window.addEventListener('click', handleInteraction, { passive: true });
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchend', handleTouchEnd, { passive: true });
-    window.addEventListener('scroll', handleInteraction, { passive: true });
-    
-    if (isDesktop) {
-      window.addEventListener('mousemove', (e) => {
-        if (e.clientY <= window.innerHeight * 0.08) showNav();
-        else if (isNavVisible) startHideTimer();
-      }, { passive: true });
-    }
-
-    return () => {
-      window.removeEventListener('click', handleInteraction);
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('scroll', handleInteraction);
-      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
-    };
-  }, [isNavVisible, isKeyboardOpen, view, deviceInfo]);
+  }, [isKeyboardOpen, isNavVisible]);
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
   const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
@@ -196,7 +109,7 @@ export default function App() {
   const [showTeamTotals, setShowTeamTotals] = useState(false);
   const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'email' | 'server'>('download');
+  const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'server'>('download');
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportEmail, setExportEmail] = useState('');
   const emailInputRef = useRef<HTMLInputElement>(null);
@@ -408,13 +321,6 @@ export default function App() {
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled
   ]);
 
-  // Focus email input when email method is selected
-  useEffect(() => {
-    if (exportMethod === 'email' && showExportMenu) {
-      setTimeout(() => emailInputRef.current?.focus(), 100);
-    }
-  }, [exportMethod, showExportMenu]);
-
   // Load player preferences when names change (e.g. typed in scoreboard)
   useEffect(() => {
     if (player1.name && playerPreferences[player1.name]) {
@@ -578,8 +484,8 @@ export default function App() {
       ...prev, 
       name: p1Name, 
       score: p1Score,
-      color: p1Pref?.color || (settings?.player1.color) || '#FFFFFF',
-      bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#881337',
+      color: p1Pref?.color || (settings?.player1.color) || '#FFFF33',
+      bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#000000',
       screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000'
     }));
     
@@ -587,8 +493,8 @@ export default function App() {
       ...prev, 
       name: p2Name, 
       score: p2Score,
-      color: p2Pref?.color || (settings?.player2.color) || '#FFFFFF',
-      bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#1e3a8a',
+      color: p2Pref?.color || (settings?.player2.color) || '#FF001C',
+      bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
       screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000'
     }));
 
@@ -670,33 +576,59 @@ export default function App() {
     return parseInt(timeStr);
   };
 
+  const formatDateUK = (date: Date, includeTime = false) => {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    const dateStr = `${d}.${m}.${y}`;
+    if (includeTime) {
+      const h = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const s = String(date.getSeconds()).padStart(2, '0');
+      return `${dateStr}, ${h}:${min}:${s}`;
+    }
+    return dateStr;
+  };
+
+  const parseUKDate = (str: string) => {
+    if (!str || typeof str !== 'string') return null;
+    // Handle DD.MM.YYYY, HH:MM:SS or DD/MM/YYYY, HH:MM:SS
+    const parts = str.split(/[,\s]+/);
+    const dateParts = parts[0].split(/[./-]/);
+    if (dateParts.length === 3) {
+      const d = parseInt(dateParts[0]);
+      const m = parseInt(dateParts[1]) - 1;
+      const y = parseInt(dateParts[2]);
+      let h = 0, min = 0, s = 0;
+      if (parts[1]) {
+        const timeParts = parts[1].split(':');
+        h = parseInt(timeParts[0]) || 0;
+        min = parseInt(timeParts[1]) || 0;
+        s = parseInt(timeParts[2]) || 0;
+      }
+      const date = new Date(y, m, d, h, min, s);
+      if (!isNaN(date.getTime())) return date.toISOString();
+    }
+    return null;
+  };
+
   const generateCSV = () => {
     let csvContent = "SECTION: TEAM SETUP\n";
     csvContent += "Team,Player Name,Highlight Color\n";
     
     team1Players.forEach(p => {
       const pref = playerPreferences[p];
-      csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFFFF'}"\n`;
+      csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFF33'}"\n`;
     });
     team2Players.forEach(p => {
       const pref = playerPreferences[p];
-      csvContent += `"${team2Name}","${p}","${pref?.color || '#FFFFFF'}"\n`;
+      csvContent += `"${team2Name}","${p}","${pref?.color || '#FF001C'}"\n`;
     });
 
     csvContent += "\nSECTION: MATCH HISTORY\n";
     csvContent += "Date,Team 1,Player 1,Score 1,Team 2,Player 2,Score 2,Winner,Shot Clock Setting,Match Clock Remaining\n";
     matchHistory.forEach(entry => {
-      const dateObj = new Date(entry.date);
-      const formattedDate = dateObj.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }) + ', ' + dateObj.toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
+      const formattedDate = formatDateUK(new Date(entry.date), true);
 
       const row = [
         formattedDate,
@@ -775,15 +707,18 @@ export default function App() {
         acc[name] = pref.color;
         return acc;
       }, {} as Record<string, string>),
-      history: matchHistory,
-      lastUpdated: new Date().toISOString()
+      history: matchHistory.map(entry => ({
+        ...entry,
+        date: formatDateUK(new Date(entry.date), true)
+      })),
+      lastUpdated: formatDateUK(new Date(), true)
     };
     return JSON.stringify(state, null, 2);
   };
 
   const downloadData = (format: 'csv' | 'json' = 'csv') => {
     const now = new Date();
-    const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    const ukDate = formatDateUK(now);
     const extension = format === 'json' ? 'json' : 'csv';
     const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.${extension}`;
 
@@ -807,7 +742,7 @@ export default function App() {
 
   const shareData = async (format: 'csv' | 'json' = 'csv') => {
     const now = new Date();
-    const ukDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    const ukDate = formatDateUK(now);
     const extension = format === 'json' ? 'json' : 'csv';
     const fileName = `${team1Name.replace(/\s+/g, '_')}_V_${team2Name.replace(/\s+/g, '_')}_${ukDate}.${extension}`;
 
@@ -829,9 +764,14 @@ export default function App() {
         });
       } catch (err) {
         console.error('Error sharing:', err);
+        if ((err as Error).name !== 'AbortError') {
+          // Fallback to download if share fails (common in some browsers/contexts)
+          downloadData(format);
+        }
       }
     } else {
-      alert('Sharing is not supported on this device/browser.');
+      // Fallback to download if navigator.share is not supported (e.g. Firefox)
+      downloadData(format);
     }
   };
 
@@ -840,9 +780,6 @@ export default function App() {
       downloadData(exportFormat);
     } else if (exportMethod === 'share') {
       shareData(exportFormat);
-    } else if (exportMethod === 'email') {
-      // Placeholder for email
-      console.log('Emailing to:', exportEmail);
     } else if (exportMethod === 'server') {
       if (!apiConfig.url) {
         alert('API URL not configured. Please set it in Settings.');
@@ -942,14 +879,21 @@ export default function App() {
             }
 
             if (state.history) {
-              setMatchHistory(state.history || []);
+              const importedHistory = (state.history || []).map((entry: any) => {
+                if (typeof entry.date === 'string' && (entry.date.includes('.') || entry.date.includes('/'))) {
+                  const parsed = parseUKDate(entry.date);
+                  if (parsed) return { ...entry, date: parsed };
+                }
+                return entry;
+              });
+              setMatchHistory(importedHistory);
             }
 
             if (state.playerPreferences) {
               const mappedPrefs: Record<string, { color: string, bgColor: string, screenColor: string }> = {};
               Object.entries(state.playerPreferences).forEach(([name, pref]: [string, any]) => {
                 // Handle both new (string) and old ({borderColor}) formats
-                const color = typeof pref === 'string' ? pref : (pref.borderColor || '#FFFFFF');
+                const color = typeof pref === 'string' ? pref : (pref.borderColor || '#FFFF33');
                 mappedPrefs[name] = {
                   color: color,
                   bgColor: '#000000',
@@ -1024,24 +968,6 @@ export default function App() {
             return values;
           };
 
-          const parseUKDate = (dateStr: string) => {
-            const parts = dateStr.split(', ');
-            if (parts.length !== 2) return new Date(dateStr);
-            const dateParts = parts[0].split('/');
-            const timeParts = parts[1].split(':');
-            if (dateParts.length === 3 && timeParts.length === 3) {
-              return new Date(
-                parseInt(dateParts[2]),
-                parseInt(dateParts[1]) - 1,
-                parseInt(dateParts[0]),
-                parseInt(timeParts[0]),
-                parseInt(timeParts[1]),
-                parseInt(timeParts[2])
-              );
-            }
-            return new Date(dateStr);
-          };
-
           // Check if it's the new multi-section format
           if (lines[0].startsWith('SECTION:')) {
             let currentSection = '';
@@ -1080,9 +1006,10 @@ export default function App() {
                 }
               } else if (currentSection === 'MATCH HISTORY') {
                 if (values[0] === 'Date') return;
+                const parsedDate = parseUKDate(values[0]);
                 importedHistory.push({
                   id: `imported-${Date.now()}-${Math.random()}`,
-                  date: parseUKDate(values[0]).toISOString(),
+                  date: parsedDate || new Date(values[0]).toISOString(),
                   team1: values[1],
                   player1: values[2],
                   score1: parseInt(values[3]) || 0,
@@ -1172,17 +1099,22 @@ export default function App() {
               if (entry['Player 1']) t1PlayersSet.add(entry['Player 1']);
               if (entry['Player 2']) t2PlayersSet.add(entry['Player 2']);
 
-              let date = new Date().toISOString();
+              let finalDate = new Date().toISOString();
               if (entry['Date']) {
-                const d = new Date(entry['Date']);
-                if (!isNaN(d.getTime())) {
-                  date = d.toISOString();
+                const parsed = parseUKDate(entry['Date']);
+                if (parsed) {
+                  finalDate = parsed;
+                } else {
+                  const d = new Date(entry['Date']);
+                  if (!isNaN(d.getTime())) {
+                    finalDate = d.toISOString();
+                  }
                 }
               }
 
               history.push({
                 id: `imported-${idx}-${Date.now()}`,
-                date: date,
+                date: finalDate,
                 team1: entry['Team 1'],
                 player1: entry['Player 1'],
                 score1: parseInt(entry['Score 1']) || 0,
@@ -1272,27 +1204,23 @@ export default function App() {
           y: (!deviceInfo.isDesktop && (
             (!isNavVisible && deviceInfo.isPhone) || 
             (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
-          )) ? (deviceInfo.isPhone ? -36 : -64) : 0,
+          )) ? (deviceInfo.isPhone ? -56 : -80) : 0,
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 h-9 md:h-16 lg:h-24 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
+        className="fixed top-0 left-0 right-0 h-14 sm:h-20 lg:h-28 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
         }}
       >
-        <div className="flex items-center gap-2 lg:gap-4 shrink-0">
-          <div 
-            className="w-8 h-8 lg:w-16 lg:h-16 rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50"
-          >
-            <Trophy 
-              className="w-5 h-5 lg:w-10 lg:h-10 transition-all duration-500" 
-              style={{ stroke: 'url(#cup-gradient)' }}
-            />
-          </div>
+        <div className="flex items-center gap-3 lg:gap-6 shrink-0">
+          <Trophy 
+            className="w-8 h-8 lg:w-16 lg:h-16 transition-all duration-500" 
+            style={{ stroke: 'url(#cup-gradient)' }}
+          />
           <h1 
-            className={`text-xl lg:text-4xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
+            className={`text-4xl lg:text-7xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
             PoolPro
@@ -1436,11 +1364,11 @@ export default function App() {
         initial={false}
         animate={{ 
           paddingTop: (view === 'teams' || view === 'settings')
-            ? `calc(${deviceInfo.isPhone ? '36px' : (deviceInfo.isTablet ? '64px' : '96px')} + 8vh)`
+            ? `calc(${deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
             : (view === 'scoreboard' 
-                ? (deviceInfo.isPhone ? 36 : (deviceInfo.isTablet ? 64 : 96)) 
+                ? (deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112)) 
                 : 0),
-          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -36 : 0,
+          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -56 : 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -1560,26 +1488,30 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              </div>
-            </motion.div>
 
-            {/* Finish Match Button - Now inside main to scale with content and stay visible on desktop */}
-            <motion.div 
-              key="finish-button"
-              initial={{ y: 100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 100, opacity: 0 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="w-full flex items-center justify-center shrink-0 z-50 mt-[5vh] sm:mt-6 lg:mt-8 mb-6 sm:mb-6 lg:mb-6"
-            >
-              <button
-                onClick={finishMatch}
-                className="w-full sm:max-w-md h-12 bg-black/95 hover:bg-black backdrop-blur-md rounded-2xl flex items-center justify-center gap-3 text-sm sm:text-lg font-bold transition-all shadow-2xl border-2 active:scale-95"
-                style={{ borderColor: player1.color }}
-              >
-                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                <span className="leading-none uppercase tracking-wider">Finish Match</span>
-              </button>
+                {/* Finish Match Button - Centered between cards */}
+                <motion.div 
+                  key="finish-button"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
+                >
+                  <button
+                    onClick={finishMatch}
+                    className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs sm:text-sm font-bold transition-all shadow-2xl border-2 active:scale-95"
+                    style={{ 
+                      border: '2px solid transparent',
+                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                      backgroundOrigin: 'border-box',
+                      backgroundClip: 'padding-box, border-box'
+                    }}
+                  >
+                    <span className="leading-none uppercase tracking-wider">Finish Match</span>
+                  </button>
+                </motion.div>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -2252,7 +2184,7 @@ export default function App() {
                               setIsApiSending(true);
                               setApiTestStatus({ type: 'idle', message: 'Testing...' });
                               try {
-                                const testBody = JSON.stringify({ test: true, timestamp: new Date().toISOString(), type: 'connection_test' });
+                                const testBody = JSON.stringify({ test: true, timestamp: formatDateUK(new Date(), true), type: 'connection_test' });
                                 console.log('Testing connection to:', apiConfig.url);
                                 const res = await fetch(apiConfig.url, {
                                   method: 'POST',
@@ -2380,7 +2312,7 @@ export default function App() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-black border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6"
+                className="bg-black border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
                 style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
               >
                 <div className="flex items-center justify-between">
@@ -2421,17 +2353,16 @@ export default function App() {
                     {[
                       { id: 'download', label: 'Download', icon: Download, desc: 'Save to device' },
                       { id: 'share', label: 'Share', icon: Share2, desc: 'Open system share' },
-                      { id: 'email', label: 'Email', icon: Mail, desc: 'Send via email' },
                       { id: 'server', label: 'Send to Server', icon: Server, desc: 'Upload to tournament server' }
                     ].map((method) => (
                       <button 
                         key={method.id}
                         onClick={() => {
-                          const id = method.id as 'download' | 'share' | 'email' | 'server';
+                          const id = method.id as 'download' | 'share' | 'server';
                           setExportMethod(id);
                           if (id === 'server') {
                             setExportFormat('json');
-                          } else if (id === 'email' || id === 'download') {
+                          } else if (id === 'download') {
                             setExportFormat('csv');
                           } else if (id === 'share') {
                             shareData(exportFormat);
@@ -2453,29 +2384,6 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Email Input */}
-                  <AnimatePresence>
-                    {exportMethod === 'email' && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Recipient Email</label>
-                          <input 
-                            ref={emailInputRef}
-                            type="email"
-                            value={exportEmail}
-                            onChange={(e) => setExportEmail(e.target.value)}
-                            placeholder="Enter email address"
-                            className="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-bold"
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
 
                 <button 
@@ -2492,7 +2400,6 @@ export default function App() {
                     <>
                       {exportMethod === 'download' && 'Download'}
                       {exportMethod === 'share' && 'Share'}
-                      {exportMethod === 'email' && 'Send Email'}
                       {exportMethod === 'server' && 'Upload to Server'}
                     </>
                   )}
@@ -2527,14 +2434,14 @@ export default function App() {
                       // Restore User Preferences Only (Colors and Clocks)
                       setPlayer1(prev => ({ 
                         ...prev, 
-                        color: '#FFFFFF', 
-                        bgColor: '#881337', 
+                        color: '#FFFF33', 
+                        bgColor: '#000000', 
                         screenColor: '#000000' 
                       }));
                       setPlayer2(prev => ({ 
                         ...prev, 
-                        color: '#FFFFFF', 
-                        bgColor: '#1e3a8a', 
+                        color: '#FF001C', 
+                        bgColor: '#000000', 
                         screenColor: '#000000' 
                       }));
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
