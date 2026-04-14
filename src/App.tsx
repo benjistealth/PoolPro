@@ -1320,21 +1320,27 @@ export default function App() {
         </div>
       </motion.nav>
 
-      {/* Vertical Team Names (Desktop/Tablet) - Moved to root for stability */}
+      {/* Vertical Team Names - Moved to root for stability */}
       <AnimatePresence>
-        {view === 'scoreboard' && !deviceInfo.isPhone && (
+        {view === 'scoreboard' && (
           <>
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 0.7, x: 0 }}
+              animate={{ 
+                opacity: 0.7, 
+                x: 0,
+                top: deviceInfo.isPhone ? (isNavVisible ? 56 : 0) : 0
+              }}
               exit={{ opacity: 0, x: -50 }}
-              className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+              className="fixed left-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
             >
               <h2 
                 className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap" 
                 style={{ 
                   color: player1.color,
-                  fontSize: `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                  fontSize: deviceInfo.isPhone 
+                    ? `min(6vw, 32px, ${70 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                    : `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
                 }}
               >
                 {team1Name}
@@ -1342,15 +1348,21 @@ export default function App() {
             </motion.div>
             <motion.div 
               initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 0.7, x: 0 }}
+              animate={{ 
+                opacity: 0.7, 
+                x: 0,
+                top: deviceInfo.isPhone ? (isNavVisible ? 56 : 0) : 0
+              }}
               exit={{ opacity: 0, x: 50 }}
-              className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+              className="fixed right-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
             >
               <h2 
                 className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180" 
                 style={{ 
                   color: player2.color,
-                  fontSize: `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                  fontSize: deviceInfo.isPhone 
+                    ? `min(6vw, 32px, ${70 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                    : `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
                 }}
               >
                 {team2Name}
@@ -1366,13 +1378,13 @@ export default function App() {
           paddingTop: (view === 'teams' || view === 'settings')
             ? `calc(${deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
             : (view === 'scoreboard' 
-                ? (deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112)) 
+                ? (deviceInfo.isPhone ? 'calc(56px + 2vh)' : (deviceInfo.isTablet ? '80px' : '112px')) 
                 : 0),
           y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -56 : 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-start sm:justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
         style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
       >
         <AnimatePresence mode="wait">
@@ -1383,20 +1395,19 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="flex flex-col sm:flex-none w-full"
+              className="flex flex-col flex-1 sm:flex-none w-full justify-center"
             >
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="relative pt-1 sm:pb-8 sm:py-2 flex flex-col gap-1 sm:gap-2 min-h-0 flex-1 sm:flex-none justify-end sm:justify-start pb-0"
+                className="relative flex flex-col gap-2 min-h-0 flex-1 justify-center pb-4 sm:pb-8"
               >
               {/* Score Cards Grid */}
               <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 lg:gap-5 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 w-full">
                   {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1">
-                        
                         <motion.div
                           onClick={() => {
                             if (!p.isTurn) {
@@ -1449,7 +1460,7 @@ export default function App() {
                             />
                           ) : (
                             p.name && (
-                              <h2 className="text-[min(4vw,1rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
+                              <h2 className="text-[min(5vw,1.2rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
                                 {p.name}
                               </h2>
                             )
@@ -1733,23 +1744,23 @@ export default function App() {
                   <h3 className="text-2xl font-black uppercase tracking-tight text-white">Matchups</h3>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Session schedule and results</p>
                 </div>
-                <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-                  <table className="w-full text-left border-collapse">
+                <div className="bg-black border border-slate-800 rounded-3xl overflow-x-auto shadow-2xl">
+                  <table className="w-full text-left border-collapse min-w-[500px] sm:min-w-0">
                     <thead>
                       <tr className="bg-black/50 border-b border-slate-800">
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Match</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team1Name || 'TEAM A'}</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">VS</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team2Name || 'TEAM B'}</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Last Result</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock</th>
-                        <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Action</th>
+                        <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Match</th>
+                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team1Name || 'TEAM A'}</th>
+                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">VS</th>
+                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team2Name || 'TEAM B'}</th>
+                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Last Result</th>
+                        <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock</th>
+                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {Math.max(team1Players.length, team2Players.length) === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
+                          <td colSpan={deviceInfo.isPhone ? 5 : 7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
                         </tr>
                       ) : (
                         <>
@@ -1770,27 +1781,27 @@ export default function App() {
                                 onClick={() => selectTeamMatch(idx)}
                                 className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                               >
-                                <td className="px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
+                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
+                                <td className="px-3 sm:px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
                                   {p1 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-6 py-4 text-center text-slate-700 font-black">VS</td>
-                                <td className="px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors">
+                                <td className="px-3 sm:px-6 py-4 text-center text-slate-700 font-black">VS</td>
+                                <td className="px-3 sm:px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-3 sm:px-6 py-4">
                                   {lastMatch ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                      <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
                                         {lastMatch.score1} - {lastMatch.score2}
                                       </span>
-                                      <span className="text-[10px] text-slate-500 font-bold uppercase">{new Date(lastMatch.date).toLocaleDateString('en-GB')}</span>
+                                      <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase">{new Date(lastMatch.date).toLocaleDateString('en-GB')}</span>
                                     </div>
                                   ) : (
                                     <span className="text-[10px] text-slate-600 font-bold uppercase">NO DATA</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                                   {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
                                     <div className="flex flex-col gap-0.5">
                                       {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
@@ -1800,7 +1811,7 @@ export default function App() {
                                     <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-3 sm:px-6 py-4 text-right">
                                   {lastMatch && (
                                     <button 
                                       onClick={(e) => {
@@ -1819,24 +1830,24 @@ export default function App() {
                           })}
                           {/* Totals Row */}
                           <tr className="bg-slate-800/80 border-t-2 border-slate-700 font-black">
-                            <td className="px-6 py-5 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
-                            <td className="px-6 py-5">
+                            <td className="hidden sm:table-cell px-3 sm:px-6 py-5 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
+                            <td className="px-3 sm:px-6 py-5">
                               <div className="flex flex-col">
-                                <span className="text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
-                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter">{team1Name}</span>
+                                <span className="text-xl sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
+                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team1Name}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-5 text-center text-slate-700 font-black">SUM</td>
-                            <td className="px-6 py-5">
+                            <td className="px-3 sm:px-6 py-5 text-center text-slate-700 font-black">SUM</td>
+                            <td className="px-3 sm:px-6 py-5">
                               <div className="flex flex-col">
-                                <span className="text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
-                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter">{team2Name}</span>
+                                <span className="text-xl sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
+                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team2Name}</span>
                               </div>
                             </td>
-                            <td colSpan={3} className="px-6 py-5 bg-slate-900/50">
-                              <div className="flex items-center justify-end gap-4">
+                            <td colSpan={deviceInfo.isPhone ? 2 : 3} className="px-3 sm:px-6 py-5 bg-slate-900/50">
+                              <div className="flex items-center justify-end gap-2 sm:gap-4">
                                 <div className="flex flex-col items-end">
-                                  <span className="text-[10px] text-slate-500 uppercase font-bold">Overall Lead</span>
+                                  <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-bold">Overall Lead</span>
                                   <span className="text-sm font-black text-slate-100">
                                     {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
                                      teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
