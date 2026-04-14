@@ -2125,7 +2125,7 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="pt-8">
+<section className="pt-8">
                   <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-6 shadow-xl relative overflow-hidden">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
@@ -2195,13 +2195,23 @@ export default function App() {
                               setIsApiSending(true);
                               setApiTestStatus({ type: 'idle', message: 'Testing...' });
                               try {
-                                const testBody = JSON.stringify({ test: true, timestamp: formatDateUK(new Date(), true), type: 'connection_test' });
+                                const testData = { test: true, timestamp: formatDateUK(new Date(), true), type: 'connection_test' };
                                 console.log('Testing connection to:', apiConfig.url);
-                                const res = await fetch(apiConfig.url, {
+                                
+                                // MODIFIED: Use Simple Request method to bypass CORS preflight
+                                // 1. Move API key to URL query string
+                                const urlWithKey = `${apiConfig.url}${apiConfig.url.includes('?') ? '&' : '?'}key=${apiConfig.key}`;
+                                
+                                const res = await fetch(urlWithKey, {
                                   method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-api-key': apiConfig.key },
-                                  body: testBody
+                                  // 2. Use form-urlencoded to avoid preflight
+                                  headers: { 
+                                    'Content-Type': 'application/x-www-form-urlencoded' 
+                                  },
+                                  // 3. Wrap JSON in a 'data' field
+                                  body: 'data=' + encodeURIComponent(JSON.stringify(testData))
                                 });
+
                                 if (res.ok) {
                                   setApiTestStatus({ type: 'success', message: 'Success! Server responded with 200 OK.' });
                                 } else {
@@ -2209,7 +2219,7 @@ export default function App() {
                                 }
                               } catch (err) {
                                 console.error('Test Connection Error:', err);
-                                setApiTestStatus({ type: 'error', message: 'Connection failed. Check console for CORS/Network errors.' });
+                                setApiTestStatus({ type: 'error', message: 'Connection failed. Check console for details.' });
                               } finally {
                                 setIsApiSending(false);
                               }
