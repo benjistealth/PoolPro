@@ -100,7 +100,15 @@
   @apply bg-slate-800 rounded-full hover:bg-slate-700 transition-colors;
 }
 
-.vertical-text {
-  writing-mode: vertical-rl;
-  white-space: nowrap;
-}
+  .vertical-text {
+    writing-mode: vertical-rl;
+    white-space: nowrap;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }

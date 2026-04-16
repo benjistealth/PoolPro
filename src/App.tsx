@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import {
-  Trophy,
-  Settings,
-  Timer,
-  RotateCcw,
-  User,
-  Play,
-  Pause,
-  Plus,
-  Minus,
+import { 
+  Trophy, 
+  Settings, 
+  Timer, 
+  RotateCcw, 
+  User, 
+  Play, 
+  Pause, 
+  Plus, 
+  Minus, 
   Trash2,
   Circle,
   Palette,
@@ -46,21 +46,33 @@ export default function App() {
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams'>('scoreboard');
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [windowSize, setWindowSize] = useState({ 
+    width: typeof window !== 'undefined' ? window.innerWidth : 1024,
+    height: typeof window !== 'undefined' ? window.innerHeight : 768 
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
     const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
     const isMobileUA = /iphone|ipod|android|iemobile|blackberry|opera mini|palm|windows ce/.test(ua);
-
+    
     // A device is a phone if it's mobile but NOT a tablet, or if the screen is very narrow
-    const isPhone = (isMobileUA && !isTabletUA) || window.innerWidth < 640;
+    const isPhone = (isMobileUA && !isTabletUA) || windowSize.width < 640;
     // A device is a tablet if it matches the tablet UA or falls in the tablet width range
-    const isTablet = isTabletUA || (window.innerWidth >= 640 && window.innerWidth < 1024);
+    const isTablet = isTabletUA || (windowSize.width >= 640 && windowSize.width < 1024);
     const isDesktop = !isPhone && !isTablet;
 
     return { isPhone, isTablet, isDesktop };
-  }, [view]); // Re-evaluate on view change as a proxy for layout shifts, but mostly static
+  }, [windowSize.width, windowSize.height]); 
 
   // Keyboard detection for mobile
   useEffect(() => {
@@ -94,6 +106,39 @@ export default function App() {
       if (!isNavVisible) setIsNavVisible(true);
     }
   }, [isKeyboardOpen, isNavVisible]);
+
+  const prevView = useRef(view);
+  // Auto-scroll to matchups table when navigating to teams view if players exist
+  useEffect(() => {
+    if (view === 'teams' && prevView.current !== 'teams' && (team1Players.length > 0 || team2Players.length > 0)) {
+      const scrollHandler = () => {
+        const table = document.getElementById('matchups-table');
+        if (table) {
+          const headerHeight = deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112);
+          const elementPosition = table.getBoundingClientRect().top + window.pageYOffset;
+          const offsetPosition = elementPosition - headerHeight - 24; // 24px extra buffer for breathing room
+
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth'
+          });
+        }
+      };
+
+      // Try multiple times to catch the render after animations
+      const timer1 = setTimeout(scrollHandler, 100);
+      const timer2 = setTimeout(scrollHandler, 400);
+      const timer3 = setTimeout(scrollHandler, 800);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
+      };
+    }
+    prevView.current = view;
+  }, [view, team1Players.length, team2Players.length, deviceInfo]);
+
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
   const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
@@ -132,8 +177,8 @@ export default function App() {
 
   const getMatchResult = (p1: string, p2: string) => {
     if (!p1 || !p2) return null;
-    return matchHistory.find(m =>
-      (m.player1 === p1 && m.player2 === p2) ||
+    return matchHistory.find(m => 
+      (m.player1 === p1 && m.player2 === p2) || 
       (m.player1 === p2 && m.player2 === p1)
     );
   };
@@ -142,11 +187,11 @@ export default function App() {
     let t1 = 0;
     let t2 = 0;
     const maxMatches = Math.max(team1Players.length, team2Players.length);
-
+    
     for (let i = 0; i < maxMatches; i++) {
       const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
       const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
-
+      
       if (selectedMatchIndex === i) {
         t1 += player1.score;
         t2 += player2.score;
@@ -171,7 +216,7 @@ export default function App() {
     try {
       const savedState = localStorage.getItem('pool_app_state');
       const state = savedState ? JSON.parse(savedState) : {};
-
+      
       // Helper to get legacy or state value
       const getVal = (key: string, stateVal: any, legacyKey: string) => {
         return stateVal !== undefined ? stateVal : (localStorage.getItem(legacyKey) || undefined);
@@ -191,7 +236,7 @@ export default function App() {
       // Load Game Data
       const history = state.gameData?.matchHistory || JSON.parse(localStorage.getItem('pool_match_history') || 'null');
       if (history) setMatchHistory(history);
-
+      
       if (state.gameData?.selectedMatchIndex !== undefined) setSelectedMatchIndex(state.gameData.selectedMatchIndex);
       if (state.gameData?.shotClock !== undefined) setShotClock(state.gameData.shotClock);
       if (state.gameData?.matchClock !== undefined) setMatchClock(state.gameData.matchClock);
@@ -204,17 +249,17 @@ export default function App() {
         if (state.userPreferences.isShotClockEnabled !== undefined) setIsShotClockEnabled(state.userPreferences.isShotClockEnabled);
         if (state.userPreferences.matchClockDuration !== undefined) setMatchClockDuration(state.userPreferences.matchClockDuration);
         if (state.userPreferences.isMatchClockEnabled !== undefined) setIsMatchClockEnabled(state.userPreferences.isMatchClockEnabled);
-
+        
         if (state.userPreferences.player1) {
-          setPlayer1(prev => ({
-            ...prev,
+          setPlayer1(prev => ({ 
+            ...prev, 
             ...state.userPreferences.player1,
             color: state.userPreferences.player1.borderColor || state.userPreferences.player1.color || prev.color
           }));
         }
         if (state.userPreferences.player2) {
-          setPlayer2(prev => ({
-            ...prev,
+          setPlayer2(prev => ({ 
+            ...prev, 
             ...state.userPreferences.player2,
             color: state.userPreferences.player2.borderColor || state.userPreferences.player2.color || prev.color
           }));
@@ -246,23 +291,23 @@ export default function App() {
 
     const state = {
       teamData: { team1Name, team2Name, team1Players, team2Players },
-      gameData: {
-        matchHistory,
-        player1Score: player1.score,
-        player2Score: player2.score,
-        selectedMatchIndex,
-        shotClock,
-        matchClock
+      gameData: { 
+        matchHistory, 
+        player1Score: player1.score, 
+        player2Score: player2.score, 
+        selectedMatchIndex, 
+        shotClock, 
+        matchClock 
       },
       userPreferences: {
-        player1: {
-          name: player1.name,
+        player1: { 
+          name: player1.name, 
           borderColor: player1.color,
           bgColor: player1.bgColor,
           screenColor: player1.screenColor
         },
-        player2: {
-          name: player2.name,
+        player2: { 
+          name: player2.name, 
           borderColor: player2.color,
           bgColor: player2.bgColor,
           screenColor: player2.screenColor
@@ -315,7 +360,7 @@ export default function App() {
       }));
     }
   }, [
-    selectedMatchIndex,
+    selectedMatchIndex, 
     player1.name, player1.color, player1.bgColor, player1.screenColor,
     player2.name, player2.color, player2.bgColor, player2.screenColor,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled
@@ -369,7 +414,7 @@ export default function App() {
     if (isTimerRunning) {
       const shotClockFinished = isShotClockEnabled && shotClock === 0;
       const matchClockFinished = isMatchClockEnabled && matchClock === 0;
-
+      
       if (shotClockFinished || matchClockFinished) {
         pauseTimer();
       }
@@ -421,18 +466,18 @@ export default function App() {
 
     const updatedHistory = [newEntry, ...matchHistory];
     setMatchHistory(updatedHistory);
-
+    
     // Move to next matchup if available
     if (selectedMatchIndex !== null) {
       const nextIndex = selectedMatchIndex + 1;
       const maxMatches = Math.max(team1Players.length, team2Players.length);
-
+      
       if (nextIndex < maxMatches) {
         selectTeamMatch(nextIndex);
       } else {
         // Show team totals if it was the last match
         setShowTeamTotals(true);
-
+        
         // Reset game if no more matches
         setPlayer1(prev => ({ ...prev, score: 0 }));
         setPlayer2(prev => ({ ...prev, score: 0 }));
@@ -448,7 +493,7 @@ export default function App() {
   };
 
   const clearMatchResult = (p1: string, p2: string) => {
-    const updatedHistory = matchHistory.filter(m =>
+    const updatedHistory = matchHistory.filter(m => 
       !((m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1))
     );
     setMatchHistory(updatedHistory);
@@ -457,11 +502,11 @@ export default function App() {
   const selectTeamMatch = (index: number) => {
     const p1Name = team1Players[index] || `PLAYER ${index + 1}`;
     const p2Name = team2Players[index] || `PLAYER ${index + 1}`;
-
+    
     // Load individual player preferences if they exist
     const p1Pref = playerPreferences[p1Name];
     const p2Pref = playerPreferences[p2Name];
-
+    
     // Load matchup-specific settings (clocks)
     const settings = matchupSettings[index];
 
@@ -479,19 +524,19 @@ export default function App() {
         p2Score = existingResult.score1;
       }
     }
-
-    setPlayer1(prev => ({
-      ...prev,
-      name: p1Name,
+    
+    setPlayer1(prev => ({ 
+      ...prev, 
+      name: p1Name, 
       score: p1Score,
       color: p1Pref?.color || (settings?.player1.color) || '#FFFF33',
       bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#000000',
       screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000'
     }));
-
-    setPlayer2(prev => ({
-      ...prev,
-      name: p2Name,
+    
+    setPlayer2(prev => ({ 
+      ...prev, 
+      name: p2Name, 
       score: p2Score,
       color: p2Pref?.color || (settings?.player2.color) || '#FF001C',
       bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
@@ -504,7 +549,7 @@ export default function App() {
       setMatchClockDuration(settings.matchClockDuration);
       setIsMatchClockEnabled(settings.isMatchClockEnabled);
     }
-
+    
     setSelectedMatchIndex(index);
     setView('scoreboard');
     resetTimer();
@@ -512,7 +557,7 @@ export default function App() {
 
   const navigateToScoreboard = () => {
     const maxMatches = Math.max(team1Players.length, team2Players.length);
-
+    
     // If we're already on scoreboard and have a match, just stay
     if (view === 'scoreboard' && selectedMatchIndex !== null) return;
 
@@ -527,7 +572,7 @@ export default function App() {
           break;
         }
       }
-
+      
       // If all matches have data, just select the first one (top row)
       const indexToSelect = firstUnplayedIndex !== -1 ? firstUnplayedIndex : 0;
       selectTeamMatch(indexToSelect);
@@ -542,7 +587,7 @@ export default function App() {
     setTeam2Name('');
     setTeam1Players([]);
     setTeam2Players([]);
-
+    
     // Clear Game Data
     setPlayer1(prev => ({ ...prev, score: 0 }));
     setPlayer2(prev => ({ ...prev, score: 0 }));
@@ -551,14 +596,14 @@ export default function App() {
     setSelectedMatchIndex(null);
     setShotClock(shotClockDuration);
     setMatchClock(matchClockDuration);
-
+    
     setShowClearTeamsConfirm(false);
   };
 
   const updateTeamData = (
-    t1Name: string,
-    t1Players: string[],
-    t2Name: string,
+    t1Name: string, 
+    t1Players: string[], 
+    t2Name: string, 
     t2Players: string[]
   ) => {
     setTeam1Name(t1Name);
@@ -615,7 +660,7 @@ export default function App() {
   const generateCSV = () => {
     let csvContent = "SECTION: TEAM SETUP\n";
     csvContent += "Team,Player Name,Highlight Color\n";
-
+    
     team1Players.forEach(p => {
       const pref = playerPreferences[p];
       csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFF33'}"\n`;
@@ -665,7 +710,7 @@ export default function App() {
     // Include current active player names if they have colors
     csvContent += `"Player 1","${player1.color}"\n`;
     csvContent += `"Player 2","${player2.color}"\n`;
-
+    
     Object.entries(playerPreferences).forEach(([name, pref]: [string, any]) => {
       csvContent += `"${name}","${pref.color}"\n`;
     });
@@ -785,11 +830,11 @@ export default function App() {
         alert('API URL not configured. Please set it in Settings.');
         return;
       }
-
+      
       setIsApiSending(true);
       try {
         const body = generateJSON();
-
+        
         console.log('--- API POST REQUEST START ---');
         console.log('URL:', apiConfig.url);
         console.log('Headers:', {
@@ -797,7 +842,7 @@ export default function App() {
           'x-api-key': apiConfig.key.substring(0, 4) + '...' // Log partial key for safety
         });
         console.log('Payload:', JSON.parse(body));
-
+        
         const response = await fetch(apiConfig.url, {
           method: 'POST',
           headers: {
@@ -842,30 +887,30 @@ export default function App() {
           // Check if it's JSON
           if (file.name.endsWith('.json')) {
             const state = JSON.parse(content) as any;
-
+            
             // Support new structure
             if (state.settings) {
               setShotClockDuration(state.settings.shotClockDuration || SHOT_CLOCK_DEFAULT);
               setIsShotClockEnabled(!!state.settings.isShotClockEnabled);
               setMatchClockDuration(state.settings.matchClockDuration || 600);
               setIsMatchClockEnabled(!!state.settings.isMatchClockEnabled);
-
+              
               if (state.settings.player1) {
-                setPlayer1(prev => ({
-                  ...prev,
+                setPlayer1(prev => ({ 
+                  ...prev, 
                   name: state.settings.player1.name || prev.name,
                   score: state.settings.player1.score ?? prev.score,
                   isTurn: state.settings.player1.isTurn ?? prev.isTurn,
-                  color: state.settings.player1.highlightColor || prev.color
+                  color: state.settings.player1.highlightColor || prev.color 
                 }));
               }
               if (state.settings.player2) {
-                setPlayer2(prev => ({
-                  ...prev,
+                setPlayer2(prev => ({ 
+                  ...prev, 
                   name: state.settings.player2.name || prev.name,
                   score: state.settings.player2.score ?? prev.score,
                   isTurn: state.settings.player2.isTurn ?? prev.isTurn,
-                  color: state.settings.player2.highlightColor || prev.color
+                  color: state.settings.player2.highlightColor || prev.color 
                 }));
               }
             }
@@ -924,23 +969,23 @@ export default function App() {
               setMatchClockDuration(state.userPreferences.matchClockDuration || 600);
               setIsMatchClockEnabled(!!state.userPreferences.isMatchClockEnabled);
               if (state.userPreferences.player1) {
-                setPlayer1(prev => ({
-                  ...prev,
+                setPlayer1(prev => ({ 
+                  ...prev, 
                   name: state.userPreferences.player1.name || prev.name,
-                  color: state.userPreferences.player1.borderColor || prev.color
+                  color: state.userPreferences.player1.borderColor || prev.color 
                 }));
               }
               if (state.userPreferences.player2) {
-                setPlayer2(prev => ({
-                  ...prev,
+                setPlayer2(prev => ({ 
+                  ...prev, 
                   name: state.userPreferences.player2.name || prev.name,
-                  color: state.userPreferences.player2.borderColor || prev.color
+                  color: state.userPreferences.player2.borderColor || prev.color 
                 }));
               }
             }
             if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
             if (state.apiConfig) setApiConfig(state.apiConfig);
-
+            
             alert('Tournament data loaded successfully!');
             return;
           }
@@ -986,7 +1031,7 @@ export default function App() {
               if (!line || line.trim() === '') return;
 
               const values = parseCSVLine(line);
-
+              
               if (currentSection === 'TEAM SETUP') {
                 if (values[0] === 'Team') return;
                 const team = values[0];
@@ -1049,7 +1094,7 @@ export default function App() {
           }
 
           const headers = parseCSVLine(lines[0]);
-
+          
           if (headers[0] === 'Team' && headers[1] === 'Player Name') {
             const t1Players: string[] = [];
             const t2Players: string[] = [];
@@ -1072,7 +1117,7 @@ export default function App() {
                 }
               }
             });
-
+            
             updateTeamData(t1Name, t1Players, t2Name, t2Players);
             setMatchHistory([]);
             setSelectedMatchIndex(null);
@@ -1189,37 +1234,37 @@ export default function App() {
           <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player1.screenColor }} />
           <div className="flex-1 h-full transition-colors duration-700" style={{ backgroundColor: player2.screenColor }} />
         </div>
-
+        
         {/* Plain Background (Teams & Settings) */}
         <div className={`absolute inset-0 bg-black transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
-
+        
         {/* Subtle Gradient Overlay for Plain Background */}
         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
       {/* Navigation Bar */}
-      <motion.nav
+      <motion.nav 
         initial={false}
-        animate={{
+        animate={{ 
           y: (!deviceInfo.isDesktop && (
-            (!isNavVisible && deviceInfo.isPhone) ||
+            (!isNavVisible && deviceInfo.isPhone) || 
             (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
           )) ? (deviceInfo.isPhone ? -56 : -80) : 0,
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
         className="fixed top-0 left-0 right-0 h-14 sm:h-20 lg:h-28 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
-        style={{
+        style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
         }}
       >
         <div className="flex items-center gap-3 lg:gap-6 shrink-0">
-          <Trophy
-            className="w-8 h-8 lg:w-16 lg:h-16 transition-all duration-500"
+          <Trophy 
+            className="w-8 h-8 lg:w-16 lg:h-16 transition-all duration-500" 
             style={{ stroke: 'url(#cup-gradient)' }}
           />
-          <h1
+          <h1 
             className={`text-4xl lg:text-7xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
@@ -1234,7 +1279,7 @@ export default function App() {
               {isMatchClockEnabled && (
                 <div className="flex flex-col items-center">
                   <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Match</span>
-                  <div
+                  <div 
                     className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : ''}`}
                     style={matchClock > 60 ? { color: player1.color } : {}}
                   >
@@ -1247,7 +1292,7 @@ export default function App() {
               {isShotClockEnabled && (
                 <div className="flex flex-col items-center">
                   <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Shot</span>
-                  <div
+                  <div 
                     className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : ''}`}
                     style={shotClock > 5 ? { color: player2.color } : {}}
                   >
@@ -1258,14 +1303,14 @@ export default function App() {
               )}
 
               <div className="flex gap-1.5 ml-1 sm:ml-2">
-                <button
+                <button 
                   onClick={isTimerRunning ? pauseTimer : startTimer}
                   className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all border border-slate-700/50 active:scale-90"
                   style={{ color: isTimerRunning ? player2.color : player1.color }}
                 >
                   {isTimerRunning ? <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 </button>
-                <button
+                <button 
                   onClick={() => {
                     resetTimer();
                     if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
@@ -1278,26 +1323,26 @@ export default function App() {
             </div>
           )}
         </div>
-
+        
         <div className="flex items-center gap-2 sm:gap-4 lg:gap-8 shrink-0">
-          <button
+          <button 
             onClick={toggleFullscreen}
             className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 hidden sm:flex"
             title="Toggle Fullscreen"
           >
-            {isFullscreen ?
-              <Minimize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} /> :
+            {isFullscreen ? 
+              <Minimize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} /> : 
               <Maximize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
             }
           </button>
-          <button
+          <button 
             onClick={navigateToScoreboard}
             className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'scoreboard' ? { backgroundColor: `${player1.color}33` } : {}}
           >
             <Trophy className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
-          <button
+          <button 
             onClick={() => {
               setView('teams');
               if (deviceInfo.isPhone) setIsNavVisible(false);
@@ -1307,7 +1352,7 @@ export default function App() {
           >
             <Users className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
-          <button
+          <button 
             onClick={() => {
               setView('settings');
               if (deviceInfo.isPhone) setIsNavVisible(false);
@@ -1324,68 +1369,77 @@ export default function App() {
       <AnimatePresence>
         {view === 'scoreboard' && (
           <>
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0, x: -50 }}
-              animate={{
-                opacity: 0.7,
+              animate={{ 
+                opacity: 0.7, 
                 x: 0,
-                top: deviceInfo.isPhone ? (isNavVisible ? 56 : 0) : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? -56 : 0
               }}
               exit={{ opacity: 0, x: -50 }}
-              className="fixed left-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+              className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <h2
-                className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap"
-                style={{
-                  color: player1.color,
-                  fontSize: deviceInfo.isPhone
-                    ? `min(6vw, 32px, ${70 / (Math.max(1, team1Name.length) * 1.1)}vh)`
-                    : `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
-                }}
-              >
-                {team1Name}
-              </h2>
+              <div className="h-14 sm:h-20 lg:h-28 flex-shrink-0" />
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
+                <h2 
+                  className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
+                  style={{ 
+                    color: player1.color,
+                    fontSize: deviceInfo.isPhone 
+                      ? `min(6vw, 32px, ${70 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                      : `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                  }}
+                >
+                  {team1Name}
+                </h2>
+              </div>
             </motion.div>
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0, x: 50 }}
-              animate={{
-                opacity: 0.7,
+              animate={{ 
+                opacity: 0.7, 
                 x: 0,
-                top: deviceInfo.isPhone ? (isNavVisible ? 56 : 0) : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? -56 : 0
               }}
               exit={{ opacity: 0, x: 50 }}
-              className="fixed right-0 bottom-0 w-[var(--sidebar-width)] flex items-center justify-center pointer-events-none z-20 overflow-hidden"
+              className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <h2
-                className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180"
-                style={{
-                  color: player2.color,
-                  fontSize: deviceInfo.isPhone
-                    ? `min(6vw, 32px, ${70 / (Math.max(1, team2Name.length) * 1.1)}vh)`
-                    : `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
-                }}
-              >
-                {team2Name}
-              </h2>
+              <div className="h-14 sm:h-20 lg:h-28 flex-shrink-0" />
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
+                <h2 
+                  className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
+                  style={{ 
+                    color: player2.color,
+                    fontSize: deviceInfo.isPhone 
+                      ? `min(6vw, 32px, ${70 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                      : `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                  }}
+                >
+                  {team2Name}
+                </h2>
+              </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      <motion.main
+      <motion.main 
         initial={false}
-        animate={{
+        animate={{ 
           paddingTop: (view === 'teams' || view === 'settings')
             ? `calc(${deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
-            : (view === 'scoreboard'
-              ? (deviceInfo.isPhone ? 'calc(56px + 2vh)' : (deviceInfo.isTablet ? '80px' : '112px'))
-              : 0),
+            : (view === 'scoreboard' 
+                ? (deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')) 
+                : 0),
           y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -56 : 0,
-          paddingBottom: 0
+          paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom`}
-        style={{ maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)' }}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom left-0 right-0`}
+        style={{ 
+          maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)',
+          margin: '0 auto'
+        }}
       >
         <AnimatePresence mode="wait">
           {view === 'scoreboard' && (
@@ -1401,12 +1455,12 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="relative flex flex-col gap-2 min-h-0 flex-1 justify-center pb-4 sm:pb-8"
+                className="relative flex flex-col gap-2 min-h-0 flex-1 justify-center"
               >
-                {/* Score Cards Grid */}
-                <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 w-full">
-                    {[player1, player2].map((p, idx) => (
+              {/* Score Cards Grid */}
+              <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 w-full">
+                  {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1">
                         <motion.div
                           onClick={() => {
@@ -1417,115 +1471,115 @@ export default function App() {
                             }
                           }}
                           className={`relative p-2 sm:p-4 lg:p-6 ${idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl' : 'rounded-3xl'} border-2 transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card sm:min-h-0 sm:max-h-none`}
-                          style={{
+                          style={{ 
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
                             boxShadow: `0 0 40px -15px ${p.color}66`
                           }}
                         >
-                          {/* Mobile Score Buttons - Absolute Positioned */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              incrementScore(p.id);
-                            }}
-                            className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
-                            style={{
-                              backgroundColor: p.color,
-                              boxShadow: `0 4px 10px -2px ${p.color}66`
-                            }}
-                          >
-                            <Plus className="w-6 h-6 font-bold" />
-                          </button>
+                            {/* Mobile Score Buttons - Absolute Positioned */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                incrementScore(p.id);
+                              }}
+                              className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
+                              style={{ 
+                                backgroundColor: p.color,
+                                boxShadow: `0 4px 10px -2px ${p.color}66`
+                              }}
+                            >
+                              <Plus className="w-6 h-6 font-bold" />
+                            </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              decrementScore(p.id);
-                            }}
-                            className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
-                          >
-                            <Minus className="w-5 h-5" />
-                          </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                decrementScore(p.id);
+                              }}
+                              className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
+                            >
+                              <Minus className="w-5 h-5" />
+                            </button>
 
                           <div className="flex flex-col items-center gap-0 sm:gap-6">
-                            {isEditingNames ? (
-                              <input
-                                type="text"
-                                value={p.name}
-                                placeholder={`PLAYER ${idx + 1} NAME`}
-                                onChange={(e) => idx === 0 ? setPlayer1({ ...p, name: e.target.value }) : setPlayer2({ ...p, name: e.target.value })}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
-                                style={{ color: p.color }}
-                              />
-                            ) : (
-                              p.name && (
-                                <h2 className="text-[min(5vw,1.2rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
-                                  {p.name}
-                                </h2>
-                              )
-                            )}
+                          {isEditingNames ? (
+                            <input
+                              type="text"
+                              value={p.name}
+                              placeholder={`PLAYER ${idx + 1} NAME`}
+                              onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                              style={{ color: p.color }}
+                            />
+                          ) : (
+                            p.name && (
+                              <h2 className="text-[min(5vw,1.2rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
+                                {p.name}
+                              </h2>
+                            )
+                          )}
 
-                            <div className="relative group mt-[-4px] sm:mt-0">
-                              <span className="text-[min(16vw,48px)] sm:text-[min(10rem,25vh)] lg:text-[min(12rem,30vh)] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
-                                {p.score}
-                              </span>
-                            </div>
-
-                            {/* Desktop Score Buttons */}
-                            <div className="hidden sm:flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
-                              <button
-                                onClick={() => decrementScore(p.id)}
-                                className="flex-1 h-8 sm:h-[min(4rem,10vh)] bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
-                              >
-                                <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  incrementScore(p.id);
-                                }}
-                                className="flex-[2] h-8 sm:h-[min(4rem,10vh)] text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
-                                style={{
-                                  backgroundColor: p.color,
-                                  boxShadow: `0 10px 15px -3px ${p.color}33`
-                                }}
-                              >
-                                <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
-                              </button>
-                            </div>
+                          <div className="relative group mt-[-4px] sm:mt-0">
+                            <span className="text-[min(16vw,48px)] sm:text-[min(10rem,25vh)] lg:text-[min(12rem,30vh)] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
+                              {p.score}
+                            </span>
                           </div>
-                        </motion.div>
-                      </div>
-                    ))}
-                  </div>
 
-                  {/* Finish Match Button - Centered between cards */}
-                  <motion.div
-                    key="finish-button"
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    transition={{ duration: 0.4, ease: "easeInOut" }}
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
-                  >
-                    <button
-                      onClick={finishMatch}
-                      className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs sm:text-sm font-bold transition-all shadow-2xl border-2 active:scale-95"
-                      style={{
-                        border: '2px solid transparent',
-                        backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
-                        backgroundOrigin: 'border-box',
-                        backgroundClip: 'padding-box, border-box'
-                      }}
-                    >
-                      <span className="leading-none uppercase tracking-wider">Finish Match</span>
-                    </button>
-                  </motion.div>
+                          {/* Desktop Score Buttons */}
+                          <div className="hidden sm:flex items-center gap-3 w-full max-w-[200px] sm:max-w-none">
+                            <button
+                              onClick={() => decrementScore(p.id)}
+                              className="flex-1 h-8 sm:h-[min(4rem,10vh)] bg-slate-800 hover:bg-slate-700 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                            >
+                              <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                incrementScore(p.id);
+                              }}
+                              className="flex-[2] h-8 sm:h-[min(4rem,10vh)] text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                              style={{ 
+                                backgroundColor: p.color,
+                                boxShadow: `0 10px 15px -3px ${p.color}33`
+                              }}
+                            >
+                              <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </div>
+                  ))}
                 </div>
-              </motion.div>
+
+                {/* Finish Match Button - Centered between cards */}
+                <motion.div 
+                  key="finish-button"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
+                >
+                  <button
+                    onClick={finishMatch}
+                    className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs sm:text-sm font-bold transition-all shadow-2xl border-2 active:scale-95"
+                    style={{ 
+                      border: '2px solid transparent',
+                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                      backgroundOrigin: 'border-box',
+                      backgroundClip: 'padding-box, border-box'
+                    }}
+                  >
+                    <span className="leading-none uppercase tracking-wider">Finish Match</span>
+                  </button>
+                </motion.div>
+              </div>
             </motion.div>
-          )}
+          </motion.div>
+        )}
 
           {view === 'teams' && (
             <motion.div
@@ -1533,11 +1587,11 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-12 pb-20"
+              className="space-y-12 pb-10"
             >
-              <div
+              <div 
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 transition-all duration-500"
-                style={{
+                style={{ 
                   borderBottom: '2px solid',
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
@@ -1547,10 +1601,10 @@ export default function App() {
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Configure your session players</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <button
+                  <button 
                     onClick={() => setShowExportMenu(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
-                    style={{
+                    style={{ 
                       borderColor: player2.color,
                       color: player2.color,
                       backgroundColor: player2.color + '11'
@@ -1559,10 +1613,10 @@ export default function App() {
                     <Download className="w-4 h-4" style={{ color: player2.color }} />
                     Export
                   </button>
-                  <button
+                  <button 
                     onClick={uploadData}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
-                    style={{
+                    style={{ 
                       borderColor: player2.color,
                       color: player2.color,
                       backgroundColor: player2.color + '11'
@@ -1571,10 +1625,10 @@ export default function App() {
                     <Upload className="w-4 h-4" style={{ color: player2.color }} />
                     Import
                   </button>
-                  <button
+                  <button 
                     onClick={() => setShowClearTeamsConfirm(true)}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all border-2"
-                    style={{
+                    style={{ 
                       borderColor: player2.color,
                       color: player2.color,
                       backgroundColor: player2.color + '11'
@@ -1594,11 +1648,11 @@ export default function App() {
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
-                    <input
-                      value={team1Name}
+                    <input 
+                      value={team1Name} 
                       onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl"
+                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
                       style={{ borderColor: player1.color }}
                       placeholder="TEAM 1 NAME"
                     />
@@ -1608,13 +1662,13 @@ export default function App() {
                     <div className="space-y-3">
                       {team1Players.map((player, idx) => (
                         <div key={idx} className="flex gap-3 group">
-                          <div
+                          <div 
                             className="w-10 h-12 flex items-center justify-center text-xs font-black bg-black border-2 rounded-xl"
                             style={{ borderColor: player1.color + '33', color: player1.color }}
                           >
                             {idx + 1}
                           </div>
-                          <input
+                          <input 
                             value={player}
                             autoFocus={idx === team1Players.length - 1 && player === ''}
                             onChange={(e) => {
@@ -1627,7 +1681,7 @@ export default function App() {
                             style={{ borderColor: player1.color + '22' }}
                             placeholder={`PLAYER ${idx + 1}`}
                           />
-                          <button
+                          <button 
                             onClick={() => {
                               const newPlayers = team1Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
@@ -1638,11 +1692,11 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                      <button
+                      <button 
                         onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
                         className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
-                        style={{
-                          borderColor: player1.color + '33',
+                        style={{ 
+                          borderColor: player1.color + '33', 
                           color: player1.color,
                           backgroundColor: 'transparent'
                         }}
@@ -1669,11 +1723,11 @@ export default function App() {
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
-                    <input
-                      value={team2Name}
+                    <input 
+                      value={team2Name} 
                       onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl"
+                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
                       style={{ borderColor: player2.color }}
                       placeholder="TEAM 2 NAME"
                     />
@@ -1683,13 +1737,13 @@ export default function App() {
                     <div className="space-y-3">
                       {team2Players.map((player, idx) => (
                         <div key={idx} className="flex gap-3 group">
-                          <div
+                          <div 
                             className="w-10 h-12 flex items-center justify-center text-xs font-black bg-black border-2 rounded-xl"
                             style={{ borderColor: player2.color + '33', color: player2.color }}
                           >
                             {idx + 1}
                           </div>
-                          <input
+                          <input 
                             value={player}
                             autoFocus={idx === team2Players.length - 1 && player === ''}
                             onChange={(e) => {
@@ -1702,7 +1756,7 @@ export default function App() {
                             style={{ borderColor: player2.color + '22' }}
                             placeholder={`PLAYER ${idx + 1}`}
                           />
-                          <button
+                          <button 
                             onClick={() => {
                               const newPlayers = team2Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
@@ -1713,11 +1767,11 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                      <button
+                      <button 
                         onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
                         className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
-                        style={{
-                          borderColor: player2.color + '33',
+                        style={{ 
+                          borderColor: player2.color + '33', 
                           color: player2.color,
                           backgroundColor: 'transparent'
                         }}
@@ -1739,24 +1793,32 @@ export default function App() {
               </div>
 
               {/* Matchups Table */}
-              <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
+              <div id="matchups-table" className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                 <div className="space-y-1">
                   <h3 className="text-2xl font-black uppercase tracking-tight text-white">Matchups</h3>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Session schedule and results</p>
                 </div>
-                <div className="bg-black border border-slate-800 rounded-3xl overflow-x-auto shadow-2xl">
-                  <table className="w-full text-left border-collapse min-w-[500px] sm:min-w-0">
-                    <thead>
-                      <tr className="bg-black/50 border-b border-slate-800">
-                        <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Match</th>
-                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team1Name || 'TEAM A'}</th>
-                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">VS</th>
-                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">{team2Name || 'TEAM B'}</th>
-                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Last Result</th>
-                        <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock</th>
-                        <th className="px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Action</th>
-                      </tr>
-                    </thead>
+                <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <table 
+                      className="text-left border-collapse sm:zoom-100 [zoom:0.9] landscape:[zoom:0.95] sm:[zoom:1]"
+                      style={{ 
+                        width: deviceInfo.isPhone 
+                          ? (windowSize.width > windowSize.height ? '105.26%' : '111.11%') 
+                          : '100%' 
+                      }}
+                    >
+                      <thead>
+                        <tr className="bg-black/50 border-b border-slate-800">
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Match</th>
+                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">{team1Name || 'TEAM A'}</th>
+                          <th className="px-0.5 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center w-4 sm:w-8">VS</th>
+                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">{team2Name || 'TEAM B'}</th>
+                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">Result</th>
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock</th>
+                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500 text-right w-10 sm:w-auto">Action</th>
+                        </tr>
+                      </thead>
                     <tbody>
                       {Math.max(team1Players.length, team2Players.length) === 0 ? (
                         <tr>
@@ -1767,38 +1829,38 @@ export default function App() {
                           {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
                             const p1 = team1Players[idx];
                             const p2 = team2Players[idx];
-
+                            
                             // Skip if both are empty (don't show "empty vs empty" rows)
                             if (!p1 && !p2) return null;
 
                             const p1Name = p1 || `PLAYER ${idx + 1}`;
                             const p2Name = p2 || `PLAYER ${idx + 1}`;
                             const lastMatch = getMatchResult(p1Name, p2Name);
-
+                            
                             return (
-                              <tr
-                                key={idx}
+                              <tr 
+                                key={idx} 
                                 onClick={() => selectTeamMatch(idx)}
                                 className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                               >
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-3 sm:px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
+                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[45px] sm:max-w-none truncate">
                                   {p1 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 text-center text-slate-700 font-black">VS</td>
-                                <td className="px-3 sm:px-6 py-4 text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
+                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">VS</td>
+                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[45px] sm:max-w-none truncate">
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-3 sm:px-6 py-4">
+                                <td className="px-1 sm:px-6 py-4">
                                   {lastMatch ? (
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                      <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                                        {lastMatch.score1} - {lastMatch.score2}
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
+                                      <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                                        {lastMatch.score1}-{lastMatch.score2}
                                       </span>
-                                      <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase">{new Date(lastMatch.date).toLocaleDateString('en-GB')}</span>
+                                      <span className="text-[6px] sm:text-[10px] text-slate-600 font-bold uppercase whitespace-nowrap">{new Date(lastMatch.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
                                     </div>
                                   ) : (
-                                    <span className="text-[10px] text-slate-600 font-bold uppercase">NO DATA</span>
+                                    <span className="text-[8px] text-slate-700 font-bold uppercase">NONE</span>
                                   )}
                                 </td>
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
@@ -1811,17 +1873,17 @@ export default function App() {
                                     <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
                                   )}
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 text-right">
+                                <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
                                   {lastMatch && (
-                                    <button
+                                    <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         clearMatchResult(p1Name, p2Name);
                                       }}
-                                      className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                      className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                                       title="Clear Result"
                                     >
-                                      <Trash2 className="w-4 h-4" />
+                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </button>
                                   )}
                                 </td>
@@ -1829,34 +1891,34 @@ export default function App() {
                             );
                           })}
                           {/* Totals Row */}
-                          <tr className="bg-slate-800/80 border-t-2 border-slate-700 font-black">
-                            <td className="hidden sm:table-cell px-3 sm:px-6 py-5 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
-                            <td className="px-3 sm:px-6 py-5">
+                          <tr className="bg-slate-800 border-t-2 border-slate-700 font-black">
+                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
+                            <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
-                                <span className="text-xl sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
-                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team1Name}</span>
+                                <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
+                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[40px] sm:max-w-none">{team1Name}</span>
                               </div>
                             </td>
-                            <td className="px-3 sm:px-6 py-5 text-center text-slate-700 font-black">SUM</td>
-                            <td className="px-3 sm:px-6 py-5">
+                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
+                            <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
-                                <span className="text-xl sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
-                                <span className="text-[8px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team2Name}</span>
+                                <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
+                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[40px] sm:max-w-none">{team2Name}</span>
                               </div>
                             </td>
-                            <td colSpan={deviceInfo.isPhone ? 2 : 3} className="px-3 sm:px-6 py-5 bg-slate-900/50">
-                              <div className="flex items-center justify-end gap-2 sm:gap-4">
-                                <div className="flex flex-col items-end">
-                                  <span className="text-[8px] sm:text-[10px] text-slate-500 uppercase font-bold">Overall Lead</span>
-                                  <span className="text-sm font-black text-slate-100">
-                                    {teamTotals.t1 === teamTotals.t2 ? 'TIED' :
-                                      teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` :
-                                        `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
-                                  </span>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                                  <Trophy className="w-5 h-5 text-emerald-400" />
-                                </div>
+                            <td colSpan={deviceInfo.isPhone ? 1 : 2} className="px-1 sm:px-6 py-4">
+                              <div className="flex flex-col items-end">
+                                <span className="text-[6px] sm:text-[10px] text-slate-600 uppercase font-bold">Overall Lead</span>
+                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-[70px] sm:max-w-none">
+                                  {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
+                                   teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
+                                   `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
+                              <div className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0">
+                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                               </div>
                             </td>
                           </tr>
@@ -1866,7 +1928,8 @@ export default function App() {
                   </table>
                 </div>
               </div>
-            </motion.div>
+            </div>
+          </motion.div>
           )}
 
           {view === 'settings' && (
@@ -1877,9 +1940,9 @@ export default function App() {
               exit={{ opacity: 0, x: 20 }}
               className="space-y-12 pb-20"
             >
-              <div
+              <div 
                 className="space-y-1 pb-8 transition-all duration-500"
-                style={{
+                style={{ 
                   borderBottom: '2px solid',
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
@@ -1890,7 +1953,7 @@ export default function App() {
 
               <div className="space-y-12">
                 <section className="space-y-6">
-                  <h3
+                  <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
@@ -1898,14 +1961,14 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
                     {[player1, player2].map((p, idx) => (
-                      <div
-                        key={p.id}
+                      <div 
+                        key={p.id} 
                         className="relative p-8 rounded-[32px] border-2 space-y-6 shadow-xl transition-all duration-500"
-                        style={{
+                        style={{ 
                           backgroundColor: p.bgColor,
                           borderColor: p.color,
                           boxShadow: `0 20px 50px -20px ${p.color}33`,
-                          '--player-color': p.color
+                          '--player-color': p.color 
                         } as React.CSSProperties}
                       >
                         <div className="flex items-center justify-between">
@@ -1918,7 +1981,7 @@ export default function App() {
                           placeholder={`PLAYER ${idx + 1} NAME`}
                           readOnly
                           className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all cursor-not-allowed opacity-70"
-                          style={{
+                          style={{ 
                             borderColor: 'transparent',
                             outline: 'none',
                             boxShadow: 'none'
@@ -1928,7 +1991,7 @@ export default function App() {
                           <ColorPicker
                             label="Text & Border"
                             value={p.color}
-                            onChange={(color) => idx === 0 ? setPlayer1({ ...p, color }) : setPlayer2({ ...p, color })}
+                            onChange={(color) => idx === 0 ? setPlayer1({...p, color}) : setPlayer2({...p, color})}
                             colors={THEME_COLORS}
                             icon={<Palette className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-theme`}
@@ -1939,7 +2002,7 @@ export default function App() {
                           <ColorPicker
                             label="Card Background"
                             value={p.bgColor}
-                            onChange={(color) => idx === 0 ? setPlayer1({ ...p, bgColor: color }) : setPlayer2({ ...p, bgColor: color })}
+                            onChange={(color) => idx === 0 ? setPlayer1({...p, bgColor: color}) : setPlayer2({...p, bgColor: color})}
                             colors={BACKGROUND_COLORS}
                             icon={<Layout className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-bg`}
@@ -1951,7 +2014,7 @@ export default function App() {
                             <ColorPicker
                               label="Screen Background"
                               value={p.screenColor}
-                              onChange={(color) => idx === 0 ? setPlayer1({ ...p, screenColor: color }) : setPlayer2({ ...p, screenColor: color })}
+                              onChange={(color) => idx === 0 ? setPlayer1({...p, screenColor: color}) : setPlayer2({...p, screenColor: color})}
                               colors={BACKGROUND_COLORS}
                               icon={<Maximize className="w-4 h-4" />}
                               isOpen={activePicker === `p${idx + 1}-screen`}
@@ -1959,9 +2022,9 @@ export default function App() {
                               themeColor={p.color}
                             />
                             {/* Screen Color Indicator Circle - 3rem (w-12 h-12) */}
-                            <div
+                            <div 
                               className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-2 ${idx === 0 ? 'left-0' : 'right-0'}`}
-                              style={{
+                              style={{ 
                                 backgroundColor: p.screenColor,
                                 borderColor: p.color,
                                 transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * var(--circle-offset)))' : 'translateX(var(--circle-offset))'}`,
@@ -1976,14 +2039,14 @@ export default function App() {
                 </section>
 
                 <section className="space-y-6">
-                  <h3
+                  <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
                     Master Match Clock
                   </h3>
-                  <div
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl"
+                  <div 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
                     style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
@@ -1991,7 +2054,7 @@ export default function App() {
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Match Clock</p>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">A master countdown for the entire match.</p>
                       </div>
-                      <button
+                      <button 
                         onClick={() => {
                           setIsMatchClockEnabled(!isMatchClockEnabled);
                           if (isMatchClockEnabled) pauseTimer();
@@ -2009,10 +2072,10 @@ export default function App() {
                           <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Match Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
                         </div>
-                        <input
-                          type="range"
-                          min="300"
-                          max="3600"
+                        <input 
+                          type="range" 
+                          min="300" 
+                          max="3600" 
                           step="300"
                           value={matchClockDuration}
                           onChange={(e) => {
@@ -2028,7 +2091,7 @@ export default function App() {
                           <span>30m</span>
                           <span>60m</span>
                         </div>
-                        <button
+                        <button 
                           onClick={resetMatchClock}
                           className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                         >
@@ -2041,14 +2104,14 @@ export default function App() {
                 </section>
 
                 <section className="space-y-6">
-                  <h3
+                  <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player2.color }}
                   >
                     Shot Clock Settings
                   </h3>
-                  <div
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl"
+                  <div 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
                     style={{ borderColor: player2.color }}
                   >
                     <div className="flex items-center justify-between">
@@ -2056,7 +2119,7 @@ export default function App() {
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Shot Clock</p>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Toggle the visibility and timer on the scoreboard.</p>
                       </div>
-                      <button
+                      <button 
                         onClick={() => {
                           setIsShotClockEnabled(!isShotClockEnabled);
                           if (isShotClockEnabled) pauseTimer();
@@ -2074,10 +2137,10 @@ export default function App() {
                           <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Timer Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
                         </div>
-                        <input
-                          type="range"
-                          min="10"
-                          max="120"
+                        <input 
+                          type="range" 
+                          min="10" 
+                          max="120" 
                           step="5"
                           value={shotClockDuration}
                           onChange={(e) => {
@@ -2099,14 +2162,14 @@ export default function App() {
                 </section>
 
                 <section className="space-y-6">
-                  <h3
+                  <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
                     System Settings
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
-                    <div
+                    <div 
                       className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
                       style={{ borderColor: player1.color }}
                     >
@@ -2114,7 +2177,7 @@ export default function App() {
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Settings</p>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
                       </div>
-                      <button
+                      <button 
                         onClick={() => setShowRestoreDefaultsConfirm(true)}
                         className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
@@ -2137,7 +2200,7 @@ export default function App() {
                       </div>
                       {isApiLocked ? (
                         <div className="flex items-center gap-2">
-                          <input
+                          <input 
                             type="password"
                             value={pinInput}
                             onChange={(e) => {
@@ -2153,7 +2216,7 @@ export default function App() {
                           />
                         </div>
                       ) : (
-                        <button
+                        <button 
                           onClick={() => setIsApiLocked(true)}
                           className="p-2 text-slate-500 hover:text-slate-300 transition-colors"
                         >
@@ -2166,17 +2229,17 @@ export default function App() {
                       <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target URL</label>
-                          <input
+                          <input 
                             type="url"
                             value={apiConfig.url}
                             onChange={(e) => setApiConfig(prev => ({ ...prev, url: e.target.value }))}
-                            placeholder="https://ais-pre-...run.app/api/matches/bulk"
+                            placeholder="https://api.yourserver.com/sync"
                             className="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-emerald-500 transition-all font-bold"
                           />
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</label>
-                          <input
+                          <input 
                             type="password"
                             value={apiConfig.key}
                             onChange={(e) => setApiConfig(prev => ({ ...prev, key: e.target.value }))}
@@ -2195,37 +2258,21 @@ export default function App() {
                               setIsApiSending(true);
                               setApiTestStatus({ type: 'idle', message: 'Testing...' });
                               try {
-                                const testData = { test: true, timestamp: formatDateUK(new Date(), true), type: 'connection_test' };
+                                const testBody = JSON.stringify({ test: true, timestamp: formatDateUK(new Date(), true), type: 'connection_test' });
                                 console.log('Testing connection to:', apiConfig.url);
-
-                                // 1. Prepare URL with Key
-                                const urlWithKey = `${apiConfig.url}${apiConfig.url.includes('?') ? '&' : '?'}key=${apiConfig.key}`;
-
-                                // 2. Use URLSearchParams for a clean "Simple Request"
-                                const formData = new URLSearchParams();
-                                formData.append('data', JSON.stringify(testData));
-
-                                // 3. Bulletproof Fetch Call
-                                const res = await fetch(urlWithKey, {
+                                const res = await fetch(apiConfig.url, {
                                   method: 'POST',
-                                  mode: 'cors',
-                                  credentials: 'include', // CRITICAL: Sends the platform security cookie
-                                  headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded'
-                                  },
-                                  body: formData.toString()
+                                  headers: { 'Content-Type': 'application/json', 'x-api-key': apiConfig.key },
+                                  body: testBody
                                 });
-
                                 if (res.ok) {
                                   setApiTestStatus({ type: 'success', message: 'Success! Server responded with 200 OK.' });
                                 } else {
-                                  // If we get a 302 or 404, it might be the cookie check
-                                  const msg = res.status === 404 ? 'Not Found (Check URL)' : `Error: ${res.status}`;
-                                  setApiTestStatus({ type: 'error', message: msg });
+                                  setApiTestStatus({ type: 'error', message: `Failed. Server responded with ${res.status}.` });
                                 }
                               } catch (err) {
                                 console.error('Test Connection Error:', err);
-                                setApiTestStatus({ type: 'error', message: 'Connection failed. Ensure you have "Unlocked" the URL in a new tab first.' });
+                                setApiTestStatus({ type: 'error', message: 'Connection failed. Check console for CORS/Network errors.' });
                               } finally {
                                 setIsApiSending(false);
                               }
@@ -2247,20 +2294,21 @@ export default function App() {
                           </button>
 
                           {apiTestStatus.type !== 'idle' && (
-                            <motion.div
+                            <motion.div 
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className={`p-3 rounded-xl text-[10px] font-bold border ${apiTestStatus.type === 'success'
-                                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
-                                : 'bg-rose-500/10 border-rose-500/50 text-rose-400'
-                                }`}
+                              className={`p-3 rounded-xl text-[10px] font-bold border ${
+                                apiTestStatus.type === 'success' 
+                                  ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
+                                  : 'bg-rose-500/10 border-rose-500/50 text-rose-400'
+                              }`}
                             >
                               {apiTestStatus.message}
                             </motion.div>
                           )}
                         </div>
                         <p className="text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
-                          This configuration enables the "Send to Server" option in the export menu.
+                          This configuration enables the "Send to Server" option in the export menu. 
                           The payload is a full JSON representation of the current tournament state.
                         </p>
                       </div>
@@ -2274,8 +2322,9 @@ export default function App() {
                     )}
                   </div>
                 </section>
+
                 <section className="pt-12">
-                  <div
+                  <div 
                     className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-4 shadow-xl"
                   >
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
@@ -2297,7 +2346,7 @@ export default function App() {
         <AnimatePresence>
           {showClearTeamsConfirm && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <motion.div
+              <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -2310,13 +2359,13 @@ export default function App() {
                 </div>
                 <p className="text-slate-400">This will permanently delete team names, player lists, current scores, and match history. This action cannot be undone.</p>
                 <div className="flex gap-4">
-                  <button
+                  <button 
                     onClick={() => setShowClearTeamsConfirm(false)}
                     className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
                   >
                     Cancel
                   </button>
-                  <button
+                  <button 
                     onClick={clearTeams}
                     className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all"
                   >
@@ -2328,11 +2377,11 @@ export default function App() {
           )}
 
           {showExportMenu && (
-            <div
+            <div 
               className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
               onClick={() => setShowExportMenu(false)}
             >
-              <motion.div
+              <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -2345,7 +2394,7 @@ export default function App() {
                     <Download className="w-8 h-8" />
                     <h3 className="text-xl font-bold uppercase tracking-tight">Export Tournament</h3>
                   </div>
-                  <button
+                  <button 
                     onClick={() => setShowExportMenu(false)}
                     className="p-2 hover:bg-slate-800 rounded-full transition-all"
                   >
@@ -2358,13 +2407,13 @@ export default function App() {
                   <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
                     <span className="font-bold uppercase tracking-widest text-xs text-slate-400">File Format</span>
                     <div className="flex bg-black p-1 rounded-xl border border-slate-800">
-                      <button
+                      <button 
                         onClick={() => setExportFormat('csv')}
                         className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${exportFormat === 'csv' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500'}`}
                       >
                         CSV
                       </button>
-                      <button
+                      <button 
                         onClick={() => setExportFormat('json')}
                         className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${exportFormat === 'json' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500'}`}
                       >
@@ -2380,7 +2429,7 @@ export default function App() {
                       { id: 'share', label: 'Share', icon: Share2, desc: 'Open system share' },
                       { id: 'server', label: 'Send to Server', icon: Server, desc: 'Upload to tournament server' }
                     ].map((method) => (
-                      <button
+                      <button 
                         key={method.id}
                         onClick={() => {
                           const id = method.id as 'download' | 'share' | 'server';
@@ -2411,7 +2460,7 @@ export default function App() {
 
                 </div>
 
-                <button
+                <button 
                   onClick={handleExportAction}
                   disabled={isApiSending}
                   className={`w-full h-16 rounded-2xl font-black uppercase tracking-[0.2em] transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-3 ${isApiSending ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'}`}
@@ -2435,7 +2484,7 @@ export default function App() {
 
           {showRestoreDefaultsConfirm && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <motion.div
+              <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -2448,26 +2497,26 @@ export default function App() {
                 </div>
                 <p className="text-slate-400">This will reset all player colors and clock settings to their original defaults. Your names, scores, and history will not be affected.</p>
                 <div className="flex gap-4">
-                  <button
+                  <button 
                     onClick={() => setShowRestoreDefaultsConfirm(false)}
                     className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
                   >
                     Cancel
                   </button>
-                  <button
+                  <button 
                     onClick={() => {
                       // Restore User Preferences Only (Colors and Clocks)
-                      setPlayer1(prev => ({
-                        ...prev,
-                        color: '#FFFF33',
-                        bgColor: '#000000',
-                        screenColor: '#000000'
+                      setPlayer1(prev => ({ 
+                        ...prev, 
+                        color: '#FFFF33', 
+                        bgColor: '#000000', 
+                        screenColor: '#000000' 
                       }));
-                      setPlayer2(prev => ({
-                        ...prev,
-                        color: '#FF001C',
-                        bgColor: '#000000',
-                        screenColor: '#000000'
+                      setPlayer2(prev => ({ 
+                        ...prev, 
+                        color: '#FF001C', 
+                        bgColor: '#000000', 
+                        screenColor: '#000000' 
                       }));
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
                       setIsShotClockEnabled(false);
@@ -2487,7 +2536,7 @@ export default function App() {
           )}
           {showClearHistoryConfirm && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <motion.div
+              <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -2500,13 +2549,13 @@ export default function App() {
                 </div>
                 <p className="text-slate-400">This will permanently delete all saved match results. This action cannot be undone.</p>
                 <div className="flex gap-4">
-                  <button
+                  <button 
                     onClick={() => setShowClearHistoryConfirm(false)}
                     className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
                   >
                     Cancel
                   </button>
-                  <button
+                  <button 
                     onClick={() => {
                       clearHistory();
                       setShowClearHistoryConfirm(false);
@@ -2521,12 +2570,12 @@ export default function App() {
           )}
           {showTeamTotals && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-              <motion.div
+              <motion.div 
                 initial={{ scale: 0.8, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.8, opacity: 0, y: 20 }}
                 className="bg-black border-2 p-10 rounded-[40px] max-w-2xl w-full space-y-10 text-center"
-                style={{
+                style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                   boxShadow: `0 0 50px ${player1.color}11`
                 }}
@@ -2556,13 +2605,13 @@ export default function App() {
                   </div>
                 </div>
 
-                <button
+                <button 
                   onClick={() => {
                     setShowTeamTotals(false);
                     setView('teams');
                   }}
                   className="w-full h-20 text-slate-950 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all active:scale-95"
-                  style={{
+                  style={{ 
                     backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
                     boxShadow: `0 10px 20px ${player1.color}33`
                   }}
@@ -2581,28 +2630,28 @@ export default function App() {
       {/* Quick Actions Floating Bar (Mobile) */}
       <AnimatePresence>
         {view !== 'scoreboard' && (
-          <motion.div
+          <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 bar-zoom"
             style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
           >
-            <button
+            <button 
               onClick={navigateToScoreboard}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'scoreboard' ? { backgroundColor: player1.color } : {}}
             >
               Score
             </button>
-            <button
+            <button 
               onClick={() => setView('teams')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'teams' ? { backgroundColor: player1.color } : {}}
             >
               Teams
             </button>
-            <button
+            <button 
               onClick={() => setView('settings')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'settings' ? { backgroundColor: player2.color } : {}}
