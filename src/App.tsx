@@ -1276,6 +1276,10 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  const halfW = windowSize.width < 640 ? 66 : 98;
+  const halfH = windowSize.width < 640 ? 22 : 26;
+  const gap = windowSize.height * 0.05;
+
   return (
     <div className="relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden">
       {/* SVG Gradient Definitions */}
@@ -1450,12 +1454,12 @@ export default function App() {
               }
             }}
             initial={matchClockPosition || { 
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-              y: windowSize.height / 2 + (deviceInfo.isPhone ? 20 : 24) + (windowSize.height * 0.05)
+              x: windowSize.width / 2 - halfW, 
+              y: windowSize.height / 2 + halfH + gap
             }}
             animate={matchClockPosition ? { x: matchClockPosition.x, y: matchClockPosition.y } : {
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-              y: windowSize.height / 2 + (deviceInfo.isPhone ? 20 : 24) + (windowSize.height * 0.05)
+              x: windowSize.width / 2 - halfW,
+              y: windowSize.height / 2 + halfH + gap
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
@@ -1507,12 +1511,12 @@ export default function App() {
               }
             }}
             initial={shotClockPosition || { 
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-              y: windowSize.height / 2 - (deviceInfo.isPhone ? 60 : 72) - (windowSize.height * 0.05)
+              x: windowSize.width / 2 - halfW, 
+              y: windowSize.height / 2 - halfH - gap - (halfH * 2)
             }}
             animate={shotClockPosition ? { x: shotClockPosition.x, y: shotClockPosition.y } : {
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-              y: windowSize.height / 2 - (deviceInfo.isPhone ? 60 : 72) - (windowSize.height * 0.05)
+              x: windowSize.width / 2 - halfW,
+              y: windowSize.height / 2 - halfH - gap - (halfH * 2)
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
@@ -1577,11 +1581,11 @@ export default function App() {
               }
             }}
             initial={deviceTimePosition || { 
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
+              x: windowSize.width / 2 - halfW, 
               y: 12 
             }}
             animate={deviceTimePosition ? { x: deviceTimePosition.x, y: deviceTimePosition.y } : {
-              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
+              x: windowSize.width / 2 - halfW,
               y: 12
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
@@ -1751,12 +1755,12 @@ export default function App() {
                         }
                       }}
                       initial={finishButtonPosition || { 
-                        x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-                        y: windowSize.height / 2 - (deviceInfo.isPhone ? 20 : 24) 
+                        x: windowSize.width / 2 - halfW, 
+                        y: windowSize.height / 2 - halfH 
                       }}
                       animate={finishButtonPosition ? { x: finishButtonPosition.x, y: finishButtonPosition.y } : {
-                        x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-                        y: windowSize.height / 2 - (deviceInfo.isPhone ? 20 : 24)
+                        x: windowSize.width / 2 - halfW,
+                        y: windowSize.height / 2 - halfH
                       }}
                       transition={{ duration: 0.4, ease: "easeInOut" }}
                       className="fixed z-[100] cursor-move pointer-events-auto touch-none"
