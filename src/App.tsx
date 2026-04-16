@@ -76,6 +76,30 @@ export default function App() {
     return { isPhone, isTablet, isDesktop, isLandscape };
   }, [windowSize.width, windowSize.height]); 
 
+  // Calculate shared font size for team names to occupy 95% of vertical space
+  const sharedTeamNameFontSize = useMemo(() => {
+    const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : (deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112));
+    const availableHeight = windowSize.height - topBarHeight;
+    const targetHeight = availableHeight * 0.95;
+    
+    const getFontSize = (name: string) => {
+      const len = Math.max(1, name.length);
+      // Adjusted scaling to meet the 1.4x request
+      return (targetHeight * 1.4) / len;
+    };
+
+    const fs1 = getFontSize(team1Name);
+    const fs2 = getFontSize(team2Name);
+    const shared = Math.min(fs1, fs2);
+
+    // Physical constraint: sidebar width
+    const sidebarWidth = deviceInfo.isPhone ? 48 : (deviceInfo.isTablet ? 80 : 120);
+    // Allow it to be slightly larger than sidebar width to fill the space well
+    const maxFs = sidebarWidth * 1.2;
+
+    return Math.min(shared, maxFs);
+  }, [windowSize.height, team1Name, team2Name, deviceInfo, isNavVisible]);
+
   // Keyboard detection for mobile
   useEffect(() => {
     const handleFocusIn = (e: FocusEvent) => {
@@ -1402,9 +1426,7 @@ export default function App() {
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
                   style={{ 
                     color: player1.color,
-                    fontSize: deviceInfo.isPhone 
-                      ? `min(6vw, 32px, ${70 / (Math.max(1, team1Name.length) * 1.1)}vh)`
-                      : `min(4vw, 54px, ${85 / (Math.max(1, team1Name.length) * 1.1)}vh)`
+                    fontSize: `${sharedTeamNameFontSize}px`
                   }}
                 >
                   {team1Name}
@@ -1427,9 +1449,7 @@ export default function App() {
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
                   style={{ 
                     color: player2.color,
-                    fontSize: deviceInfo.isPhone 
-                      ? `min(6vw, 32px, ${70 / (Math.max(1, team2Name.length) * 1.1)}vh)`
-                      : `min(4vw, 54px, ${85 / (Math.max(1, team2Name.length) * 1.1)}vh)`
+                    fontSize: `${sharedTeamNameFontSize}px`
                   }}
                 >
                   {team2Name}
