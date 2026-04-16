@@ -22,7 +22,8 @@ import {
   PlusCircle,
   Share2,
   Server,
-  Zap
+  Zap,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, MatchHistoryEntry, MatchupSettings } from './types';
@@ -70,8 +71,9 @@ export default function App() {
     // A device is a tablet if it matches the tablet UA or falls in the tablet width range
     const isTablet = isTabletUA || (windowSize.width >= 640 && windowSize.width < 1024);
     const isDesktop = !isPhone && !isTablet;
+    const isLandscape = windowSize.width > windowSize.height;
 
-    return { isPhone, isTablet, isDesktop };
+    return { isPhone, isTablet, isDesktop, isLandscape };
   }, [windowSize.width, windowSize.height]); 
 
   // Keyboard detection for mobile
@@ -165,6 +167,19 @@ export default function App() {
   const [isApiSending, setIsApiSending] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showDeviceTime, setShowDeviceTime] = useState(false);
+  const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
+  const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
+  const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const clockRef = useRef<HTMLDivElement>(null);
+  const matchClockRef = useRef<HTMLDivElement>(null);
+  const shotClockRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // --- Refs ---
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -276,6 +291,11 @@ export default function App() {
       if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
       if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
       if (state.apiConfig) setApiConfig(state.apiConfig);
+      
+      if (state.userPreferences?.showDeviceTime !== undefined) setShowDeviceTime(state.userPreferences.showDeviceTime);
+      if (state.userPreferences?.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
+      if (state.userPreferences?.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
+      if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
 
       // Finalize loading
       setTimeout(() => setIsLoaded(true), 100);
@@ -315,7 +335,11 @@ export default function App() {
         shotClockDuration,
         isShotClockEnabled,
         matchClockDuration,
-        isMatchClockEnabled
+        isMatchClockEnabled,
+        showDeviceTime,
+        deviceTimePosition,
+        matchClockPosition,
+        shotClockPosition
       },
       matchupSettings,
       playerPreferences,
@@ -327,6 +351,7 @@ export default function App() {
     team1Name, team2Name, team1Players, team2Players,
     matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
+    showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
     matchupSettings, playerPreferences, apiConfig
   ]);
 
@@ -704,6 +729,19 @@ export default function App() {
     csvContent += `Player 1 Highlight Color,"${player1.color}"\n`;
     csvContent += `Player 2 Highlight Color,"${player2.color}"\n`;
     csvContent += `Selected Match Index,"${selectedMatchIndex}"\n`;
+    csvContent += `Show Device Time,"${showDeviceTime}"\n`;
+    if (deviceTimePosition) {
+      csvContent += `Device Time Position X,"${deviceTimePosition.x}"\n`;
+      csvContent += `Device Time Position Y,"${deviceTimePosition.y}"\n`;
+    }
+    if (matchClockPosition) {
+      csvContent += `Match Clock Position X,"${matchClockPosition.x}"\n`;
+      csvContent += `Match Clock Position Y,"${matchClockPosition.y}"\n`;
+    }
+    if (shotClockPosition) {
+      csvContent += `Shot Clock Position X,"${shotClockPosition.x}"\n`;
+      csvContent += `Shot Clock Position Y,"${shotClockPosition.y}"\n`;
+    }
 
     csvContent += "\nSECTION: PLAYER PREFERENCES\n";
     csvContent += "Player Name,Highlight Color\n";
@@ -968,6 +1006,11 @@ export default function App() {
               setIsShotClockEnabled(!!state.userPreferences.isShotClockEnabled);
               setMatchClockDuration(state.userPreferences.matchClockDuration || 600);
               setIsMatchClockEnabled(!!state.userPreferences.isMatchClockEnabled);
+              if (state.userPreferences.showDeviceTime !== undefined) setShowDeviceTime(state.userPreferences.showDeviceTime);
+              if (state.userPreferences.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
+              if (state.userPreferences.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
+              if (state.userPreferences.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
+              
               if (state.userPreferences.player1) {
                 setPlayer1(prev => ({ 
                   ...prev, 
@@ -1076,6 +1119,13 @@ export default function App() {
                 if (key === 'Player 1 Highlight Color') setPlayer1(p => ({ ...p, color: val }));
                 if (key === 'Player 2 Highlight Color') setPlayer2(p => ({ ...p, color: val }));
                 if (key === 'Selected Match Index') setSelectedMatchIndex(val === 'NULL' ? null : parseInt(val));
+                if (key === 'Show Device Time') setShowDeviceTime(val === 'true');
+                if (key === 'Device Time Position X') setDeviceTimePosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
+                if (key === 'Device Time Position Y') setDeviceTimePosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
+                if (key === 'Match Clock Position X') setMatchClockPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
+                if (key === 'Match Clock Position Y') setMatchClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
+                if (key === 'Shot Clock Position X') setShotClockPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
+                if (key === 'Shot Clock Position Y') setShotClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
               } else if (currentSection === 'PLAYER PREFERENCES') {
                 if (values[0] === 'Player Name') return;
                 const name = values[0];
@@ -1272,62 +1322,14 @@ export default function App() {
           </h1>
         </div>
 
-        {/* Centered Clocks */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-auto">
-          {(isShotClockEnabled || isMatchClockEnabled) && (
-            <div className="flex items-center gap-2 sm:gap-6 bg-slate-900/60 backdrop-blur-xl px-3 py-1.5 sm:px-6 sm:py-2 rounded-2xl border border-slate-800/50 shadow-2xl">
-              {isMatchClockEnabled && (
-                <div className="flex flex-col items-center">
-                  <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Match</span>
-                  <div 
-                    className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : ''}`}
-                    style={matchClock > 60 ? { color: player1.color } : {}}
-                  >
-                    <Timer className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
-                    {formatTime(matchClock)}
-                  </div>
-                </div>
-              )}
-
-              {isShotClockEnabled && (
-                <div className="flex flex-col items-center">
-                  <span className="hidden lg:block text-[8px] font-black uppercase tracking-widest text-slate-500 mb-0.5">Shot</span>
-                  <div 
-                    className={`flex items-center gap-1.5 text-sm sm:text-xl lg:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : ''}`}
-                    style={shotClock > 5 ? { color: player2.color } : {}}
-                  >
-                    <Timer className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
-                    {shotClock}s
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-1.5 ml-1 sm:ml-2">
-                <button 
-                  onClick={isTimerRunning ? pauseTimer : startTimer}
-                  className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all border border-slate-700/50 active:scale-90"
-                  style={{ color: isTimerRunning ? player2.color : player1.color }}
-                >
-                  {isTimerRunning ? <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                </button>
-                <button 
-                  onClick={() => {
-                    resetTimer();
-                    if (isMatchClockEnabled && !isShotClockEnabled) resetMatchClock();
-                  }}
-                  className="p-1.5 sm:p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all border border-slate-700/50 text-slate-400 active:scale-90"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Centered Controls - Removed as they are now in the widgets */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-none">
         </div>
         
         <div className="flex items-center gap-2 sm:gap-4 lg:gap-8 shrink-0">
           <button 
             onClick={toggleFullscreen}
-            className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 hidden sm:flex"
+            className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 flex"
             title="Toggle Fullscreen"
           >
             {isFullscreen ? 
@@ -1423,6 +1425,175 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Floating Match Clock Widget */}
+      <AnimatePresence>
+        {isMatchClockEnabled && view === 'scoreboard' && (
+          <motion.div
+            ref={matchClockRef}
+            drag
+            dragMomentum={false}
+            onDragEnd={() => {
+              if (matchClockRef.current) {
+                const rect = matchClockRef.current.getBoundingClientRect();
+                setMatchClockPosition({ x: rect.left, y: rect.top });
+              }
+            }}
+            initial={matchClockPosition || { 
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
+              y: 12 
+            }}
+            animate={matchClockPosition ? { x: matchClockPosition.x, y: matchClockPosition.y } : {
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
+              y: 12
+            }}
+            className="fixed z-[100] cursor-move pointer-events-auto touch-none"
+            style={{ left: 0, top: 0 }}
+          >
+            <div 
+              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-between px-2 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl"
+              style={{ 
+                border: '2px solid transparent',
+                backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player1.color}, ${player2.color})`,
+                backgroundOrigin: 'border-box',
+                backgroundClip: 'padding-box, border-box'
+              }}
+            >
+              <div className="flex flex-col items-start">
+                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-widest text-slate-500 leading-none mb-0.5">Match</span>
+                <div 
+                  className={`flex items-center gap-1 text-xs sm:text-sm font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                >
+                  <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {formatTime(matchClock)}
+                </div>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetMatchClock();
+                }}
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-slate-400 active:scale-90"
+                title="Reset Match Clock"
+              >
+                <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Shot Clock Widget */}
+      <AnimatePresence>
+        {isShotClockEnabled && view === 'scoreboard' && (
+          <motion.div
+            ref={shotClockRef}
+            drag
+            dragMomentum={false}
+            onDragEnd={() => {
+              if (shotClockRef.current) {
+                const rect = shotClockRef.current.getBoundingClientRect();
+                setShotClockPosition({ x: rect.left, y: rect.top });
+              }
+            }}
+            initial={shotClockPosition || { 
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
+              y: isMatchClockEnabled ? 70 : 12 
+            }}
+            animate={shotClockPosition ? { x: shotClockPosition.x, y: shotClockPosition.y } : {
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
+              y: isMatchClockEnabled ? 70 : 12
+            }}
+            className="fixed z-[100] cursor-move pointer-events-auto touch-none"
+            style={{ left: 0, top: 0 }}
+          >
+            <div 
+              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-between px-2 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl"
+              style={{ 
+                border: '2px solid transparent',
+                backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                backgroundOrigin: 'border-box',
+                backgroundClip: 'padding-box, border-box'
+              }}
+            >
+              <div className="flex flex-col items-start">
+                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-widest text-slate-500 leading-none mb-0.5">Shot</span>
+                <div 
+                  className={`flex items-center gap-1 text-xs sm:text-sm font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                >
+                  <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {shotClock}s
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    isTimerRunning ? pauseTimer() : startTimer();
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-all active:scale-90"
+                  style={{ color: isTimerRunning ? player2.color : player1.color }}
+                  title={isTimerRunning ? "Pause" : "Start"}
+                >
+                  {isTimerRunning ? <Pause className="w-3 h-3 sm:w-4 sm:h-4" /> : <Play className="w-3 h-3 sm:w-4 sm:h-4" />}
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetTimer();
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-slate-400 active:scale-90"
+                  title="Reset Shot Clock"
+                >
+                  <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Device Time Clock */}
+      <AnimatePresence>
+        {showDeviceTime && view === 'scoreboard' && (
+          <motion.div
+            ref={clockRef}
+            drag
+            dragMomentum={false}
+            onDragEnd={() => {
+              if (clockRef.current) {
+                const rect = clockRef.current.getBoundingClientRect();
+                setDeviceTimePosition({ x: rect.left, y: rect.top });
+              }
+            }}
+            initial={deviceTimePosition || { 
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
+              y: (isMatchClockEnabled && isShotClockEnabled) ? 128 : (isMatchClockEnabled || isShotClockEnabled) ? 70 : 12 
+            }}
+            animate={deviceTimePosition ? { x: deviceTimePosition.x, y: deviceTimePosition.y } : {
+              x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
+              y: (isMatchClockEnabled && isShotClockEnabled) ? 128 : (isMatchClockEnabled || isShotClockEnabled) ? 70 : 12
+            }}
+            className="fixed z-[100] cursor-move pointer-events-auto touch-none"
+            style={{ left: 0, top: 0 }}
+          >
+            <div 
+              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-center gap-2 rounded-2xl bg-black border-2 shadow-2xl"
+              style={{ 
+                border: '2px solid transparent',
+                backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                backgroundOrigin: 'border-box',
+                backgroundClip: 'padding-box, border-box'
+              }}
+            >
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
+              <span className="text-xs sm:text-sm font-mono font-bold text-white tracking-wider">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.main 
         initial={false}
         animate={{ 
@@ -1459,7 +1630,7 @@ export default function App() {
               >
               {/* Score Cards Grid */}
               <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 w-full">
+                <div className={`grid gap-3 sm:gap-4 lg:gap-5 w-full ${deviceInfo.isLandscape ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
                   {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1">
                         <motion.div
@@ -1792,10 +1963,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Matchups Table */}
+              {/* Match Results Table */}
               <div id="matchups-table" className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black uppercase tracking-tight text-white">Matchups</h3>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-white">Match Results Table</h3>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Session schedule and results</p>
                 </div>
                 <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
@@ -2174,11 +2345,31 @@ export default function App() {
                       style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1 text-center sm:text-left">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Show Device Time</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a draggable clock on the gameplay screen.</p>
+                      </div>
+                      <button 
+                        onClick={() => setShowDeviceTime(!showDeviceTime)}
+                        className={`w-14 h-7 rounded-full transition-colors relative`}
+                        style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
+                      >
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showDeviceTime ? 'left-8' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    <div 
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                      style={{ borderColor: player1.color }}
+                    >
+                      <div className="space-y-1 text-center sm:text-left">
                         <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Settings</p>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
                       </div>
                       <button 
-                        onClick={() => setShowRestoreDefaultsConfirm(true)}
+                        onClick={() => {
+                          setShowRestoreDefaultsConfirm(true);
+                          setDeviceTimePosition(null);
+                        }}
                         className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -2524,6 +2715,10 @@ export default function App() {
                       setIsMatchClockEnabled(false);
                       setPlayerPreferences({});
                       setMatchupSettings({});
+                      setShowDeviceTime(false);
+                      setDeviceTimePosition(null);
+                      setMatchClockPosition(null);
+                      setShotClockPosition(null);
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
