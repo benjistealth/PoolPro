@@ -171,10 +171,12 @@ export default function App() {
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
+  const [finishButtonPosition, setFinishButtonPosition] = useState<{ x: number, y: number } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const clockRef = useRef<HTMLDivElement>(null);
   const matchClockRef = useRef<HTMLDivElement>(null);
   const shotClockRef = useRef<HTMLDivElement>(null);
+  const finishButtonRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -296,6 +298,7 @@ export default function App() {
       if (state.userPreferences?.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
       if (state.userPreferences?.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
       if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
+      if (state.userPreferences?.finishButtonPosition !== undefined) setFinishButtonPosition(state.userPreferences.finishButtonPosition);
 
       // Finalize loading
       setTimeout(() => setIsLoaded(true), 100);
@@ -339,7 +342,8 @@ export default function App() {
         showDeviceTime,
         deviceTimePosition,
         matchClockPosition,
-        shotClockPosition
+        shotClockPosition,
+        finishButtonPosition
       },
       matchupSettings,
       playerPreferences,
@@ -351,7 +355,7 @@ export default function App() {
     team1Name, team2Name, team1Players, team2Players,
     matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
+    showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition, finishButtonPosition,
     matchupSettings, playerPreferences, apiConfig
   ]);
 
@@ -742,6 +746,10 @@ export default function App() {
       csvContent += `Shot Clock Position X,"${shotClockPosition.x}"\n`;
       csvContent += `Shot Clock Position Y,"${shotClockPosition.y}"\n`;
     }
+    if (finishButtonPosition) {
+      csvContent += `Finish Button Position X,"${finishButtonPosition.x}"\n`;
+      csvContent += `Finish Button Position Y,"${finishButtonPosition.y}"\n`;
+    }
 
     csvContent += "\nSECTION: PLAYER PREFERENCES\n";
     csvContent += "Player Name,Highlight Color\n";
@@ -1010,6 +1018,7 @@ export default function App() {
               if (state.userPreferences.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
               if (state.userPreferences.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
               if (state.userPreferences.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
+              if (state.userPreferences.finishButtonPosition !== undefined) setFinishButtonPosition(state.userPreferences.finishButtonPosition);
               
               if (state.userPreferences.player1) {
                 setPlayer1(prev => ({ 
@@ -1126,6 +1135,8 @@ export default function App() {
                 if (key === 'Match Clock Position Y') setMatchClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
                 if (key === 'Shot Clock Position X') setShotClockPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
                 if (key === 'Shot Clock Position Y') setShotClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
+                if (key === 'Finish Button Position X') setFinishButtonPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
+                if (key === 'Finish Button Position Y') setFinishButtonPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
               } else if (currentSection === 'PLAYER PREFERENCES') {
                 if (values[0] === 'Player Name') return;
                 const name = values[0];
@@ -1440,11 +1451,11 @@ export default function App() {
             }}
             initial={matchClockPosition || { 
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-              y: 12 
+              y: windowSize.height / 2 + (deviceInfo.isPhone ? 20 : 24) + (windowSize.height * 0.05)
             }}
             animate={matchClockPosition ? { x: matchClockPosition.x, y: matchClockPosition.y } : {
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-              y: 12
+              y: windowSize.height / 2 + (deviceInfo.isPhone ? 20 : 24) + (windowSize.height * 0.05)
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
@@ -1458,12 +1469,12 @@ export default function App() {
                 backgroundClip: 'padding-box, border-box'
               }}
             >
-              <div className="flex flex-col items-start">
-                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-widest text-slate-500 leading-none mb-0.5">Match</span>
+              <div className="flex flex-col items-center justify-center h-full pt-1 flex-1">
+                <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5">Match</span>
                 <div 
-                  className={`flex items-center gap-1 text-xs sm:text-sm font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                  className={`flex items-center gap-1 text-lg sm:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
                 >
-                  <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Timer className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                   {formatTime(matchClock)}
                 </div>
               </div>
@@ -1497,11 +1508,11 @@ export default function App() {
             }}
             initial={shotClockPosition || { 
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-              y: isMatchClockEnabled ? 70 : 12 
+              y: windowSize.height / 2 - (deviceInfo.isPhone ? 60 : 72) - (windowSize.height * 0.05)
             }}
             animate={shotClockPosition ? { x: shotClockPosition.x, y: shotClockPosition.y } : {
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-              y: isMatchClockEnabled ? 70 : 12
+              y: windowSize.height / 2 - (deviceInfo.isPhone ? 60 : 72) - (windowSize.height * 0.05)
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
@@ -1515,12 +1526,12 @@ export default function App() {
                 backgroundClip: 'padding-box, border-box'
               }}
             >
-              <div className="flex flex-col items-start">
-                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-widest text-slate-500 leading-none mb-0.5">Shot</span>
+              <div className="flex flex-col items-center justify-center h-full pt-1 flex-1">
+                <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5">Shot</span>
                 <div 
-                  className={`flex items-center gap-1 text-xs sm:text-sm font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                  className={`flex items-center gap-1 text-lg sm:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
                 >
-                  <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Timer className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                   {shotClock}s
                 </div>
               </div>
@@ -1567,11 +1578,11 @@ export default function App() {
             }}
             initial={deviceTimePosition || { 
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
-              y: (isMatchClockEnabled && isShotClockEnabled) ? 128 : (isMatchClockEnabled || isShotClockEnabled) ? 70 : 12 
+              y: 12 
             }}
             animate={deviceTimePosition ? { x: deviceTimePosition.x, y: deviceTimePosition.y } : {
               x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
-              y: (isMatchClockEnabled && isShotClockEnabled) ? 128 : (isMatchClockEnabled || isShotClockEnabled) ? 70 : 12
+              y: 12
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
@@ -1585,8 +1596,8 @@ export default function App() {
                 backgroundClip: 'padding-box, border-box'
               }}
             >
-              <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400" />
-              <span className="text-xs sm:text-sm font-mono font-bold text-white tracking-wider">
+              <Clock className="w-4 h-4 sm:w-6 sm:h-6 text-slate-400" />
+              <span className="text-lg sm:text-2xl font-mono font-black text-white tracking-wider tabular-nums">
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
               </span>
             </div>
@@ -1608,7 +1619,7 @@ export default function App() {
         transition={{ duration: 0.4, ease: "easeInOut" }}
         className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom left-0 right-0`}
         style={{ 
-          maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(90vw, 985px)',
+          maxWidth: view === 'scoreboard' ? 'var(--gameplay-width)' : 'min(95vw, 985px)',
           margin: '0 auto'
         }}
       >
@@ -1726,27 +1737,46 @@ export default function App() {
                 </div>
 
                 {/* Finish Match Button - Centered between cards */}
-                <motion.div 
-                  key="finish-button"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  transition={{ duration: 0.4, ease: "easeInOut" }}
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
-                >
-                  <button
-                    onClick={finishMatch}
-                    className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-xs sm:text-sm font-bold transition-all shadow-2xl border-2 active:scale-95"
-                    style={{ 
-                      border: '2px solid transparent',
-                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
-                      backgroundOrigin: 'border-box',
-                      backgroundClip: 'padding-box, border-box'
-                    }}
-                  >
-                    <span className="leading-none uppercase tracking-wider">Finish Match</span>
-                  </button>
-                </motion.div>
+                <AnimatePresence>
+                  {view === 'scoreboard' && (
+                    <motion.div 
+                      ref={finishButtonRef}
+                      key="finish-button"
+                      drag
+                      dragMomentum={false}
+                      onDragEnd={() => {
+                        if (finishButtonRef.current) {
+                          const rect = finishButtonRef.current.getBoundingClientRect();
+                          setFinishButtonPosition({ x: rect.left, y: rect.top });
+                        }
+                      }}
+                      initial={finishButtonPosition || { 
+                        x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96), 
+                        y: windowSize.height / 2 - (deviceInfo.isPhone ? 20 : 24) 
+                      }}
+                      animate={finishButtonPosition ? { x: finishButtonPosition.x, y: finishButtonPosition.y } : {
+                        x: windowSize.width / 2 - (deviceInfo.isPhone ? 64 : 96),
+                        y: windowSize.height / 2 - (deviceInfo.isPhone ? 20 : 24)
+                      }}
+                      transition={{ duration: 0.4, ease: "easeInOut" }}
+                      className="fixed z-[100] cursor-move pointer-events-auto touch-none"
+                      style={{ left: 0, top: 0 }}
+                    >
+                      <button
+                        onClick={finishMatch}
+                        className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-lg sm:text-xl font-black transition-all shadow-2xl border-2 active:scale-95"
+                        style={{ 
+                          border: '2px solid transparent',
+                          backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                          backgroundOrigin: 'border-box',
+                          backgroundClip: 'padding-box, border-box'
+                        }}
+                      >
+                        <span className="leading-none uppercase tracking-wider">Finish Match</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           </motion.div>
@@ -1966,34 +1996,28 @@ export default function App() {
               {/* Match Results Table */}
               <div id="matchups-table" className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black uppercase tracking-tight text-white">Match Results Table</h3>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Session schedule and results</p>
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-white whitespace-pre-wrap">Match  Results  Table</h3>
                 </div>
                 <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                   <div className="overflow-x-auto scrollbar-hide">
                     <table 
-                      className="text-left border-collapse sm:zoom-100 [zoom:0.9] landscape:[zoom:0.95] sm:[zoom:1]"
-                      style={{ 
-                        width: deviceInfo.isPhone 
-                          ? (windowSize.width > windowSize.height ? '105.26%' : '111.11%') 
-                          : '100%' 
-                      }}
+                      className="w-full text-left border-collapse min-w-[440px] sm:min-w-0"
                     >
                       <thead>
-                        <tr className="bg-black/50 border-b border-slate-800">
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Match</th>
-                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">{team1Name || 'TEAM A'}</th>
-                          <th className="px-0.5 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center w-4 sm:w-8">VS</th>
-                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">{team2Name || 'TEAM B'}</th>
-                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500">Result</th>
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock</th>
-                          <th className="px-1 sm:px-6 py-4 text-[8px] sm:text-[10px] font-bold uppercase tracking-tighter sm:tracking-widest text-slate-500 text-right w-10 sm:w-auto">Action</th>
+                        <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-[0.2em] text-slate-400">Match</th>
+                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white">{team1Name || 'TEAM A'}</th>
+                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-600 text-center w-4 sm:w-8">VS</th>
+                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white">{team2Name || 'TEAM B'}</th>
+                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400">Result</th>
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-widest text-slate-400">Clock</th>
+                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 text-right w-10 sm:w-auto">Action</th>
                         </tr>
                       </thead>
                     <tbody>
                       {Math.max(team1Players.length, team2Players.length) === 0 ? (
                         <tr>
-                          <td colSpan={deviceInfo.isPhone ? 5 : 7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
+                          <td colSpan={windowSize.width < 640 ? 5 : 7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
                         </tr>
                       ) : (
                         <>
@@ -2015,14 +2039,14 @@ export default function App() {
                                 className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                               >
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[45px] sm:max-w-none truncate">
+                                <td className="px-2 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
                                   {p1 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">VS</td>
-                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[45px] sm:max-w-none truncate">
+                                <td className="px-1 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">VS</td>
+                                <td className="px-2 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-1 sm:px-6 py-4">
+                                <td className="px-2 sm:px-6 py-4">
                                   {lastMatch ? (
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
                                       <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
@@ -2044,7 +2068,7 @@ export default function App() {
                                     <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
                                   )}
                                 </td>
-                                <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
+                                <td className="px-2 sm:px-6 py-4 text-right w-10 sm:w-auto">
                                   {lastMatch && (
                                     <button 
                                       onClick={(e) => {
@@ -2062,32 +2086,32 @@ export default function App() {
                             );
                           })}
                           {/* Totals Row */}
-                          <tr className="bg-slate-800 border-t-2 border-slate-700 font-black">
+                          <tr className="bg-slate-900/80 border-t-2 border-slate-800 font-black">
                             <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
-                            <td className="px-1 sm:px-6 py-4">
+                            <td className="px-2 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
-                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[40px] sm:max-w-none">{team1Name}</span>
+                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team1Name}</span>
                               </div>
                             </td>
-                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
-                            <td className="px-1 sm:px-6 py-4">
+                            <td className="px-1 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
+                            <td className="px-2 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
-                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[40px] sm:max-w-none">{team2Name}</span>
+                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team2Name}</span>
                               </div>
                             </td>
-                            <td colSpan={deviceInfo.isPhone ? 1 : 2} className="px-1 sm:px-6 py-4">
+                            <td colSpan={windowSize.width < 640 ? 1 : 2} className="px-2 sm:px-6 py-4">
                               <div className="flex flex-col items-end">
                                 <span className="text-[6px] sm:text-[10px] text-slate-600 uppercase font-bold">Overall Lead</span>
-                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-[70px] sm:max-w-none">
+                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-[100px] sm:max-w-none">
                                   {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
                                    teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
                                    `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
                                 </span>
                               </div>
                             </td>
-                            <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
+                            <td className="px-2 sm:px-6 py-4 text-right w-10 sm:w-auto">
                               <div className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0">
                                 <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                               </div>
@@ -2719,6 +2743,7 @@ export default function App() {
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
+                      setFinishButtonPosition(null);
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
@@ -2820,11 +2845,11 @@ export default function App() {
       </motion.main>
 
       {/* Navigation Bar Spacing for history view */}
-      {view !== 'scoreboard' && <div className="h-16 lg:h-32" />}
+      {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && <div className="h-16 lg:h-32" />}
 
       {/* Quick Actions Floating Bar (Mobile) */}
       <AnimatePresence>
-        {view !== 'scoreboard' && (
+        {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
