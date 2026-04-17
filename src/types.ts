@@ -19,10 +19,6 @@ export interface MatchupSettings {
     bgColor: string;
     screenColor: string;
   };
-  shotClockDuration: number;
-  isShotClockEnabled: boolean;
-  matchClockDuration: number;
-  isMatchClockEnabled: boolean;
 }
 
 export interface MatchHistoryEntry {

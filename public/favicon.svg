@@ -1,24 +1,20 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <defs>
-    <linearGradient id="trophy_grad" x1="256" y1="20" x2="256" y2="492" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#4B00FF" />
-      <stop offset="100%" stop-color="#FF26B9" />
+    <linearGradient id="cup-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFFF33;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF001C;stop-opacity:1" />
     </linearGradient>
   </defs>
-
-  <!-- The Trophy Shape - Scaled up to fill the 512x512 area -->
-  <g stroke="url(#trophy_grad)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Main Cup Body - Moved up and scaled -->
-    <path d="M140 60H372V220C372 280 320 330 256 330C192 330 140 280 140 220V60Z" />
-    
-    <!-- Left Handle - Extended to the edge -->
-    <path d="M140 120H100C60 120 30 150 30 190C30 230 60 260 100 260H140" />
-    
-    <!-- Right Handle - Extended to the edge -->
-    <path d="M372 120H412C452 120 482 150 482 190C482 230 452 260 412 260H372" />
-    
-    <!-- Legs/Base - Adjusted for high visibility -->
-    <path d="M210 330C210 330 200 400 160 470" />
-    <path d="M302 330C302 330 312 400 352 470" />
+  <!-- Solid rounded background for high visibility -->
+  <rect width="32" height="32" rx="7" fill="#000000" />
+  
+  <g transform="translate(4, 4) scale(0.75)">
+    <!-- Trophy shape -->
+    <path d="M8 12H6a3.5 3.5 0 0 1 0-7h2" stroke="url(#cup-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 12h2a3.5 3.5 0 0 0 0-7h2" stroke="url(#cup-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M5 28h22" stroke="url(#cup-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 20v5" stroke="url(#cup-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 3H8v9a8 8 0 0 0 16 0V3Z" fill="url(#cup-gradient)" stroke="url(#cup-gradient)" stroke-width="1"/>
+    <path d="M24 3H8v9a8 8 0 0 0 16 0V3Z" stroke="url(#cup-gradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   </g>
 </svg>

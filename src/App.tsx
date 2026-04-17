@@ -84,8 +84,9 @@ export default function App() {
     
     const getFontSize = (name: string) => {
       const len = Math.max(1, name.length);
-      // Adjusted scaling to meet the 1.4x request
-      return (targetHeight * 1.4) / len;
+      // Scaling: 1.1x for mobile, 1.2x for others as requested
+      const scale = deviceInfo.isPhone ? 1.1 : 1.2;
+      return (targetHeight * scale) / len;
     };
 
     const fs1 = getFontSize(team1Name);
@@ -94,8 +95,8 @@ export default function App() {
 
     // Physical constraint: sidebar width
     const sidebarWidth = deviceInfo.isPhone ? 48 : (deviceInfo.isTablet ? 80 : 120);
-    // Allow it to be slightly larger than sidebar width to fill the space well
-    const maxFs = sidebarWidth * 1.2;
+    // Adjust maximum font size slightly based on device
+    const maxFs = sidebarWidth * (deviceInfo.isPhone ? 1.0 : 1.05);
 
     return Math.min(shared, maxFs);
   }, [windowSize.height, team1Name, team2Name, deviceInfo, isNavVisible]);
@@ -191,7 +192,7 @@ export default function App() {
   const [isApiSending, setIsApiSending] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [isLoaded, setIsLoaded] = useState(false);
-  const [showDeviceTime, setShowDeviceTime] = useState(false);
+  const [showDeviceTime, setShowDeviceTime] = useState(true);
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
@@ -383,18 +384,14 @@ export default function App() {
     matchupSettings, playerPreferences, apiConfig
   ]);
 
-  // Sync current settings to matchupSettings and playerPreferences when they change
+  // Sync current player preferences when they change
   useEffect(() => {
     if (selectedMatchIndex !== null) {
       setMatchupSettings(prev => ({
         ...prev,
         [selectedMatchIndex]: {
           player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor },
-          shotClockDuration,
-          isShotClockEnabled,
-          matchClockDuration,
-          isMatchClockEnabled
+          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor }
         }
       }));
     }
@@ -415,8 +412,7 @@ export default function App() {
   }, [
     selectedMatchIndex, 
     player1.name, player1.color, player1.bgColor, player1.screenColor,
-    player2.name, player2.color, player2.bgColor, player2.screenColor,
-    shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled
+    player2.name, player2.color, player2.bgColor, player2.screenColor
   ]);
 
   // Load player preferences when names change (e.g. typed in scoreboard)
@@ -595,17 +591,11 @@ export default function App() {
       bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
       screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000'
     }));
-
-    if (settings) {
-      setShotClockDuration(settings.shotClockDuration);
-      setIsShotClockEnabled(settings.isShotClockEnabled);
-      setMatchClockDuration(settings.matchClockDuration);
-      setIsMatchClockEnabled(settings.isMatchClockEnabled);
-    }
     
     setSelectedMatchIndex(index);
     setView('scoreboard');
     resetTimer();
+    resetMatchClock();
   };
 
   const navigateToScoreboard = () => {
@@ -1357,7 +1347,7 @@ export default function App() {
             className={`text-4xl lg:text-7xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
-            PoolPro
+            Pool-Pro.uk
           </h1>
         </div>
 
