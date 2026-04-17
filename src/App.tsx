@@ -1970,9 +1970,9 @@ export default function App() {
                               const newPlayers = team1Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                             }}
-                            className="p-1 sm:p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1 sm:p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                           >
-                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       ))}
@@ -2045,9 +2045,9 @@ export default function App() {
                               const newPlayers = team2Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                             }}
-                            className="p-1 sm:p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1 sm:p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                           >
-                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       ))}
@@ -2084,17 +2084,21 @@ export default function App() {
                 <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                   <div className="overflow-x-auto scrollbar-hide">
                     <table 
-                      className="w-full text-left border-collapse min-w-[440px] sm:min-w-0"
+                      className="w-full text-left border-collapse table-fixed"
                     >
                       <thead>
                         <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-[0.2em] text-slate-400">Match</th>
-                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white">{team1Name || 'TEAM A'}</th>
-                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-600 text-center w-4 sm:w-8">VS</th>
-                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white">{team2Name || 'TEAM B'}</th>
-                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400">Result</th>
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-widest text-slate-400">Clock</th>
-                          <th className="px-1.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 text-right w-10 sm:w-auto">Action</th>
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
+                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                            <div className="truncate">{team1Name || 'TEAM A'}</div>
+                          </th>
+                          <th className="px-0.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
+                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                            <div className="truncate">{team2Name || 'TEAM B'}</div>
+                          </th>
+                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
+                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear Score</th>
+                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
                         </tr>
                       </thead>
                     <tbody>
@@ -2122,14 +2126,14 @@ export default function App() {
                                 className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                               >
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-2 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
+                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
                                   {p1 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-1 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">VS</td>
-                                <td className="px-2 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors max-w-[80px] sm:max-w-none truncate">
+                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px]">VS</td>
+                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-2 sm:px-6 py-4">
+                                <td className="px-1 sm:px-6 py-4">
                                   {lastMatch ? (
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
                                       <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
@@ -2141,17 +2145,7 @@ export default function App() {
                                     <span className="text-[8px] text-slate-700 font-bold uppercase">NONE</span>
                                   )}
                                 </td>
-                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
-                                  {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
-                                    <div className="flex flex-col gap-0.5">
-                                      {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
-                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[9px] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
-                                  )}
-                                </td>
-                                <td className="px-2 sm:px-6 py-4 text-right w-10 sm:w-auto">
+                                <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
                                   {lastMatch && (
                                     <button 
                                       onClick={(e) => {
@@ -2165,40 +2159,51 @@ export default function App() {
                                     </button>
                                   )}
                                 </td>
+                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
+                                  {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
+                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[9px] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
                           {/* Totals Row */}
                           <tr className="bg-slate-900/80 border-t-2 border-slate-800 font-black">
                             <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
-                            <td className="px-2 sm:px-6 py-4">
+                            <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
                                 <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team1Name}</span>
                               </div>
                             </td>
-                            <td className="px-1 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
-                            <td className="px-2 sm:px-6 py-4">
+                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
+                            <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
                                 <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team2Name}</span>
                               </div>
                             </td>
-                            <td colSpan={windowSize.width < 640 ? 1 : 2} className="px-2 sm:px-6 py-4">
+                            <td colSpan={windowSize.width < 640 ? 1 : 2} className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col items-end">
                                 <span className="text-[6px] sm:text-[10px] text-slate-600 uppercase font-bold">Overall Lead</span>
-                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-[100px] sm:max-w-none">
+                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-full block">
                                   {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
                                    teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
                                    `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
                                 </span>
                               </div>
                             </td>
-                            <td className="px-2 sm:px-6 py-4 text-right w-10 sm:w-auto">
+                            <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
                               <div className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0">
                                 <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                               </div>
                             </td>
+                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4" />
                           </tr>
                         </>
                       )}
