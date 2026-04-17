@@ -1924,10 +1924,10 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+              <div className="grid grid-cols-2 gap-4 sm:gap-10">
                 {/* Team 1 Setup */}
-                <div className="space-y-8">
-                  <div className="space-y-4">
+                <div className="space-y-4 sm:space-y-8">
+                  <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
@@ -1936,18 +1936,18 @@ export default function App() {
                       value={team1Name} 
                       onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ borderColor: player1.color }}
-                      placeholder="TEAM 1 NAME"
+                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl px-3 sm:px-6 py-2 sm:py-4 text-sm sm:text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ borderColor: player1.color, fontSize: '16px' }}
+                      placeholder="TEAM 1"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Players (In Order)</label>
-                    <div className="space-y-3">
+                  <div className="space-y-3 sm:space-y-4">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Players</label>
+                    <div className="space-y-2 sm:space-y-3">
                       {team1Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-3 group">
+                        <div key={idx} className="flex gap-2 sm:gap-3 group">
                           <div 
-                            className="w-10 h-12 flex items-center justify-center text-xs font-black bg-black border-2 rounded-xl"
+                            className="w-8 sm:w-10 h-10 sm:h-12 flex items-center justify-center text-[10px] sm:text-xs font-black bg-black border-2 rounded-lg sm:rounded-xl"
                             style={{ borderColor: player1.color + '33', color: player1.color }}
                           >
                             {idx + 1}
@@ -1961,24 +1961,24 @@ export default function App() {
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="flex-1 bg-black/50 border rounded-xl px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                            style={{ borderColor: player1.color + '22' }}
-                            placeholder={`PLAYER ${idx + 1}`}
+                            className="flex-1 bg-black/50 border rounded-lg sm:rounded-xl px-2 sm:px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                            style={{ borderColor: player1.color + '22', fontSize: '16px' }}
+                            placeholder={`P${idx + 1}`}
                           />
                           <button 
                             onClick={() => {
                               const newPlayers = team1Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                             }}
-                            className="p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1 sm:p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           >
-                            <X className="w-5 h-5" />
+                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                        className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
+                        className="w-full py-2 sm:py-4 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[10px] sm:text-sm font-black uppercase tracking-widest"
                         style={{ 
                           borderColor: player1.color + '33', 
                           color: player1.color,
@@ -1993,16 +1993,16 @@ export default function App() {
                           e.currentTarget.style.borderColor = player1.color + '33';
                         }}
                       >
-                        <Plus className="w-4 h-4" />
-                        Add Player
+                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                        Add
                       </button>
                     </div>
                   </div>
                 </div>
 
                 {/* Team 2 Setup */}
-                <div className="space-y-8">
-                  <div className="space-y-4">
+                <div className="space-y-4 sm:space-y-8">
+                  <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
@@ -2011,18 +2011,18 @@ export default function App() {
                       value={team2Name} 
                       onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-2xl px-6 py-4 text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ borderColor: player2.color }}
-                      placeholder="TEAM 2 NAME"
+                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl px-3 sm:px-6 py-2 sm:py-4 text-sm sm:text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ borderColor: player2.color, fontSize: '16px' }}
+                      placeholder="TEAM 2"
                     />
                   </div>
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Players (In Order)</label>
-                    <div className="space-y-3">
+                  <div className="space-y-3 sm:space-y-4">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Players</label>
+                    <div className="space-y-2 sm:space-y-3">
                       {team2Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-3 group">
+                        <div key={idx} className="flex gap-2 sm:gap-3 group">
                           <div 
-                            className="w-10 h-12 flex items-center justify-center text-xs font-black bg-black border-2 rounded-xl"
+                            className="w-8 sm:w-10 h-10 sm:h-12 flex items-center justify-center text-[10px] sm:text-xs font-black bg-black border-2 rounded-lg sm:rounded-xl"
                             style={{ borderColor: player2.color + '33', color: player2.color }}
                           >
                             {idx + 1}
@@ -2036,24 +2036,24 @@ export default function App() {
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="flex-1 bg-black/50 border rounded-xl px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                            style={{ borderColor: player2.color + '22' }}
-                            placeholder={`PLAYER ${idx + 1}`}
+                            className="flex-1 bg-black/50 border rounded-lg sm:rounded-xl px-2 sm:px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                            style={{ borderColor: player2.color + '22', fontSize: '16px' }}
+                            placeholder={`P${idx + 1}`}
                           />
                           <button 
                             onClick={() => {
                               const newPlayers = team2Players.filter((_, i) => i !== idx);
                               updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                             }}
-                            className="p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1 sm:p-3 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                           >
-                            <X className="w-5 h-5" />
+                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
-                        className="w-full py-4 border-2 border-dashed rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest"
+                        className="w-full py-2 sm:py-4 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[10px] sm:text-sm font-black uppercase tracking-widest"
                         style={{ 
                           borderColor: player2.color + '33', 
                           color: player2.color,
@@ -2068,8 +2068,8 @@ export default function App() {
                           e.currentTarget.style.borderColor = player2.color + '33';
                         }}
                       >
-                        <Plus className="w-4 h-4" />
-                        Add Player
+                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                        Add
                       </button>
                     </div>
                   </div>
