@@ -47,6 +47,7 @@ export default function App() {
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams'>('scoreboard');
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const isKeyboardOpenRef = useRef(false);
   const [windowSize, setWindowSize] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
     height: typeof window !== 'undefined' ? window.innerHeight : 768 
@@ -64,13 +65,12 @@ export default function App() {
   const deviceInfo = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
     const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
-    const isMobileUA = /iphone|ipod|android|iemobile|blackberry|opera mini|palm|windows ce/.test(ua);
     
-    // A device is a phone if it's mobile but NOT a tablet, or if the screen is very narrow
-    const isPhone = (isMobileUA && !isTabletUA) || windowSize.width < 640;
-    // A device is a tablet if it matches the tablet UA or falls in the tablet width range
-    const isTablet = isTabletUA || (windowSize.width >= 640 && windowSize.width < 1024);
-    const isDesktop = !isPhone && !isTablet;
+    // We prioritize window width for scaling tiers to ensure the user's specific test sizes are hit.
+    // Tablet range now goes up to 1400px to accommodate the user's 1380px test environment.
+    const isPhone = windowSize.width < 640;
+    const isTablet = windowSize.width >= 640 && windowSize.width < 1400; 
+    const isDesktop = windowSize.width >= 1400;
     const isLandscape = windowSize.width > windowSize.height;
 
     return { isPhone, isTablet, isDesktop, isLandscape };
@@ -101,18 +101,62 @@ export default function App() {
     return Math.min(shared, maxFs);
   }, [windowSize.height, team1Name, team2Name, deviceInfo, isNavVisible]);
 
+  const sharedPlayerNameFontSize = useMemo(() => {
+    // Precise width calculations to match the UI padding/gaps
+    const sidebarWidth = deviceInfo.isPhone ? 48 : (deviceInfo.isTablet ? 80 : 120);
+    const mainPadding = deviceInfo.isPhone ? 32 : (deviceInfo.isTablet ? 48 : 48);
+    const cardPadding = deviceInfo.isPhone ? 16 : (deviceInfo.isTablet ? 32 : 48);
+    
+    // totalAvailableWidth is the space between the two sidebars
+    const totalAvailableWidth = windowSize.width - (sidebarWidth * 2) - mainPadding;
+    
+    let cardWidth;
+    if (deviceInfo.isLandscape) {
+      // 2 columns, gap of 12-20px
+      const gap = deviceInfo.isPhone ? 12 : 16;
+      cardWidth = (totalAvailableWidth - gap) / 2;
+    } else {
+      // 1 column (usually mobile portrait)
+      cardWidth = totalAvailableWidth;
+    }
+    
+    // Usable width inside the card - conservative for phone/desktop, huge for tablet
+    const usableWidthMultiplier = deviceInfo.isPhone ? 0.65 : (deviceInfo.isDesktop ? 0.82 : 0.98);
+    const usableWidth = (cardWidth - cardPadding) * usableWidthMultiplier;
+
+    const getFontSize = (name: string) => {
+      const len = Math.max(1, (name || "PLAYER 1").length);
+      // Applying another 20% reduction (Buffer * 1.25)
+      // Mobile: 2.50 * 1.25 = 3.125. Tablet: 0.60 * 1.25 = 0.75.
+      const bufferFactor = deviceInfo.isPhone ? 3.125 : (deviceInfo.isDesktop ? 0.85 : 0.75);
+      return usableWidth / (len * bufferFactor);
+    };
+
+    const fs1 = getFontSize(player1.name);
+    const fs2 = getFontSize(player2.name);
+    const shared = Math.min(fs1, fs2);
+
+    // Caps reduced by another 20%: Tablet 80->64. Phone 10->8.
+    const maxFs = deviceInfo.isPhone ? 8 : (deviceInfo.isTablet ? 64 : 60);
+    const minFs = deviceInfo.isPhone ? 6 : 12;
+
+    return Math.max(minFs, Math.min(shared, maxFs));
+  }, [windowSize.width, player1.name, player2.name, deviceInfo]);
+
   // Keyboard detection for mobile
   useEffect(() => {
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
         setIsKeyboardOpen(true);
+        isKeyboardOpenRef.current = true;
         setIsNavVisible(false);
       }
     };
 
     const handleFocusOut = () => {
       setIsKeyboardOpen(false);
+      isKeyboardOpenRef.current = false;
     };
 
     window.addEventListener('focusin', handleFocusIn);
@@ -134,11 +178,25 @@ export default function App() {
     }
   }, [isKeyboardOpen, isNavVisible]);
 
-  const prevView = useRef(view);
+  const hasScrolledTeamsRef = useRef(false);
   // Auto-scroll to matchups table when navigating to teams view if players exist
   useEffect(() => {
-    if (view === 'teams' && prevView.current !== 'teams' && (team1Players.length > 0 || team2Players.length > 0)) {
+    // Reset the scroll lock when we leave the teams view
+    if (view !== 'teams') {
+      hasScrolledTeamsRef.current = false;
+      return;
+    }
+
+    // Attempt scroll if we are in teams view, haven't scrolled yet in this session, 
+    // there is data to scroll to, and the keyboard isn't blocking us.
+    if (!hasScrolledTeamsRef.current && 
+        (team1Players.length > 0 || team2Players.length > 0) && 
+        !isKeyboardOpen) {
+      
       const scrollHandler = () => {
+        // Double check keyboard state in the async handler using Ref to get latest value
+        if (isKeyboardOpenRef.current) return;
+        
         const table = document.getElementById('matchups-table');
         if (table) {
           const headerHeight = deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112);
@@ -149,6 +207,9 @@ export default function App() {
             top: offsetPosition,
             behavior: 'smooth'
           });
+          
+          // Mark as scrolled so we don't trigger again for this entry session
+          hasScrolledTeamsRef.current = true;
         }
       };
 
@@ -163,8 +224,7 @@ export default function App() {
         clearTimeout(timer3);
       };
     }
-    prevView.current = view;
-  }, [view, team1Players.length, team2Players.length, deviceInfo]);
+  }, [view, team1Players.length, team2Players.length, isKeyboardOpen, deviceInfo]);
 
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
@@ -1332,7 +1392,7 @@ export default function App() {
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 h-14 sm:h-20 lg:h-28 bg-black/80 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
+        className="fixed top-0 left-0 right-0 h-14 sm:h-20 lg:h-28 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
@@ -1705,12 +1765,21 @@ export default function App() {
                               value={p.name}
                               placeholder={`PLAYER ${idx + 1} NAME`}
                               onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center text-[min(4vw,1.2rem)] sm:text-[1.8rem] lg:text-[2.2rem] font-bold focus:outline-none focus:border-emerald-500 uppercase"
-                              style={{ color: p.color }}
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                              style={{ 
+                                color: p.color,
+                                fontSize: `${sharedPlayerNameFontSize}px`
+                              }}
                             />
                           ) : (
                             p.name && (
-                              <h2 className="text-[min(5vw,1.2rem)] sm:text-[2.2rem] lg:text-[min(2.8rem,6vh)] font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" style={{ color: p.color }}>
+                              <h2 
+                                className="font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" 
+                                style={{ 
+                                  color: p.color,
+                                  fontSize: `${sharedPlayerNameFontSize}px`
+                                }}
+                              >
                                 {p.name}
                               </h2>
                             )
@@ -2753,7 +2822,7 @@ export default function App() {
                       setIsMatchClockEnabled(false);
                       setPlayerPreferences({});
                       setMatchupSettings({});
-                      setShowDeviceTime(false);
+                      setShowDeviceTime(true);
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
