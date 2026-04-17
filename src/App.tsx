@@ -64,12 +64,14 @@ export default function App() {
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
+    const isMobileUA = /iphone|android.*mobile|ipod|blackberry|iemobile|opera mini/i.test(ua);
     const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
     
     // We prioritize window width for scaling tiers to ensure the user's specific test sizes are hit.
     // Tablet range now goes up to 1400px to accommodate the user's 1380px test environment.
-    const isPhone = windowSize.width < 640;
-    const isTablet = windowSize.width >= 640 && windowSize.width < 1400; 
+    // Modern phones in landscape or high-res can exceed 768px, so we check UA too.
+    const isPhone = (windowSize.width < 768) || (isMobileUA && windowSize.width < 1024);
+    const isTablet = (windowSize.width >= 768 && windowSize.width < 1400) && !isPhone; 
     const isDesktop = windowSize.width >= 1400;
     const isLandscape = windowSize.width > windowSize.height;
 
@@ -1952,28 +1954,30 @@ export default function App() {
                           >
                             {idx + 1}
                           </div>
-                          <input 
-                            value={player}
-                            autoFocus={idx === team1Players.length - 1 && player === ''}
-                            onChange={(e) => {
-                              const newPlayers = [...team1Players];
-                              newPlayers[idx] = e.target.value.toUpperCase();
-                              updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                            }}
-                            onFocus={(e) => e.target.select()}
-                            className="flex-1 bg-black/50 border rounded-lg sm:rounded-xl px-2 sm:px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                            style={{ borderColor: player1.color + '22', fontSize: '16px' }}
-                            placeholder={`P${idx + 1}`}
-                          />
-                          <button 
-                            onClick={() => {
-                              const newPlayers = team1Players.filter((_, i) => i !== idx);
-                              updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                            }}
-                            className="p-1 sm:p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
+                          <div className="relative flex-1 group">
+                            <input 
+                              value={player}
+                              autoFocus={idx === team1Players.length - 1 && player === ''}
+                              onChange={(e) => {
+                                const newPlayers = [...team1Players];
+                                newPlayers[idx] = e.target.value.toUpperCase();
+                                updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pl-2 sm:pl-4 pr-10 sm:pr-14 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                              style={{ borderColor: player1.color + '22', fontSize: '16px' }}
+                              placeholder={`P${idx + 1}`}
+                            />
+                            <button 
+                              onClick={() => {
+                                const newPlayers = team1Players.filter((_, i) => i !== idx);
+                                updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                              }}
+                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
+                            >
+                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                       <button 
@@ -2027,28 +2031,30 @@ export default function App() {
                           >
                             {idx + 1}
                           </div>
-                          <input 
-                            value={player}
-                            autoFocus={idx === team2Players.length - 1 && player === ''}
-                            onChange={(e) => {
-                              const newPlayers = [...team2Players];
-                              newPlayers[idx] = e.target.value.toUpperCase();
-                              updateTeamData(team1Name, team1Players, team2Name, newPlayers);
-                            }}
-                            onFocus={(e) => e.target.select()}
-                            className="flex-1 bg-black/50 border rounded-lg sm:rounded-xl px-2 sm:px-4 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                            style={{ borderColor: player2.color + '22', fontSize: '16px' }}
-                            placeholder={`P${idx + 1}`}
-                          />
-                          <button 
-                            onClick={() => {
-                              const newPlayers = team2Players.filter((_, i) => i !== idx);
-                              updateTeamData(team1Name, team1Players, team2Name, newPlayers);
-                            }}
-                            className="p-1 sm:p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
+                          <div className="relative flex-1 group">
+                            <input 
+                              value={player}
+                              autoFocus={idx === team2Players.length - 1 && player === ''}
+                              onChange={(e) => {
+                                const newPlayers = [...team2Players];
+                                newPlayers[idx] = e.target.value.toUpperCase();
+                                updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                              }}
+                              onFocus={(e) => e.target.select()}
+                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pl-2 sm:pl-4 pr-10 sm:pr-14 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                              style={{ borderColor: player2.color + '22', fontSize: '16px' }}
+                              placeholder={`P${idx + 1}`}
+                            />
+                            <button 
+                              onClick={() => {
+                                const newPlayers = team2Players.filter((_, i) => i !== idx);
+                                updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                              }}
+                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
+                            >
+                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                       <button 
@@ -2199,9 +2205,12 @@ export default function App() {
                               </div>
                             </td>
                             <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
-                              <div className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0">
+                              <button 
+                                onClick={() => setShowTeamTotals(true)}
+                                className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0 active:scale-95 transition-all hover:bg-emerald-500/20"
+                              >
                                 <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
-                              </div>
+                              </button>
                             </td>
                             <td className="hidden sm:table-cell px-3 sm:px-6 py-4" />
                           </tr>
@@ -2879,10 +2888,10 @@ export default function App() {
           {showTeamTotals && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 
-                initial={{ scale: 0.8, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.8, opacity: 0, y: 20 }}
-                className="bg-black border-2 p-10 rounded-[40px] max-w-2xl w-full space-y-10 text-center"
+                initial={{ scale: deviceInfo.isPhone ? 0.3 : 0.8, opacity: 0, y: 20 }}
+                animate={{ scale: deviceInfo.isPhone ? 0.5 : 1, opacity: 1, y: 0 }}
+                exit={{ scale: deviceInfo.isPhone ? 0.3 : 0.8, opacity: 0, y: 20 }}
+                className="bg-black border-2 p-6 sm:p-10 rounded-[30px] sm:rounded-[40px] max-w-2xl w-full space-y-6 sm:space-y-10 text-center relative"
                 style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                   boxShadow: `0 0 50px ${player1.color}11`
@@ -2890,24 +2899,24 @@ export default function App() {
               >
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <div className="p-4 rounded-full" style={{ backgroundColor: `${player1.color}11` }}>
-                      <Trophy className="w-12 h-12" style={{ color: player1.color }} />
+                    <div className="p-3 sm:p-4 rounded-full" style={{ backgroundColor: `${player1.color}11` }}>
+                      <Trophy className="w-8 h-8 sm:w-12 sm:h-12" style={{ color: player1.color }} />
                     </div>
                   </div>
-                  <h2 className="text-5xl font-black uppercase tracking-tighter text-white">Team Totals</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Final Session Results</p>
+                  <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter text-white">Team Totals</h2>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] sm:text-xs">Final Session Results</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8 items-center">
-                  <div className="space-y-4">
-                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player1.color }}>{team1Name || 'TEAM 1'}</p>
-                    <p className="text-8xl font-black text-white tabular-nums">
+                <div className="grid grid-cols-2 gap-4 sm:gap-8 items-center">
+                  <div className="space-y-2 sm:space-y-4">
+                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player1.color }}>{team1Name || 'TEAM 1'}</p>
+                    <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
                       {teamTotals.t1}
                     </p>
                   </div>
-                  <div className="space-y-4">
-                    <p className="text-xl font-black uppercase tracking-tight truncate" style={{ color: player2.color }}>{team2Name || 'TEAM 2'}</p>
-                    <p className="text-8xl font-black text-white tabular-nums">
+                  <div className="space-y-2 sm:space-y-4">
+                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player2.color }}>{team2Name || 'TEAM 2'}</p>
+                    <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
                       {teamTotals.t2}
                     </p>
                   </div>
@@ -2918,7 +2927,7 @@ export default function App() {
                     setShowTeamTotals(false);
                     setView('teams');
                   }}
-                  className="w-full h-20 text-slate-950 rounded-3xl font-black text-2xl uppercase tracking-widest transition-all active:scale-95"
+                  className="w-full h-14 sm:h-20 text-slate-950 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-2xl uppercase tracking-widest transition-all active:scale-95"
                   style={{ 
                     backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
                     boxShadow: `0 10px 20px ${player1.color}33`
