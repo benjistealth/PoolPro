@@ -112,3 +112,39 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .floating-widget {
+    @apply transition-all duration-300;
+    width: 192px !important;
+    height: 48px !important;
+  }
+
+  .widget-text { font-size: 24px !important; }
+  .widget-label { font-size: 7px !important; }
+  .widget-icon { width: 24px !important; height: 24px !important; }
+
+  /* Enforce Compact Top Bar for Mobile/Tablet Preview */
+  @media (max-width: 767px) {
+    nav.nav-zoom {
+      height: 44px !important;
+      min-height: 44px !important;
+      max-height: 44px !important;
+    }
+    .floating-widget {
+      width: 100px !important;
+      height: 32px !important;
+    }
+    .widget-finish-match {
+      width: 130px !important;
+    }
+    .widget-text { font-size: 13px !important; }
+    .widget-label { font-size: 5px !important; }
+    .widget-icon { width: 12px !important; height: 12px !important; }
+  }
+
+  /* Tablet & Desktop Specific Finish Match */
+  @media (min-width: 768px) {
+    .widget-finish-match {
+      width: 224px !important;
+    }
+  }

@@ -64,14 +64,12 @@ export default function App() {
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
-    const isMobileUA = /iphone|android.*mobile|ipod|blackberry|iemobile|opera mini/i.test(ua);
     const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
     
     // We prioritize window width for scaling tiers to ensure the user's specific test sizes are hit.
-    // Tablet range now goes up to 1400px to accommodate the user's 1380px test environment.
-    // Modern phones in landscape or high-res can exceed 768px, so we check UA too.
-    const isPhone = (windowSize.width < 768) || (isMobileUA && windowSize.width < 1024);
-    const isTablet = (windowSize.width >= 768 && windowSize.width < 1400) && !isPhone; 
+    // Simplifying: screens below 768px are treated as phone for compact top bars.
+    const isPhone = windowSize.width < 768;
+    const isTablet = windowSize.width >= 768 && windowSize.width < 1400;
     const isDesktop = windowSize.width >= 1400;
     const isLandscape = windowSize.width > windowSize.height;
 
@@ -80,13 +78,12 @@ export default function App() {
 
   // Calculate shared font size for team names to occupy 95% of vertical space
   const sharedTeamNameFontSize = useMemo(() => {
-    const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : (deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112));
+    const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : (deviceInfo.isPhone ? 44 : (windowSize.width >= 1024 ? 112 : 80));
     const availableHeight = windowSize.height - topBarHeight;
     const targetHeight = availableHeight * 0.95;
     
     const getFontSize = (name: string) => {
       const len = Math.max(1, name.length);
-      // Scaling: 1.1x for mobile, 1.2x for others as requested
       const scale = deviceInfo.isPhone ? 1.1 : 1.2;
       return (targetHeight * scale) / len;
     };
@@ -95,54 +92,49 @@ export default function App() {
     const fs2 = getFontSize(team2Name);
     const shared = Math.min(fs1, fs2);
 
-    // Physical constraint: sidebar width
-    const sidebarWidth = deviceInfo.isPhone ? 48 : (deviceInfo.isTablet ? 80 : 120);
-    // Adjust maximum font size slightly based on device
+    const sidebarWidth = deviceInfo.isPhone ? 48 : (windowSize.width < 1024 ? 80 : 120);
     const maxFs = sidebarWidth * (deviceInfo.isPhone ? 1.0 : 1.05);
 
     return Math.min(shared, maxFs);
-  }, [windowSize.height, team1Name, team2Name, deviceInfo, isNavVisible]);
+  }, [windowSize.height, windowSize.width, team1Name, team2Name, deviceInfo, isNavVisible]);
 
   const sharedPlayerNameFontSize = useMemo(() => {
-    // Precise width calculations to match the UI padding/gaps
-    const sidebarWidth = deviceInfo.isPhone ? 48 : (deviceInfo.isTablet ? 80 : 120);
-    const mainPadding = deviceInfo.isPhone ? 32 : (deviceInfo.isTablet ? 48 : 48);
-    const cardPadding = deviceInfo.isPhone ? 16 : (deviceInfo.isTablet ? 32 : 48);
+    const sidebarWidth = deviceInfo.isPhone ? 48 : (windowSize.width < 1024 ? 80 : 120);
+    const mainPadding = deviceInfo.isPhone ? 32 : (windowSize.width < 1024 ? 48 : 48);
+    // totalAvailableWidth is the space between the two sidebars, but capped by the CSS maxWidth
+    let availableWidth = windowSize.width - (sidebarWidth * 2) - mainPadding;
     
-    // totalAvailableWidth is the space between the two sidebars
-    const totalAvailableWidth = windowSize.width - (sidebarWidth * 2) - mainPadding;
-    
+    // Desktop Max Width Constraint (matches --gameplay-width: min(1100px, ...))
+    if (windowSize.width >= 1024) {
+      availableWidth = Math.min(1100, availableWidth);
+    }
+
     let cardWidth;
     if (deviceInfo.isLandscape) {
-      // 2 columns, gap of 12-20px
       const gap = deviceInfo.isPhone ? 12 : 16;
-      cardWidth = (totalAvailableWidth - gap) / 2;
+      cardWidth = (availableWidth - gap) / 2;
     } else {
-      // 1 column (usually mobile portrait)
-      cardWidth = totalAvailableWidth;
+      cardWidth = availableWidth;
     }
     
-    // Usable width inside the card - conservative for phone/desktop, huge for tablet
-    const usableWidthMultiplier = deviceInfo.isPhone ? 0.65 : (deviceInfo.isDesktop ? 0.82 : 0.98);
-    const usableWidth = (cardWidth - cardPadding) * usableWidthMultiplier;
+    // Available internal width
+    const cardPadding = deviceInfo.isPhone ? 16 : (windowSize.width < 1024 ? 32 : 48);
+    const targetWidth = cardWidth - cardPadding;
 
     const getFontSize = (name: string) => {
-      const len = Math.max(1, (name || "PLAYER 1").length);
-      // Applying another 20% reduction (Buffer * 1.25)
-      // Mobile: 2.50 * 1.25 = 3.125. Tablet: 0.60 * 1.25 = 0.75.
-      const bufferFactor = deviceInfo.isPhone ? 3.125 : (deviceInfo.isDesktop ? 0.85 : 0.75);
-      return usableWidth / (len * bufferFactor);
+      const len = Math.max(1, (name || "PLAYER").length);
+      const scale = deviceInfo.isPhone ? 1.1 : 1.2;
+      return (targetWidth * scale) / len;
     };
 
     const fs1 = getFontSize(player1.name);
     const fs2 = getFontSize(player2.name);
     const shared = Math.min(fs1, fs2);
 
-    // Caps reduced by another 20%: Tablet 80->64. Phone 10->8.
-    const maxFs = deviceInfo.isPhone ? 8 : (deviceInfo.isTablet ? 64 : 60);
-    const minFs = deviceInfo.isPhone ? 6 : 12;
+    const maxFs = deviceInfo.isPhone ? 28 : (windowSize.width < 1024 ? 64 : 80);
+    const minFs = deviceInfo.isPhone ? 12 : 16;
 
-    return Math.max(minFs, Math.min(shared, maxFs));
+    return Math.min(shared, maxFs);
   }, [windowSize.width, player1.name, player2.name, deviceInfo]);
 
   // Keyboard detection for mobile
@@ -201,7 +193,7 @@ export default function App() {
         
         const table = document.getElementById('matchups-table');
         if (table) {
-          const headerHeight = deviceInfo.isPhone ? 56 : (deviceInfo.isTablet ? 80 : 112);
+          const headerHeight = deviceInfo.isPhone ? 44 : (deviceInfo.isTablet ? 80 : 112);
           const elementPosition = table.getBoundingClientRect().top + window.pageYOffset;
           const offsetPosition = elementPosition - headerHeight - 24; // 24px extra buffer for breathing room
 
@@ -240,9 +232,11 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showClearTeamsConfirm, setShowClearTeamsConfirm] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
-  const [showTeamTotals, setShowTeamTotals] = useState(false);
-  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showTeamTotals, setShowTeamTotals] = useState(false);
+  const [isBreakTrackingEnabled, setIsBreakTrackingEnabled] = useState(false);
+  const [currentBreakPlayerId, setCurrentBreakPlayerId] = useState<'1' | '2'>('1');
+  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
   const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'server'>('download');
   const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
   const [exportEmail, setExportEmail] = useState('');
@@ -300,20 +294,28 @@ export default function App() {
         t1 += player1.score;
         t2 += player2.score;
       } else {
+        const settings = matchupSettings[i];
         const match = getMatchResult(p1Name, p2Name);
-        if (match) {
+        
+        let m1 = settings?.score1 ?? 0;
+        let m2 = settings?.score2 ?? 0;
+        
+        if (m1 === 0 && m2 === 0 && match) {
           if (match.player1 === p1Name) {
-            t1 += match.score1;
-            t2 += match.score2;
+            m1 = match.score1;
+            m2 = match.score2;
           } else {
-            t1 += match.score2;
-            t2 += match.score1;
+            m1 = match.score2;
+            m2 = match.score1;
           }
         }
+        
+        t1 += m1;
+        t2 += m2;
       }
     }
     return { t1, t2 };
-  }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score]);
+  }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score, matchupSettings]);
 
   // --- Initialization ---
   useEffect(() => {
@@ -353,6 +355,8 @@ export default function App() {
         if (state.userPreferences.isShotClockEnabled !== undefined) setIsShotClockEnabled(state.userPreferences.isShotClockEnabled);
         if (state.userPreferences.matchClockDuration !== undefined) setMatchClockDuration(state.userPreferences.matchClockDuration);
         if (state.userPreferences.isMatchClockEnabled !== undefined) setIsMatchClockEnabled(state.userPreferences.isMatchClockEnabled);
+        if (state.userPreferences.isBreakTrackingEnabled !== undefined) setIsBreakTrackingEnabled(state.userPreferences.isBreakTrackingEnabled);
+        if (state.userPreferences.currentBreakPlayerId !== undefined) setCurrentBreakPlayerId(state.userPreferences.currentBreakPlayerId);
         
         if (state.userPreferences.player1) {
           setPlayer1(prev => ({ 
@@ -381,6 +385,8 @@ export default function App() {
       if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
       if (state.apiConfig) setApiConfig(state.apiConfig);
       
+      if (state.userPreferences?.view !== undefined) setView(state.userPreferences.view);
+      if (state.userPreferences?.isNavVisible !== undefined) setIsNavVisible(state.userPreferences.isNavVisible);
       if (state.userPreferences?.showDeviceTime !== undefined) setShowDeviceTime(state.userPreferences.showDeviceTime);
       if (state.userPreferences?.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
       if (state.userPreferences?.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
@@ -388,7 +394,7 @@ export default function App() {
       if (state.userPreferences?.finishButtonPosition !== undefined) setFinishButtonPosition(state.userPreferences.finishButtonPosition);
 
       // Finalize loading
-      setTimeout(() => setIsLoaded(true), 100);
+      setIsLoaded(true);
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
       setIsLoaded(true);
@@ -396,10 +402,10 @@ export default function App() {
   }, []);
 
   // --- Persistence (Single JSON Source) ---
-  useEffect(() => {
+  const saveState = useCallback(() => {
     if (!isLoaded) return;
 
-    const state = {
+    const stateToSave = {
       teamData: { team1Name, team2Name, team1Players, team2Players },
       gameData: { 
         matchHistory, 
@@ -426,6 +432,10 @@ export default function App() {
         isShotClockEnabled,
         matchClockDuration,
         isMatchClockEnabled,
+        isBreakTrackingEnabled,
+        currentBreakPlayerId,
+        view,
+        isNavVisible,
         showDeviceTime,
         deviceTimePosition,
         matchClockPosition,
@@ -436,15 +446,28 @@ export default function App() {
       playerPreferences,
       apiConfig
     };
-    localStorage.setItem('pool_app_state', JSON.stringify(state));
+    localStorage.setItem('pool_app_state', JSON.stringify(stateToSave));
   }, [
     isLoaded,
     team1Name, team2Name, team1Players, team2Players,
     matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
+    isBreakTrackingEnabled, currentBreakPlayerId,
+    view, isNavVisible,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition, finishButtonPosition,
     matchupSettings, playerPreferences, apiConfig
   ]);
+
+  useEffect(() => {
+    saveState();
+  }, [saveState]);
+
+  // Window-level safety save
+  useEffect(() => {
+    const handleUnload = () => saveState();
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [saveState]);
 
   // Sync current player preferences when they change
   useEffect(() => {
@@ -453,7 +476,9 @@ export default function App() {
         ...prev,
         [selectedMatchIndex]: {
           player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor }
+          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor },
+          score1: player1.score,
+          score2: player2.score
         }
       }));
     }
@@ -473,8 +498,8 @@ export default function App() {
     }
   }, [
     selectedMatchIndex, 
-    player1.name, player1.color, player1.bgColor, player1.screenColor,
-    player2.name, player2.color, player2.bgColor, player2.screenColor
+    player1.name, player1.score, player1.color, player1.bgColor, player1.screenColor,
+    player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor
   ]);
 
   // Load player preferences when names change (e.g. typed in scoreboard)
@@ -548,6 +573,12 @@ export default function App() {
     } else {
       setPlayer2(prev => ({ ...prev, score: prev.score + 1 }));
     }
+    
+    // Swap break indicator if tracking is enabled
+    if (isBreakTrackingEnabled) {
+      setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+    }
+    
     resetTimer();
   };
 
@@ -603,11 +634,33 @@ export default function App() {
     }
   };
 
-  const clearMatchResult = (p1: string, p2: string) => {
+  const clearMatchResult = (p1: string, p2: string, index?: number) => {
+    // 1. Clear from history
     const updatedHistory = matchHistory.filter(m => 
       !((m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1))
     );
     setMatchHistory(updatedHistory);
+
+    // 2. Reset live matchup settings if index is provided
+    if (index !== undefined) {
+      setMatchupSettings(prev => {
+        const next = { ...prev };
+        if (next[index]) {
+          next[index] = {
+            ...next[index],
+            score1: 0,
+            score2: 0
+          };
+        }
+        return next;
+      });
+      
+      // 3. If it's the active match, reset the live players' scores
+      if (selectedMatchIndex === index) {
+        setPlayer1(prev => ({ ...prev, score: 0 }));
+        setPlayer2(prev => ({ ...prev, score: 0 }));
+      }
+    }
   };
 
   const selectTeamMatch = (index: number) => {
@@ -618,15 +671,15 @@ export default function App() {
     const p1Pref = playerPreferences[p1Name];
     const p2Pref = playerPreferences[p2Name];
     
-    // Load matchup-specific settings (clocks)
+    // Load matchup-specific settings (scores, colors)
     const settings = matchupSettings[index];
 
-    // Load existing scores if available
+    // Load existing scores - prefer live matchups setting if available
     const existingResult = getMatchResult(p1Name, p2Name);
-    let p1Score = 0;
-    let p2Score = 0;
+    let p1Score = settings?.score1 !== undefined ? settings.score1 : 0;
+    let p2Score = settings?.score2 !== undefined ? settings.score2 : 0;
 
-    if (existingResult) {
+    if (p1Score === 0 && p2Score === 0 && existingResult) {
       if (existingResult.player1 === p1Name) {
         p1Score = existingResult.score1;
         p2Score = existingResult.score2;
@@ -663,8 +716,11 @@ export default function App() {
   const navigateToScoreboard = () => {
     const maxMatches = Math.max(team1Players.length, team2Players.length);
     
-    // If we're already on scoreboard and have a match, just stay
-    if (view === 'scoreboard' && selectedMatchIndex !== null) return;
+    // If we're already on scoreboard OR we have a match selected, just stay/go to it
+    if (selectedMatchIndex !== null) {
+      setView('scoreboard');
+      return;
+    }
 
     if (maxMatches > 0) {
       // Find the first match with no data
@@ -1352,12 +1408,24 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  const halfW = windowSize.width < 640 ? 66 : 98;
-  const halfH = windowSize.width < 640 ? 22 : 26;
+    // Calculate half-widths for centering widgets based on device and widget type
+    // Aligning strictly with CSS 768px breakpoint for scaling
+    const isMobile = windowSize.width < 768;
+    const isTablet = windowSize.width >= 768 && windowSize.width < 1400;
+
+    const getWidgetHalfW = (type: 'clock' | 'finish') => {
+      if (isMobile) {
+        return type === 'finish' ? 65 : 50; // 130/2 or 100/2
+      }
+      // Tablet and Desktop both use 224px for finish match, 192px for clocks
+      return type === 'finish' ? 112 : 96; 
+    };
+
+    const halfH = isMobile ? 16 : 24; // 32/2 vs 48/2
   const gap = windowSize.height * 0.05;
 
   return (
-    <div className="relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden">
+    <div className={`relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden ${deviceInfo.isPhone ? 'is-phone' : (deviceInfo.isTablet ? 'is-tablet' : 'is-desktop')}`}>
       {/* SVG Gradient Definitions */}
       <svg width="0" height="0" className="absolute pointer-events-none">
         <defs>
@@ -1390,70 +1458,81 @@ export default function App() {
           y: (!deviceInfo.isDesktop && (
             (!isNavVisible && deviceInfo.isPhone) || 
             (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
-          )) ? (deviceInfo.isPhone ? -56 : -80) : 0,
+          )) ? (deviceInfo.isPhone ? -44 : -80) : 0,
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 h-14 sm:h-20 lg:h-28 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom"
+        className={`fixed top-0 left-0 right-0 h-[44px] md:h-20 lg:h-28 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-6 nav-zoom`}
         style={{ 
           borderBottom: '2px solid',
-          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+          height: deviceInfo.isPhone ? '44px' : undefined
         }}
       >
-        <div className="flex items-center gap-3 lg:gap-6 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 lg:gap-6 shrink-0">
           <Trophy 
-            className="w-8 h-8 lg:w-16 lg:h-16 transition-all duration-500" 
+            className="w-6 h-6 sm:w-8 sm:h-8 lg:w-16 lg:h-16 transition-all duration-500" 
             style={{ stroke: 'url(#cup-gradient)' }}
           />
           <h1 
-            className={`text-4xl lg:text-7xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
+            className={`text-2xl sm:text-4xl lg:text-7xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) ? 'hidden sm:block' : ''}`}
             style={{ backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})` }}
           >
             Pool-Pro.uk
           </h1>
         </div>
 
-        {/* Centered Controls - Removed as they are now in the widgets */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-none">
+        {/* Centered Device Time */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
+          {showDeviceTime && (
+            <div 
+              className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 rounded-lg sm:rounded-xl bg-black/40 border border-white/10 backdrop-blur-md pointer-events-auto shadow-lg"
+            >
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4 lg:w-8 lg:h-8 text-slate-400" />
+              <span className="font-mono font-black text-white tracking-wider tabular-nums text-[10px] sm:text-xs lg:text-3xl">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </span>
+            </div>
+          )}
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-4 lg:gap-8 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-4 lg:gap-8 shrink-0">
           <button 
             onClick={toggleFullscreen}
-            className="w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 flex"
+            className="w-7 h-7 sm:w-9 sm:h-9 lg:w-[72px] lg:h-[72px] rounded lg:rounded-2xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 flex"
             title="Toggle Fullscreen"
           >
             {isFullscreen ? 
-              <Minimize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} /> : 
-              <Maximize className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
+              <Minimize className="w-4 h-4 sm:w-5 sm:h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} /> : 
+              <Maximize className="w-4 h-4 sm:w-5 sm:h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
             }
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-7 h-7 sm:w-9 sm:h-9 lg:w-[72px] lg:h-[72px] rounded lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'scoreboard' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Trophy className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => {
               setView('teams');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-7 h-7 sm:w-9 sm:h-9 lg:w-[72px] lg:h-[72px] rounded lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'teams' ? { backgroundColor: `${player1.color}33` } : {}}
           >
-            <Users className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
           <button 
             onClick={() => {
               setView('settings');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`w-9 h-9 lg:w-[72px] lg:h-[72px] rounded-lg lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`w-7 h-7 sm:w-9 sm:h-9 lg:w-[72px] lg:h-[72px] rounded lg:rounded-2xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={view === 'settings' ? { backgroundColor: `${player2.color}33` } : {}}
           >
-            <Settings className="w-5 h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5 lg:w-10 lg:h-10" style={{ stroke: 'url(#cup-gradient)' }} />
           </button>
         </div>
       </motion.nav>
@@ -1467,12 +1546,12 @@ export default function App() {
               animate={{ 
                 opacity: 0.7, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? -56 : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? -44 : 0
               }}
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div className="h-14 sm:h-20 lg:h-28 flex-shrink-0" />
+              <div className={`${deviceInfo.isPhone ? 'h-[44px]' : (deviceInfo.isTablet ? 'h-20' : 'h-28')} flex-shrink-0`} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -1490,12 +1569,12 @@ export default function App() {
               animate={{ 
                 opacity: 0.7, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? -56 : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? -44 : 0
               }}
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div className="h-14 sm:h-20 lg:h-28 flex-shrink-0" />
+              <div className={`${deviceInfo.isPhone ? 'h-[44px]' : (deviceInfo.isTablet ? 'h-20' : 'h-28')} flex-shrink-0`} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
@@ -1526,18 +1605,18 @@ export default function App() {
               }
             }}
             initial={matchClockPosition || { 
-              x: windowSize.width / 2 - halfW, 
+              x: windowSize.width / 2 - getWidgetHalfW('clock'), 
               y: windowSize.height / 2 + halfH + gap
             }}
             animate={matchClockPosition ? { x: matchClockPosition.x, y: matchClockPosition.y } : {
-              x: windowSize.width / 2 - halfW,
+              x: windowSize.width / 2 - getWidgetHalfW('clock'),
               y: windowSize.height / 2 + halfH + gap
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
           >
             <div 
-              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-between px-2 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl"
+              className="flex items-center justify-between px-1 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl floating-widget"
               style={{ 
                 border: '2px solid transparent',
                 backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player1.color}, ${player2.color})`,
@@ -1545,12 +1624,12 @@ export default function App() {
                 backgroundClip: 'padding-box, border-box'
               }}
             >
-              <div className="flex flex-col items-center justify-center h-full pt-1 flex-1">
-                <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5">Match</span>
+              <div className="flex flex-col items-center justify-center h-full pt-0.5 flex-1">
+                <span className="font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5 widget-label">Match</span>
                 <div 
-                  className={`flex items-center gap-1 text-lg sm:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                  className={`flex items-center gap-1 font-mono font-black tabular-nums transition-all duration-500 widget-text ${matchClock <= 60 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
                 >
-                  <Timer className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  <Timer className="widget-icon" />
                   {formatTime(matchClock)}
                 </div>
               </div>
@@ -1583,18 +1662,18 @@ export default function App() {
               }
             }}
             initial={shotClockPosition || { 
-              x: windowSize.width / 2 - halfW, 
+              x: windowSize.width / 2 - getWidgetHalfW('clock'), 
               y: windowSize.height / 2 - halfH - gap - (halfH * 2)
             }}
             animate={shotClockPosition ? { x: shotClockPosition.x, y: shotClockPosition.y } : {
-              x: windowSize.width / 2 - halfW,
+              x: windowSize.width / 2 - getWidgetHalfW('clock'),
               y: windowSize.height / 2 - halfH - gap - (halfH * 2)
             }}
             className="fixed z-[100] cursor-move pointer-events-auto touch-none"
             style={{ left: 0, top: 0 }}
           >
             <div 
-              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-between px-2 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl"
+              className="flex items-center justify-between px-1 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl floating-widget"
               style={{ 
                 border: '2px solid transparent',
                 backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
@@ -1602,12 +1681,12 @@ export default function App() {
                 backgroundClip: 'padding-box, border-box'
               }}
             >
-              <div className="flex flex-col items-center justify-center h-full pt-1 flex-1">
-                <span className="text-[6px] sm:text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5">Shot</span>
+              <div className="flex flex-col items-center justify-center h-full pt-0.5 flex-1">
+                <span className="font-black uppercase tracking-[0.2em] text-slate-500 leading-none mb-0.5 widget-label">Shot</span>
                 <div 
-                  className={`flex items-center gap-1 text-lg sm:text-2xl font-mono font-black tabular-nums transition-all duration-500 ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
+                  className={`flex items-center gap-1 font-mono font-black tabular-nums transition-all duration-500 widget-text ${shotClock <= 5 ? 'text-red-500 animate-pulse scale-110' : 'text-white'}`}
                 >
-                  <Timer className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                  <Timer className="widget-icon" />
                   {shotClock}s
                 </div>
               </div>
@@ -1639,57 +1718,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Floating Device Time Clock */}
-      <AnimatePresence>
-        {showDeviceTime && view === 'scoreboard' && (
-          <motion.div
-            ref={clockRef}
-            drag
-            dragMomentum={false}
-            onDragEnd={() => {
-              if (clockRef.current) {
-                const rect = clockRef.current.getBoundingClientRect();
-                setDeviceTimePosition({ x: rect.left, y: rect.top });
-              }
-            }}
-            initial={deviceTimePosition || { 
-              x: windowSize.width / 2 - halfW, 
-              y: 12 
-            }}
-            animate={deviceTimePosition ? { x: deviceTimePosition.x, y: deviceTimePosition.y } : {
-              x: windowSize.width / 2 - halfW,
-              y: 12
-            }}
-            className="fixed z-[100] cursor-move pointer-events-auto touch-none"
-            style={{ left: 0, top: 0 }}
-          >
-            <div 
-              className="w-32 sm:w-48 h-10 sm:h-12 flex items-center justify-center gap-2 rounded-2xl bg-black border-2 shadow-2xl"
-              style={{ 
-                border: '2px solid transparent',
-                backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
-                backgroundOrigin: 'border-box',
-                backgroundClip: 'padding-box, border-box'
-              }}
-            >
-              <Clock className="w-4 h-4 sm:w-6 sm:h-6 text-slate-400" />
-              <span className="text-lg sm:text-2xl font-mono font-black text-white tracking-wider tabular-nums">
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       <motion.main 
         initial={false}
         animate={{ 
           paddingTop: (view === 'teams' || view === 'settings')
-            ? `calc(${deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
+            ? `calc(${deviceInfo.isPhone ? '44px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
             : (view === 'scoreboard' 
-                ? (deviceInfo.isPhone ? '56px' : (deviceInfo.isTablet ? '80px' : '112px')) 
+                ? (deviceInfo.isPhone ? '44px' : (deviceInfo.isTablet ? '80px' : '112px')) 
                 : 0),
-          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -56 : 0,
+          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? -44 : 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -1735,30 +1774,42 @@ export default function App() {
                             boxShadow: `0 0 40px -15px ${p.color}66`
                           }}
                         >
-                            {/* Mobile Score Buttons - Absolute Positioned */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                incrementScore(p.id);
-                              }}
-                              className={`sm:hidden absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
-                              style={{ 
-                                backgroundColor: p.color,
-                                boxShadow: `0 4px 10px -2px ${p.color}66`
-                              }}
-                            >
-                              <Plus className="w-6 h-6 font-bold" />
-                            </button>
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                decrementScore(p.id);
-                              }}
-                              className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'left-2' : 'right-2'} w-12 h-12 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
-                            >
-                              <Minus className="w-5 h-5" />
-                            </button>
+                             {/* Mobile Score Buttons - Absolute Positioned */}
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 incrementScore(p.id);
+                               }}
+                               className={`sm:hidden absolute top-2 ${idx === 0 ? 'right-2' : 'left-2'} w-8 h-8 text-slate-950 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
+                               style={{ 
+                                 backgroundColor: p.color,
+                                 boxShadow: `0 4px 10px -2px ${p.color}66`
+                               }}
+                             >
+                               <Plus className="w-4 h-4 font-bold" />
+                             </button>
+ 
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 decrementScore(p.id);
+                               }}
+                               className={`sm:hidden absolute bottom-2 ${idx === 0 ? 'right-2' : 'left-2'} w-8 h-8 bg-slate-800/80 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
+                             >
+                               <Minus className="w-3 h-3" />
+                             </button>
+ 
+                             {/* White Ball Break Indicator */}
+                             {isBreakTrackingEnabled && (
+                               <button
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   setCurrentBreakPlayerId(p.id as '1' | '2');
+                                 }}
+                                 className={`absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-8 h-8 rounded-full border-2 transition-all duration-300 z-10 flex items-center justify-center ${currentBreakPlayerId === p.id ? 'bg-white border-white shadow-[0_0_15px_rgba(255,255,255,0.8)] scale-110' : 'bg-slate-700/50 border-slate-600 scale-90 opacity-40'}`}
+                                 title="Break Indicator"
+                               />
+                             )}
 
                           <div className="flex flex-col items-center gap-0 sm:gap-6">
                           {isEditingNames ? (
@@ -1776,7 +1827,7 @@ export default function App() {
                           ) : (
                             p.name && (
                               <h2 
-                                className="font-bold uppercase truncate w-full text-center leading-none sm:leading-normal" 
+                                className="font-bold uppercase w-full text-center whitespace-nowrap leading-none sm:leading-normal" 
                                 style={{ 
                                   color: p.color,
                                   fontSize: `${sharedPlayerNameFontSize}px`
@@ -1806,13 +1857,13 @@ export default function App() {
                                 e.stopPropagation();
                                 incrementScore(p.id);
                               }}
-                              className="flex-[2] h-8 sm:h-[min(4rem,10vh)] text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
+                              className="flex-1 h-8 sm:h-[min(4rem,10vh)] text-slate-950 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-lg"
                               style={{ 
                                 backgroundColor: p.color,
                                 boxShadow: `0 10px 15px -3px ${p.color}33`
                               }}
                             >
-                              <Plus className="w-5 h-5 sm:w-6 sm:h-6 font-bold" />
+                              <Plus className="w-4 h-4 sm:w-5 sm:h-5 font-bold" />
                             </button>
                           </div>
                         </div>
@@ -1836,11 +1887,11 @@ export default function App() {
                         }
                       }}
                       initial={finishButtonPosition || { 
-                        x: windowSize.width / 2 - halfW, 
+                        x: windowSize.width / 2 - getWidgetHalfW('finish'), 
                         y: windowSize.height / 2 - halfH 
                       }}
                       animate={finishButtonPosition ? { x: finishButtonPosition.x, y: finishButtonPosition.y } : {
-                        x: windowSize.width / 2 - halfW,
+                        x: windowSize.width / 2 - getWidgetHalfW('finish'),
                         y: windowSize.height / 2 - halfH
                       }}
                       transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -1849,12 +1900,13 @@ export default function App() {
                     >
                       <button
                         onClick={finishMatch}
-                        className="w-32 sm:w-48 h-10 sm:h-12 hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center text-lg sm:text-xl font-black transition-all shadow-2xl border-2 active:scale-95"
+                        className="hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border-2 active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
                         style={{ 
                           border: '2px solid transparent',
                           backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
                           backgroundOrigin: 'border-box',
-                          backgroundClip: 'padding-box, border-box'
+                          backgroundClip: 'padding-box, border-box',
+                          color: '#fff'
                         }}
                       >
                         <span className="leading-none uppercase tracking-wider">Finish Match</span>
@@ -2123,7 +2175,34 @@ export default function App() {
 
                             const p1Name = p1 || `PLAYER ${idx + 1}`;
                             const p2Name = p2 || `PLAYER ${idx + 1}`;
+                            const matchup = matchupSettings[idx];
                             const lastMatch = getMatchResult(p1Name, p2Name);
+                            
+                            // Determine which score to display
+                            let displayScore: { score1: number, score2: number, isLive: boolean } | null = null;
+                            
+                            if (selectedMatchIndex === idx) {
+                              // Priority 1: Current active game
+                              displayScore = { 
+                                score1: player1.score, 
+                                score2: player2.score, 
+                                isLive: true 
+                              };
+                            } else if (matchup?.score1 !== undefined || matchup?.score2 !== undefined) {
+                              // Priority 2: Other ongoing games in matchupSettings
+                              displayScore = { 
+                                score1: matchup.score1 || 0, 
+                                score2: matchup.score2 || 0, 
+                                isLive: true 
+                              };
+                            } else if (lastMatch) {
+                              // Priority 3: Completed historical games
+                              displayScore = { 
+                                score1: lastMatch.score1,
+                                score2: lastMatch.score2,
+                                isLive: false 
+                              };
+                            }
                             
                             return (
                               <tr 
@@ -2140,26 +2219,34 @@ export default function App() {
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
                                 <td className="px-1 sm:px-6 py-4">
-                                  {lastMatch ? (
+                                  {displayScore ? (
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
-                                      <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${lastMatch.winner === p1Name ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                                        {lastMatch.score1}-{lastMatch.score2}
+                                      <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${
+                                        displayScore.isLive 
+                                          ? 'bg-blue-500/20 text-blue-400' 
+                                          : (displayScore as any).winner === p1Name 
+                                            ? 'bg-emerald-500/20 text-emerald-400' 
+                                            : (displayScore as any).winner === p2Name
+                                              ? 'bg-rose-500/20 text-rose-400'
+                                              : 'bg-slate-800 text-slate-400'
+                                      }`}>
+                                        {displayScore.score1}-{displayScore.score2}
                                       </span>
-                                      <span className="text-[6px] sm:text-[10px] text-slate-600 font-bold uppercase whitespace-nowrap">{new Date(lastMatch.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
+                                      <span className="text-[6px] sm:text-[10px] text-slate-600 font-bold uppercase whitespace-nowrap">{displayScore.isLive ? 'LIVE' : new Date((displayScore as any).date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
                                     </div>
                                   ) : (
                                     <span className="text-[8px] text-slate-700 font-bold uppercase">NONE</span>
                                   )}
                                 </td>
                                 <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
-                                  {lastMatch && (
+                                  {(lastMatch || matchup) && (
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        clearMatchResult(p1Name, p2Name);
+                                        clearMatchResult(p1Name, p2Name, idx);
                                       }}
                                       className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                      title="Clear Result"
+                                      title="Clear Score"
                                     >
                                       <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </button>
@@ -2244,12 +2331,13 @@ export default function App() {
               </div>
 
               <div className="space-y-12">
+                {/* 1. Colour Preferences */}
                 <section className="space-y-6">
                   <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
-                    Player Customization
+                    Colour Preferences
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
                     {[player1, player2].map((p, idx) => (
@@ -2330,12 +2418,126 @@ export default function App() {
                   </div>
                 </section>
 
+                {/* 2. Break Tracker */}
                 <section className="space-y-6">
                   <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
                   >
-                    Master Match Clock
+                    Break Tracker
+                  </h3>
+                  <div 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    style={{ borderColor: player1.color }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Break Tracking</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a "white ball" break indicator that alternates with scores.</p>
+                      </div>
+                      <button 
+                        onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
+                        className={`w-14 h-7 rounded-full transition-colors relative`}
+                        style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
+                      >
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-8' : 'left-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 3. Device Time */}
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                  >
+                    Device Time
+                  </h3>
+                  <div 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                    style={{ borderColor: player1.color }}
+                  >
+                    <div className="space-y-1 text-center sm:text-left">
+                      <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Show Device Time</p>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a draggable clock on the gameplay screen.</p>
+                    </div>
+                    <button 
+                      onClick={() => setShowDeviceTime(!showDeviceTime)}
+                      className={`w-14 h-7 rounded-full transition-colors relative`}
+                      style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
+                    >
+                      <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showDeviceTime ? 'left-8' : 'left-1'}`} />
+                    </button>
+                  </div>
+                </section>
+
+                {/* 4. Shot Clock */}
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player2.color }}
+                  >
+                    Shot Clock
+                  </h3>
+                  <div 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    style={{ borderColor: player2.color }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Shot Clock</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Toggle the visibility and timer on the scoreboard.</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          setIsShotClockEnabled(!isShotClockEnabled);
+                          if (isShotClockEnabled) pauseTimer();
+                        }}
+                        className={`w-14 h-7 rounded-full transition-colors relative`}
+                        style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
+                      >
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-8' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    {isShotClockEnabled && (
+                      <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Timer Duration</label>
+                          <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="10" 
+                          max="120" 
+                          step="5"
+                          value={shotClockDuration}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setShotClockDuration(val);
+                            setShotClock(val);
+                          }}
+                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                          style={{ accentColor: player2.color }}
+                        />
+                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                          <span>10s</span>
+                          <span>60s</span>
+                          <span>120s</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* 5. Match Clock */}
+                <section className="space-y-6">
+                  <h3 
+                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                  >
+                    Match Clock
                   </h3>
                   <div 
                     className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
@@ -2395,64 +2597,7 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="space-y-6">
-                  <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player2.color }}
-                  >
-                    Shot Clock Settings
-                  </h3>
-                  <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
-                    style={{ borderColor: player2.color }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Shot Clock</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Toggle the visibility and timer on the scoreboard.</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          setIsShotClockEnabled(!isShotClockEnabled);
-                          if (isShotClockEnabled) pauseTimer();
-                        }}
-                        className={`w-14 h-7 rounded-full transition-colors relative`}
-                        style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
-                      >
-                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-8' : 'left-1'}`} />
-                      </button>
-                    </div>
-
-                    {isShotClockEnabled && (
-                      <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Timer Duration</label>
-                          <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="10" 
-                          max="120" 
-                          step="5"
-                          value={shotClockDuration}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setShotClockDuration(val);
-                            setShotClock(val);
-                          }}
-                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-                          style={{ accentColor: player2.color }}
-                        />
-                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
-                          <span>10s</span>
-                          <span>60s</span>
-                          <span>120s</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-
+                {/* 6. Restore Defaults */}
                 <section className="space-y-6">
                   <h3 
                     className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
@@ -2466,24 +2611,7 @@ export default function App() {
                       style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1 text-center sm:text-left">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Show Device Time</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a draggable clock on the gameplay screen.</p>
-                      </div>
-                      <button 
-                        onClick={() => setShowDeviceTime(!showDeviceTime)}
-                        className={`w-14 h-7 rounded-full transition-colors relative`}
-                        style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
-                      >
-                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showDeviceTime ? 'left-8' : 'left-1'}`} />
-                      </button>
-                    </div>
-
-                    <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
-                      style={{ borderColor: player1.color }}
-                    >
-                      <div className="space-y-1 text-center sm:text-left">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Reset Settings</p>
+                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Restore Defaults</p>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
                       </div>
                       <button 
@@ -2494,7 +2622,7 @@ export default function App() {
                         className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
                         <RotateCcw className="w-4 h-4" />
-                        Reset Settings
+                        Restore Defaults
                       </button>
                     </div>
                   </div>
@@ -2641,7 +2769,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Version</span>
-                      <span className="font-mono" style={{ color: player1.color }}>0.6.9-pro</span>
+                      <span className="font-mono" style={{ color: player1.color }}>0.6.9-BETA</span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-slate-500">Developer</span>
@@ -2805,7 +2933,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-4 text-blue-500">
                   <RotateCcw className="w-8 h-8" />
-                  <h3 className="text-xl font-bold">Reset Settings?</h3>
+                  <h3 className="text-xl font-bold">Restore Defaults?</h3>
                 </div>
                 <p className="text-slate-400">This will reset all player colors and clock settings to their original defaults. Your names, scores, and history will not be affected.</p>
                 <div className="flex gap-4">
@@ -2845,7 +2973,7 @@ export default function App() {
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
                   >
-                    Reset
+                    Restore
                   </button>
                 </div>
               </motion.div>
@@ -2888,10 +3016,10 @@ export default function App() {
           {showTeamTotals && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 
-                initial={{ scale: deviceInfo.isPhone ? 0.3 : 0.8, opacity: 0, y: 20 }}
-                animate={{ scale: deviceInfo.isPhone ? 0.5 : 1, opacity: 1, y: 0 }}
-                exit={{ scale: deviceInfo.isPhone ? 0.3 : 0.8, opacity: 0, y: 20 }}
-                className="bg-black border-2 p-6 sm:p-10 rounded-[30px] sm:rounded-[40px] max-w-2xl w-full space-y-6 sm:space-y-10 text-center relative"
+                initial={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
+                animate={{ scale: !deviceInfo.isDesktop ? 0.7 : 1, opacity: 1, y: 0 }}
+                exit={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
+                className="bg-black border-2 p-6 sm:p-10 rounded-[30px] sm:rounded-[40px] max-w-2xl w-full space-y-6 sm:space-y-10 text-center"
                 style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                   boxShadow: `0 0 50px ${player1.color}11`
