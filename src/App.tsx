@@ -80,7 +80,7 @@ export default function App() {
     
     // We prioritize height for scaling tiers in landscape-intended apps.
     // Screens below 768px wide OR below 500px tall are treated as phone for compact top bars.
-    const isPhone = windowSize.width < 768 || windowSize.height < 500;
+    const isPhone = windowSize.width < 1301 || windowSize.height < 500;
     const isTablet = !isPhone && windowSize.width < 1024;
     const isDesktop = !isPhone && !isTablet;
     const isLandscape = windowSize.width > windowSize.height;
