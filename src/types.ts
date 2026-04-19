@@ -23,6 +23,18 @@ export interface MatchupSettings {
   score2?: number;
 }
 
+export interface FrameDetail {
+  frameNumber: number;
+  timestamp: string;
+  score1: number;
+  score2: number;
+  breakerId: string;
+  breakerName: string;
+  winnerId?: string;
+  winnerName?: string;
+  duration?: number; // in seconds
+}
+
 export interface MatchHistoryEntry {
   id: string;
   date: string;
@@ -35,4 +47,5 @@ export interface MatchHistoryEntry {
   winner: string;
   shotClockSetting?: number;
   matchClockRemaining?: number;
+  frameDetails?: FrameDetail[];
 }

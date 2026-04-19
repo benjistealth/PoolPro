@@ -23,10 +23,12 @@ import {
   Share2,
   Server,
   Zap,
-  Clock
+  Clock,
+  FileText,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Player, MatchHistoryEntry, MatchupSettings } from './types';
+import { Player, MatchHistoryEntry, MatchupSettings, FrameDetail } from './types';
 import { THEME_COLORS, BACKGROUND_COLORS } from './constants';
 import { ColorPicker } from './components/ColorPicker';
 
@@ -43,8 +45,11 @@ export default function App() {
   const [team1Players, setTeam1Players] = useState<string[]>([]);
   const [team2Players, setTeam2Players] = useState<string[]>([]);
   const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>([]);
+  const [currentMatchFrameDetails, setCurrentMatchFrameDetails] = useState<FrameDetail[]>([]);
+  const [viewingMatchDetailsId, setViewingMatchDetailsId] = useState<string | null>(null);
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
-  const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams'>('scoreboard');
+  const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
+  const frameStartTimeRef = useRef<number>(Date.now());
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const isKeyboardOpenRef = useRef(false);
@@ -568,6 +573,30 @@ export default function App() {
 
   // --- Game Actions ---
   const incrementScore = (playerId: string) => {
+    const now = Date.now();
+    const duration = Math.round((now - frameStartTimeRef.current) / 1000);
+    
+    const nextScore1 = playerId === '1' ? player1.score + 1 : player1.score;
+    const nextScore2 = playerId === '2' ? player2.score + 1 : player2.score;
+    
+    const breakerId = currentBreakPlayerId;
+    const breakerName = breakerId === '1' ? player1.name : player2.name;
+    
+    const frameDetail: FrameDetail = {
+      frameNumber: (player1.score + player2.score) + 1,
+      timestamp: new Date().toISOString(),
+      score1: nextScore1,
+      score2: nextScore2,
+      breakerId,
+      breakerName: breakerName || (breakerId === '1' ? 'PLAYER 1' : 'PLAYER 2'),
+      winnerId: playerId,
+      winnerName: playerId === '1' ? player1.name : player2.name,
+      duration
+    };
+    
+    setCurrentMatchFrameDetails(prev => [...prev, frameDetail]);
+    frameStartTimeRef.current = now;
+
     if (playerId === '1') {
       setPlayer1(prev => ({ ...prev, score: prev.score + 1 }));
     } else {
@@ -583,6 +612,16 @@ export default function App() {
   };
 
   const decrementScore = (playerId: string) => {
+    // Undo the last frame detail if it matches the player
+    setCurrentMatchFrameDetails(prev => {
+      if (prev.length === 0) return prev;
+      const lastFrame = prev[prev.length - 1];
+      if (lastFrame.winnerId === playerId) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+
     if (playerId === '1') {
       setPlayer1(prev => ({ ...prev, score: Math.max(0, prev.score - 1) }));
     } else {
@@ -603,11 +642,14 @@ export default function App() {
       score2: player2.score,
       winner,
       shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
-      matchClockRemaining: isMatchClockEnabled ? matchClock : undefined
+      matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
+      frameDetails: currentMatchFrameDetails
     };
 
     const updatedHistory = [newEntry, ...matchHistory];
     setMatchHistory(updatedHistory);
+    setCurrentMatchFrameDetails([]);
+    frameStartTimeRef.current = Date.now();
     
     // Move to next matchup if available
     if (selectedMatchIndex !== null) {
@@ -711,6 +753,11 @@ export default function App() {
     setView('scoreboard');
     resetTimer();
     resetMatchClock();
+  };
+
+  const viewMatchDetails = (matchId: string) => {
+    setViewingMatchDetailsId(matchId);
+    setView('match-details');
   };
 
   const navigateToScoreboard = () => {
@@ -1723,7 +1770,7 @@ export default function App() {
       <motion.main 
         initial={false}
         animate={{ 
-          paddingTop: (view === 'teams' || view === 'settings')
+          paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
             ? `calc(${deviceInfo.isPhone ? '44px' : (deviceInfo.isTablet ? '80px' : '112px')} + 8vh)`
             : (view === 'scoreboard' 
                 ? (deviceInfo.isPhone ? '44px' : (deviceInfo.isTablet ? '80px' : '112px')) 
@@ -2239,18 +2286,32 @@ export default function App() {
                                   )}
                                 </td>
                                 <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
-                                  {(lastMatch || matchup) && (
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        clearMatchResult(p1Name, p2Name, idx);
-                                      }}
-                                      className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                      title="Clear Score"
-                                    >
-                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-end gap-1">
+                                    {lastMatch && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          viewMatchDetails(lastMatch.id);
+                                        }}
+                                        className="p-1 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                        title="View Details"
+                                      >
+                                        <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      </button>
+                                    )}
+                                    {(lastMatch || matchup) && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          clearMatchResult(p1Name, p2Name, idx);
+                                        }}
+                                        className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                        title="Clear Score"
+                                      >
+                                        <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                                   {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
@@ -2778,6 +2839,133 @@ export default function App() {
                   </div>
                 </section>
               </div>
+            </motion.div>
+          )}
+
+          {view === 'match-details' && (
+            <motion.div
+              key="match-details"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-8 pb-20"
+            >
+              <div 
+                className="flex items-center gap-4 pb-8 border-b-2"
+                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+              >
+                <button 
+                  onClick={() => setView('history')}
+                  className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-white hover:bg-slate-800 transition-all flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
+                >
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+                <div className="space-y-1">
+                  <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-white line-clamp-1">Match Details</h2>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] sm:text-[10px]">Detailed Frame Analysis</p>
+                </div>
+              </div>
+
+              {matchHistory.find(m => m.id === viewingMatchDetailsId) ? (() => {
+                const match = matchHistory.find(m => m.id === viewingMatchDetailsId)!;
+                return (
+                  <div className="space-y-6">
+                    {/* Header Info */}
+                    <div className="grid grid-cols-2 gap-3 sm:gap-6">
+                       <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg">
+                          <p className="text-[8px] sm:text-[10px] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Players</p>
+                          <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
+                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
+                            <span className="text-[8px] sm:text-xs text-slate-600 font-black">VS</span>
+                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
+                          </div>
+                          {match.team1 && <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
+                       </div>
+                       <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 text-right shadow-lg">
+                          <p className="text-[8px] sm:text-[10px] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Outcome / Date</p>
+                          <p className="text-base sm:text-2xl font-black text-emerald-400 tabular-nums">{match.score1} - {match.score2}</p>
+                          <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase mt-1.5">{new Date(match.date).toLocaleString('en-GB')}</p>
+                       </div>
+                    </div>
+
+                    {/* Frame Table */}
+                    <div className="overflow-hidden rounded-3xl border border-slate-800/50 shadow-2xl bg-black/40 backdrop-blur-3xl">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[500px]">
+                          <thead>
+                            <tr className="bg-slate-900/80 border-b-2 border-slate-800/50">
+                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[10%]">Frame</th>
+                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[25%]">Breaker</th>
+                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[25%]">Winner</th>
+                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[20%]">Score</th>
+                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 text-right w-[20%]">Timestamp</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/30">
+                            {match.frameDetails && match.frameDetails.length > 0 ? match.frameDetails.map((frame, fidx) => (
+                              <tr key={fidx} className="hover:bg-emerald-500/5 transition-colors group">
+                                <td className="px-5 py-4 text-xs sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors">#{frame.frameNumber}</td>
+                                <td className="px-5 py-4">
+                                  <span className="text-xs sm:text-sm font-bold text-slate-300 uppercase letter-spacing-tight">{frame.breakerName}</span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-tight">{frame.winnerName}</span>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 font-mono text-xs sm:text-base text-slate-500 font-bold tabular-nums">
+                                  {frame.score1}<span className="text-slate-700 mx-1">-</span>{frame.score2}
+                                </td>
+                                <td className="px-5 py-4 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-[10px] sm:text-xs font-black text-slate-400 tabular-nums">
+                                      {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                    </span>
+                                    {frame.duration !== undefined && (
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <Clock className="w-2.5 h-2.5 text-slate-700" />
+                                        <span className="text-[8px] sm:text-[9px] font-black text-slate-600 uppercase tracking-tighter">
+                                          {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )) : (
+                              <tr>
+                                <td colSpan={5} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[10px]">No detailed frame data available.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center px-4">
+                       <div className="flex items-center gap-2">
+                          <div className="w-1 h-1 rounded-full bg-slate-800" />
+                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">End of Record</p>
+                       </div>
+                       {match.shotClockSetting && (
+                         <div className="flex items-center gap-2">
+                            <Zap className="w-3 h-3 text-slate-700" />
+                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="py-20 text-center space-y-4">
+                  <div className="inline-flex p-5 rounded-full bg-slate-900 border border-slate-800 text-slate-600">
+                    <FileText className="w-10 h-10" />
+                  </div>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Match record not found.</p>
+                  <button onClick={() => setView('history')} className="text-emerald-500 font-black uppercase text-[10px] hover:text-emerald-400 transition-colors">Return to History</button>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

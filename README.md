@@ -3,17 +3,27 @@ Features:
 player names
 team names
 data export
+data import
 custom colours per player 
 persistent data storage
-data import
-shot clock
-match clock
+shot clock - movable widget
+match clock - movable widget
 device time
+Break Tracker
+Match Details Table
+Score Tracking & Totals
+Match Timings recorded
 clear data
 restore defaults
 API - send data to server
-results table and score keeping
 epic auto sizing of long names to fit space
+Retracting top bar when keyboard is active
+
+
+
+<img alt="Screenshot_1" src="public\pool-pro.gameplay.png.png">
+
+
 
 Try it here: 
 
