@@ -25,7 +25,7 @@ Retracting top bar when keyboard is active
 
 ## Screenshot of Gameplay Page
 
-<img alt="Screenshot_1" src="./public/pool-pro.gameplay.png.png">
+<img alt="Screenshot_1" src="./public/pool-pro.uk.gameplay.png">
 
 
 
