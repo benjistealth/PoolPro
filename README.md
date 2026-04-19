@@ -1,6 +1,6 @@
 ## Description
 
-Pool-Pro.uk pool scoring app for teams and singles.
+Pool-Pro.uk is a feature rich web application for pool scoring for teams and singles.
 
 
 ## Features
@@ -17,7 +17,7 @@ Pool-Pro.uk pool scoring app for teams and singles.
 - Match Details Table
 - Score Tracking & Totals
 - Match Timings recorded
-- clear data
+- clear team data
 - restore defaults
 - API - send data to server
 - epic auto sizing of long names to fit space

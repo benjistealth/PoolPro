@@ -6,6 +6,8 @@ export interface Player {
   color: string;
   bgColor: string;
   screenColor: string;
+  bgStyle?: 'default' | 'balls' | 'cloth';
+  screenStyle?: 'default' | 'balls' | 'cloth';
 }
 
 export interface MatchupSettings {

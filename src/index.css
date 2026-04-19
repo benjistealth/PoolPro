@@ -7,24 +7,24 @@
 }
 
 :root {
-  --sidebar-width: 48px;
-  --gameplay-width: calc(100vw - 96px);
-  --circle-offset: calc(100% + 2rem);
+  --sidebar-width: 12vw;
+  --gameplay-width: calc(100vw - 24vw);
+  --circle-offset: calc(100% + 4vw);
 }
 
 @media (min-width: 640px) {
   :root {
-    --sidebar-width: 80px;
-    --gameplay-width: calc(100vw - 160px);
-    --circle-offset: calc(100% + 2rem);
+    --sidebar-width: 10vw;
+    --gameplay-width: calc(100vw - 20vw);
+    --circle-offset: calc(100% + 3vw);
   }
 }
 
 @media (min-width: 1024px) {
   :root {
-    --sidebar-width: 120px;
-    --gameplay-width: min(1100px, calc(100vw - 240px));
-    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 4.5rem);
+    --sidebar-width: 8vw;
+    --gameplay-width: min(80vw, calc(100vw - 16vw));
+    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 6vw);
   }
 }
 
@@ -52,7 +52,8 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 28vh !important;
+      height: 38vh !important;
+      min-height: 28vh !important;
     }
   }
 
@@ -69,7 +70,7 @@
     }
     .gameplay-card {
       height: 65vh !important;
-      min-height: 120px !important;
+      min-height: 40vh !important;
     }
   }
 
@@ -89,7 +90,8 @@
 
 /* Custom scrollbar for a cleaner look */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 1vw;
+  min-width: 0.5vw;
 }
 
 ::-webkit-scrollbar-track {
@@ -115,36 +117,46 @@
 
   .floating-widget {
     @apply transition-all duration-300;
-    width: 192px !important;
-    height: 48px !important;
+    width: 16vw;
+    height: 6.4vh !important;
+    min-width: 12vw;
+    min-height: 4vh;
   }
 
-  .widget-text { font-size: 24px !important; }
-  .widget-label { font-size: 7px !important; }
-  .widget-icon { width: 24px !important; height: 24px !important; }
+  .widget-text { font-size: 2vh !important; }
+  .widget-label { font-size: 0.8vh !important; }
+  .widget-icon { width: 2.4vh !important; height: 2.4vh !important; }
 
-  /* Enforce Compact Top Bar for Mobile/Tablet Preview */
-  @media (max-width: 767px) {
-    nav.nav-zoom {
-      height: 44px !important;
-      min-height: 44px !important;
-      max-height: 44px !important;
-    }
-    .floating-widget {
-      width: 100px !important;
-      height: 32px !important;
-    }
-    .widget-finish-match {
-      width: 130px !important;
-    }
-    .widget-text { font-size: 13px !important; }
-    .widget-label { font-size: 5px !important; }
-    .widget-icon { width: 12px !important; height: 12px !important; }
+  /* Standardized Top Bar base styles */
+  nav.nav-zoom {
+    min-height: 48px !important;
   }
 
-  /* Tablet & Desktop Specific Finish Match */
+  .floating-widget {
+    @apply transition-all duration-300;
+    width: 24vw;
+    height: 8vh !important;
+    min-width: 80px;
+    min-height: 4vh;
+  }
+
+  .widget-text { font-size: 3vh !important; }
+  .widget-label { font-size: 1.2vh !important; }
+  .widget-icon { width: 4vh !important; height: 4vh !important; }
+
+  .widget-finish-match {
+    width: 22vw !important;
+  }
+
+  /* Tablet & Desktop Layout Refinements */
   @media (min-width: 768px) {
-    .widget-finish-match {
-      width: 224px !important;
+    .floating-widget {
+      width: 16vw;
     }
+    .widget-finish-match {
+      width: 20vw !important;
+    }
+    .widget-text { font-size: 2.4vh !important; }
+    .widget-label { font-size: 0.96vh !important; }
+    .widget-icon { width: 3.2vh !important; height: 3.2vh !important; }
   }
