@@ -173,7 +173,7 @@ export default function App() {
       style.paddingBottom = vPad;
       style.paddingLeft = hPad;
       style.paddingRight = hPad;
-      style.lineHeight = '1';
+      style.lineHeight = '2.5';
     }
     return style;
   }, [deviceInfo]);
@@ -189,7 +189,7 @@ export default function App() {
       style.paddingTop = vPad;
       style.paddingBottom = vPad;
       style.paddingLeft = deviceInfo.isPhone ? '2vw' : '3vw';
-      style.lineHeight = '1';
+      style.lineHeight = '2.5';
     }
     return style;
   }, [deviceInfo]);
@@ -2207,7 +2207,7 @@ export default function App() {
                     style={{ 
                       borderColor: player2.color,
                       color: player2.color,
-                      backgroundColor: player2.color + '11'
+                      backgroundColor: player2.color + '22'
                     }}
                   >
                     <Download className="w-4 h-4" style={{ color: player2.color }} />
@@ -3331,7 +3331,7 @@ export default function App() {
                         </div>
                         <div className="flex-1">
                           <div className={`font-black uppercase tracking-tight ${exportMethod === method.id ? 'text-emerald-500' : 'text-slate-200'}`}>{method.label}</div>
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{method.desc}</div>
+                          <div className="text-[11px] font-bold text-slate-100 uppercase tracking-widest">{method.desc}</div>
                         </div>
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${exportMethod === method.id ? 'border-emerald-500' : 'border-slate-700'}`}>
                           {exportMethod === method.id && <div className="w-3 h-3 bg-emerald-500 rounded-full" />}
@@ -3469,7 +3469,7 @@ export default function App() {
               >
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <div className="p-3 sm:p-4 rounded-full" style={{ backgroundColor: `${player1.color}11` }}>
+                    <div className="p-3 sm:p-4 rounded-full" style={{ backgroundColor: `${player1.color}22` }}>
                       <Trophy className="w-8 h-8 sm:w-12 sm:h-12" style={{ color: player1.color }} />
                     </div>
                   </div>

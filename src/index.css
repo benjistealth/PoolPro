@@ -20,7 +20,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1300px) {
   :root {
     --sidebar-width: 10.4vw;
     --gameplay-width: min(84vw, calc(100vw - 20.8vw));
@@ -58,7 +58,7 @@
   }
 
   /* Mobile Landscape */
-  @media (max-width: 950px) and (orientation: landscape) {
+  @media (max-width: 1300px) and (orientation: landscape) {
     .responsive-zoom {
       @apply origin-top;
     }
@@ -75,7 +75,7 @@
   }
 
   /* Tablet Landscape */
-  @media (min-width: 951px) and (max-width: 1180px) and (orientation: landscape) {
+  @media (min-width: 951px) and (max-width: 1380px) and (orientation: landscape) {
     .responsive-zoom {
       @apply origin-top;
     }
