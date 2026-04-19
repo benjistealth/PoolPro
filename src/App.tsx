@@ -81,17 +81,18 @@ export default function App() {
     // We prioritize height for scaling tiers in landscape-intended apps.
     // Screens below 768px wide OR below 500px tall are treated as phone for compact top bars.
     const isPhone = windowSize.width < 768 || windowSize.height < 500;
-    const isTablet = !isPhone && windowSize.width < 1400;
+    const isTablet = !isPhone && windowSize.width < 1024;
     const isDesktop = !isPhone && !isTablet;
     const isLandscape = windowSize.width > windowSize.height;
     const isShort = windowSize.height < 500;
+    const scaleFactor = isDesktop ? 1.3 : 1.0;
 
-    return { isPhone, isTablet, isDesktop, isLandscape, isShort };
+    return { isPhone, isTablet, isDesktop, isLandscape, isShort, scaleFactor };
   }, [windowSize.width, windowSize.height]); 
 
   // Calculate shared font size for team names to occupy 95% of vertical space
   const sharedTeamNameFontSize = useMemo(() => {
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
+    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * (0.1 * deviceInfo.scaleFactor);
     const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : topBarHeightVal;
     const availableHeight = windowSize.height - topBarHeight;
     const targetHeight = availableHeight * 0.9;
@@ -113,12 +114,12 @@ export default function App() {
   }, [windowSize.height, windowSize.width, team1Name, team2Name, deviceInfo, isNavVisible]);
 
   const sharedPlayerNameFontSize = useMemo(() => {
-    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.08) : (windowSize.width * 0.08));
-    const mainPadding = deviceInfo.isPhone ? (windowSize.width * 0.04) : (windowSize.width < 1024 ? (windowSize.width * 0.05) : (windowSize.width * 0.04));
+    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.08 * deviceInfo.scaleFactor) : (windowSize.width * 0.08 * deviceInfo.scaleFactor));
+    const mainPadding = deviceInfo.isPhone ? (windowSize.width * 0.04) : (windowSize.width < 1024 ? (windowSize.width * 0.05 * deviceInfo.scaleFactor) : (windowSize.width * 0.04 * deviceInfo.scaleFactor));
     let availableWidth = windowSize.width - (sidebarWidth * 2) - mainPadding;
     
     if (windowSize.width >= 1024) {
-      availableWidth = Math.min(windowSize.width * 0.8, availableWidth);
+      availableWidth = Math.min(windowSize.width * 0.8 * deviceInfo.scaleFactor, availableWidth);
     }
 
     let cardWidth;
@@ -142,10 +143,56 @@ export default function App() {
     const fs2 = getFontSize(player2.name);
     const shared = Math.min(fs1, fs2);
 
-    const maxFs = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.06) : (windowSize.width * 0.06));
+    const maxFs = deviceInfo.isPhone ? (windowSize.width * 0.08) : (windowSize.width < 1024 ? (windowSize.width * 0.04) : (windowSize.width * 0.03));
     
     return `${(Math.min(shared, maxFs) / windowSize.width) * 100}vw`;
   }, [windowSize.width, player1.name, player2.name, deviceInfo]);
+
+  const labelFontSize = useMemo(() => {
+    // We want 1pt bigger than Teamname field.
+    // teamEntryStyle baseFs: Phone: 4.8, Tablet: 3.2, Desktop: 1.8
+    // factor is 1.3 for Desktop, 1.0 otherwise.
+    const factor = deviceInfo.scaleFactor;
+    // 1pt approx 0.15vh as a safety buffer.
+    const offset = 0.2; 
+    if (deviceInfo.isPhone) return `${(4.8 + offset) * factor}vh`;
+    if (deviceInfo.isTablet) return `${(3.2 + offset) * factor}vh`;
+    return `${(1.8 + offset) * factor}vh`;
+  }, [deviceInfo]);
+
+  const teamEntryStyle = useMemo(() => {
+    const isMobile = deviceInfo.isPhone || deviceInfo.isTablet;
+    const baseFs = deviceInfo.isPhone ? 4.8 : (deviceInfo.isTablet ? 3.2 : 1.8);
+    const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
+    const style: React.CSSProperties = { fontSize: fs };
+    
+    if (isMobile) {
+      const vPad = deviceInfo.isPhone ? '0.4vh' : '0.8vh';
+      const hPad = deviceInfo.isPhone ? '1.5vw' : '2.5vw';
+      style.paddingTop = vPad;
+      style.paddingBottom = vPad;
+      style.paddingLeft = hPad;
+      style.paddingRight = hPad;
+      style.lineHeight = '1';
+    }
+    return style;
+  }, [deviceInfo]);
+
+  const playerEntryStyle = useMemo(() => {
+    const isMobile = deviceInfo.isPhone || deviceInfo.isTablet;
+    const baseFs = deviceInfo.isPhone ? 4.8 : (deviceInfo.isTablet ? 3.2 : 1.8);
+    const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
+    const style: React.CSSProperties = { fontSize: fs };
+    
+    if (isMobile) {
+      const vPad = deviceInfo.isPhone ? '0.4vh' : '0.8vh';
+      style.paddingTop = vPad;
+      style.paddingBottom = vPad;
+      style.paddingLeft = deviceInfo.isPhone ? '2vw' : '3vw';
+      style.lineHeight = '1';
+    }
+    return style;
+  }, [deviceInfo]);
 
   // Keyboard detection for mobile
   useEffect(() => {
@@ -1476,19 +1523,23 @@ export default function App() {
     const getWidgetHalfW = (type: 'clock' | 'finish') => {
       // Use the stable deviceInfo detection consistent with CSS
       if (type === 'finish') {
-        // Mobile: 22vw (!important), Tablet/Desktop: 20vw
-        return deviceInfo.isPhone ? (windowSize.width * 0.11) : (windowSize.width * 0.1);
+        // Mobile: 22vw (!important), Tablet: 20vw, Desktop: 26vw
+        if (deviceInfo.isPhone) return windowSize.width * 0.11;
+        if (deviceInfo.isTablet) return windowSize.width * 0.1;
+        return windowSize.width * 0.13;
       }
-      // Clocks - Mobile: 24vw, Tablet/Desktop: 16vw
-      return deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width * 0.08);
+      // Clocks - Mobile: 24vw, Tablet: 16vw, Desktop: 20.8vw
+      if (deviceInfo.isPhone) return windowSize.width * 0.12;
+      if (deviceInfo.isTablet) return windowSize.width * 0.08;
+      return windowSize.width * 0.104;
     };
 
-    const halfH = deviceInfo.isPhone ? (windowSize.height * 0.025) : (windowSize.height * 0.04);
-    const gap = windowSize.height * 0.05;
+    const halfH = deviceInfo.isPhone ? (windowSize.height * 0.025) : (windowSize.height * (0.04 * deviceInfo.scaleFactor));
+    const gap = windowSize.height * (0.05 * deviceInfo.scaleFactor);
 
     // Default positional offsets to ensure centralized alignment with score digits
-    const vOffset = windowSize.height * 0.04; // Back to 4vh raise
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
+    const vOffset = windowSize.height * (0.04 * deviceInfo.scaleFactor); // Back to 4vh raise
+    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * (0.1 * deviceInfo.scaleFactor);
     const topBarOffset = (deviceInfo.isPhone && !isNavVisible) ? -topBarHeightVal : topBarHeightVal;
     const centerY = (windowSize.height + topBarOffset) / 2;
     const centerX = windowSize.width / 2;
@@ -1569,7 +1620,7 @@ export default function App() {
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-          height: deviceInfo.isPhone ? '16vh' : '10vh'
+          height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh`
         }}
       >
         <div className="flex items-center gap-[1vw] shrink-0 transform-none">
@@ -1577,18 +1628,42 @@ export default function App() {
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: deviceInfo.isPhone ? '12vh' : '8vh',
-              height: deviceInfo.isPhone ? '12vh' : '8vh'
+              width: deviceInfo.isPhone ? '12vh' : `${8 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '12vh' : `${8 * deviceInfo.scaleFactor}vh`
             }}
           />
           <h1 
-            className={`font-black tracking-tight bg-clip-text text-transparent transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''}`}
+            className={`transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''} flex items-center`}
             style={{ 
-              backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
-              fontSize: deviceInfo.isPhone ? '11vh' : '9vh'
+              height: deviceInfo.isPhone ? '11vh' : `${9 * deviceInfo.scaleFactor}vh`,
             }}
           >
-            Pool-Pro.uk
+            <svg 
+              height="100%" 
+              viewBox="0 0 210 40" 
+              preserveAspectRatio="xMinYMid meet"
+              className="w-auto overflow-visible"
+            >
+              <defs>
+                <linearGradient id="logo-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={player1.color} />
+                  <stop offset="100%" stopColor={player2.color} />
+                </linearGradient>
+              </defs>
+              <text 
+                x="0" 
+                y="32" 
+                fill="url(#logo-grad-svg)" 
+                style={{ 
+                  fontFamily: 'Inter, sans-serif', 
+                  fontWeight: 900, 
+                  fontSize: '32px', 
+                  letterSpacing: '-0.03em' 
+                }}
+              >
+                P<tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan><tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan>l<tspan textLength="6" lengthAdjust="spacingAndGlyphs" dx="1">-</tspan><tspan dx="1">P</tspan>r<tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan>.uk
+              </text>
+            </svg>
           </h1>
         </div>
 
@@ -1596,13 +1671,13 @@ export default function App() {
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
           {showDeviceTime && (
             <div 
-              className="flex items-center justify-center px-4 rounded-lg bg-black/40 border-2 border-white/10 backdrop-blur-md pointer-events-auto shadow-xl"
-              style={{ height: '9vh' }}
+              className="flex items-center justify-center px-4 rounded-lg bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
+              style={{ height: `${9 * deviceInfo.scaleFactor}vh` }}
             >
               <span 
                 className="font-mono font-black text-white tracking-wider tabular-nums leading-none"
                 style={{
-                  fontSize: '6vh'
+                  fontSize: `${6 * deviceInfo.scaleFactor}vh`
                 }}
               >
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -1616,8 +1691,8 @@ export default function App() {
             onClick={toggleFullscreen}
             className="rounded-xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 flex"
             style={{
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh'
+              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
             }}
             title="Toggle Fullscreen"
           >
@@ -1625,15 +1700,15 @@ export default function App() {
               <Minimize 
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
+                  height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
                 }} 
               /> : 
               <Maximize 
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
+                  height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
                 }} 
               />
             }
@@ -1643,15 +1718,15 @@ export default function App() {
             className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'scoreboard' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh'
+              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
             }}
           >
             <Trophy 
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
+                height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
               }} 
             />
           </button>
@@ -1663,8 +1738,8 @@ export default function App() {
             className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'teams' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh'
+              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
             }}
           >
             <Users 
@@ -1683,15 +1758,15 @@ export default function App() {
             className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'settings' ? `${player2.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh'
+              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
             }}
           >
             <Settings 
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
+                height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
               }} 
             />
           </button>
@@ -1712,7 +1787,7 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div className={deviceInfo.isPhone ? 'h-[16vh]' : 'h-[10vh]'} />
+              <div style={{ height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh` }} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -1735,7 +1810,7 @@ export default function App() {
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div className={deviceInfo.isPhone ? 'h-[16vh]' : 'h-[10vh]'} />
+              <div style={{ height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh` }} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
@@ -1928,9 +2003,9 @@ export default function App() {
         initial={false}
         animate={{ 
           paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : '10vh'} + ${deviceInfo.isPhone ? '16vh' : '10vh'})`
+            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + ${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)})`
             : (view === 'scoreboard' 
-                ? (deviceInfo.isPhone ? '16vh' : '10vh') 
+                ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)) 
                 : 0),
           y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
           paddingBottom: 0 
@@ -1938,7 +2013,7 @@ export default function App() {
         transition={{ duration: 0.4, ease: "easeInOut" }}
         className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom left-0 right-0`}
         style={{ 
-          maxWidth: view === 'scoreboard' ? (deviceInfo.isPhone ? '92vw' : 'var(--gameplay-width)') : 'min(95vw, 985px)',
+          maxWidth: view === 'scoreboard' ? (deviceInfo.isPhone ? '92vw' : 'var(--gameplay-width)') : (deviceInfo.isDesktop ? `min(95vw, ${985 * deviceInfo.scaleFactor}px)` : 'min(95vw, 985px)'),
           margin: '0 auto'
         }}
       >
@@ -1974,13 +2049,13 @@ export default function App() {
                               resetTimer();
                             }
                           }}
-                          className={`relative transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card sm:min-h-0 sm:max-h-none ${
+                          className={`relative transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card ${
                             p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
                             ? 'rounded-full aspect-square border-0' 
                             : idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl border-2' : 'rounded-3xl border-2'
                           }`}
                           style={{ 
-                            padding: deviceInfo.isPhone ? '2vh' : (deviceInfo.isTablet ? '1.5rem' : '2rem'),
+                            padding: deviceInfo.isPhone ? '1vh 2vh' : (deviceInfo.isTablet ? '1.5rem' : '2rem'),
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
                             backgroundImage: p.bgStyle === 'dial' ? 'linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.2) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.2) 75%)' : undefined,
@@ -1989,7 +2064,8 @@ export default function App() {
                               ? 'inset -20px -20px 60px rgba(0,0,0,0.8), inset 20px 20px 60px rgba(255,255,255,0.4), 0 20px 40px rgba(0,0,0,0.5)'
                               : `0 0 40px -15px ${p.color}66`,
                             width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'calc(100% - 2rem)' : undefined,
-                            margin: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? '0 auto' : undefined
+                            margin: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? '0 auto' : undefined,
+                            height: deviceInfo.isLandscape ? '70vh' : undefined
                           }}
                         >
                           {/* Pool Ball Visual Elements (Stripes & Reflections) - Only if Ball mode */}
@@ -2014,40 +2090,46 @@ export default function App() {
                              </>
                           )}
 
-                             {/* Mobile Score Buttons - Absolute Positioned */}
+                             {/* Global Unified Score Buttons - Circular and Anchored to Corners */}
+                             
                              <button
                                onClick={(e) => {
                                  e.stopPropagation();
                                  incrementScore(p.id);
                                }}
-                               className={`sm:hidden absolute top-[2vw] ${idx === 0 ? 'right-[2vw]' : 'left-[2vw]'} ${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[12vw] h-[12vw] rounded-full' : 'w-[8vw] h-[8vw] rounded-xl'} text-slate-950 flex items-center justify-center transition-all active:scale-95 shadow-lg z-10`}
+                               className="absolute bottom-[1vh] right-[1vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:scale-95 shadow-lg z-20"
                                style={{ 
-                                 backgroundColor: p.color,
-                                 boxShadow: `0 4px 10px -2px ${p.color}66`
+                                 width: '15vh',
+                                 height: '15vh',
+                                 backgroundColor: p.color
                                }}
                              >
-                               <Plus className="w-4 h-4 font-bold" />
+                               <Plus className="w-5 h-5 font-bold" />
                              </button>
- 
+
                              <button
                                onClick={(e) => {
                                  e.stopPropagation();
                                  decrementScore(p.id);
                                }}
-                               className={`sm:hidden absolute bottom-[2vw] ${idx === 0 ? 'right-[2vw]' : 'left-[2vw]'} ${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[12vw] h-[12vw] rounded-full' : 'w-[8vw] h-[8vw] rounded-xl'} bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center transition-all active:scale-95 z-10 border border-slate-700`}
+                               className="absolute bottom-[2vh] left-[2vh] rounded-full bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center transition-all active:scale-95 z-20 border border-slate-700"
+                               style={{ 
+                                 width: '12vh',
+                                 height: '12vh'
+                               }}
                              >
-                               <Minus className="w-3 h-3" />
+                               <Minus className="w-4 h-4" />
                              </button>
- 
+                              
 
-                           <div className="flex flex-col items-center gap-0 sm:gap-6">
+                           <div className="flex-1 flex flex-col items-center justify-evenly w-full m-0 p-0">
                           {isEditingNames ? (
                             <input
                               type="text"
                               value={p.name}
                               placeholder={`PLAYER ${idx + 1} NAME`}
                               onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
-                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center font-bold focus:outline-none focus:border-emerald-500 uppercase"
+                              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-1 text-center font-bold focus:outline-none focus:border-emerald-500 uppercase"
                               style={{ 
                                 color: p.color,
                                 fontSize: sharedPlayerNameFontSize
@@ -2056,7 +2138,7 @@ export default function App() {
                           ) : (
                             p.name && (
                               <h2 
-                                className="font-bold uppercase w-full text-center whitespace-nowrap leading-none sm:leading-normal" 
+                                className="font-bold uppercase w-full text-center whitespace-nowrap leading-none m-0 p-0" 
                                 style={{ 
                                   color: p.color,
                                   fontSize: sharedPlayerNameFontSize
@@ -2067,36 +2149,15 @@ export default function App() {
                             )
                           )}
 
-                           <div className="relative group mt-[-0.5vh] sm:mt-0">
-                            <span className="text-[22vw] sm:text-[15vh] lg:text-[20vh] font-black tracking-tighter tabular-nums leading-none" style={{ color: p.color }}>
-                              {p.score}
-                            </span>
-                          </div>
-
-                          <div 
-                            className={`hidden sm:flex items-center w-full ${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'justify-center max-w-none' : 'gap-[1vw] sm:gap-[1.5vw]'}`}
-                            style={p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? { gap: '5vw' } : {}}
+                          <span 
+                            className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 pb-15" 
+                            style={{ 
+                              color: p.color,
+                              fontSize: deviceInfo.isPhone ? '22vw' : (deviceInfo.isTablet ? '15vh' : `${20 * deviceInfo.scaleFactor}vh`)
+                            }}
                           >
-                            <button
-                              onClick={() => decrementScore(p.id)}
-                              className={`${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[6vh] h-[6vh] sm:w-[8vh] sm:h-[8vh]' : 'flex-1 h-[4vh] sm:h-[6vh]'} bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center transition-all active:scale-95`}
-                            >
-                              <Minus className={`${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[3vh] h-[3vh] sm:w-[4vh] sm:h-[4vh]' : 'w-[1.5vh] h-[1.5vh] sm:w-[2vh] sm:h-[2vh]'}`} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                incrementScore(p.id);
-                              }}
-                              className={`${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[6vh] h-[6vh] sm:w-[8vh] sm:h-[8vh]' : 'flex-1 h-[4vh] sm:h-[6vh]'} text-slate-950 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-lg`}
-                              style={{ 
-                                backgroundColor: p.color,
-                                boxShadow: `0 1vh 1.5vh -0.3vh ${p.color}33`
-                              }}
-                            >
-                              <Plus className={`${p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'w-[3vh] h-[3vh] sm:w-[4vh] sm:h-[4vh]' : 'w-[1.5vh] h-[1.5vh] sm:w-[2vh] sm:h-[2vh]'} font-bold`} />
-                            </button>
-                          </div>
+                            {p.score}
+                          </span>
                         </div>
                       </motion.div>
                       {/* White Ball Break Indicator - Outside clipped container to maintain visibility in ball mode */}
@@ -2136,8 +2197,8 @@ export default function App() {
                 }}
               >
                 <div className="space-y-1">
-                  <h2 className="text-4xl font-black uppercase tracking-tight text-white">Team Setup</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Configure your session players</p>
+                  <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '5vh' : (deviceInfo.isTablet ? '3.2vh' : `${3 * deviceInfo.scaleFactor}vw`) }}>Team Setup</h2>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '0.9vh' : `${0.7 * deviceInfo.scaleFactor}vw`) }}>Configure your session players</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button 
@@ -2184,20 +2245,20 @@ export default function App() {
                 <div className="space-y-4 sm:space-y-8">
                   <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 1 Name</label>
+                      <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Team 1 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
                     <input 
                       value={team1Name} 
                       onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl px-3 sm:px-6 py-2 sm:py-4 text-sm sm:text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ borderColor: player1.color, fontSize: '1.8vh' }}
+                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ ...teamEntryStyle, borderColor: player1.color }}
                       placeholder="TEAM 1"
                     />
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Players</label>
+                    <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Players</label>
                     <div className="space-y-2 sm:space-y-3">
                       {team1Players.map((player, idx) => (
                         <div key={idx} className="flex gap-2 sm:gap-3 group">
@@ -2217,8 +2278,8 @@ export default function App() {
                                 updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                               }}
                               onFocus={(e) => e.target.select()}
-                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pl-2 sm:pl-4 pr-10 sm:pr-14 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                              style={{ borderColor: player1.color + '22', fontSize: '1.8vh' }}
+                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pr-10 sm:pr-14 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                              style={{ ...playerEntryStyle, borderColor: player1.color + '22' }}
                               placeholder={`P${idx + 1}`}
                             />
                             <button 
@@ -2250,7 +2311,7 @@ export default function App() {
                           e.currentTarget.style.borderColor = player1.color + '33';
                         }}
                       >
-                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <Plus className="w-9 h-9" />
                         Add
                       </button>
                     </div>
@@ -2261,20 +2322,20 @@ export default function App() {
                 <div className="space-y-4 sm:space-y-8">
                   <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Team 2 Name</label>
+                      <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Team 2 Name</label>
                       <Users className="w-4 h-4 text-slate-600" />
                     </div>
                     <input 
                       value={team2Name} 
                       onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
                       onFocus={(e) => e.target.select()}
-                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl px-3 sm:px-6 py-2 sm:py-4 text-sm sm:text-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ borderColor: player2.color, fontSize: '1.8vh' }}
+                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                      style={{ ...teamEntryStyle, borderColor: player2.color }}
                       placeholder="TEAM 2"
                     />
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Players</label>
+                    <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Players</label>
                     <div className="space-y-2 sm:space-y-3">
                       {team2Players.map((player, idx) => (
                         <div key={idx} className="flex gap-2 sm:gap-3 group">
@@ -2294,8 +2355,8 @@ export default function App() {
                                 updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                               }}
                               onFocus={(e) => e.target.select()}
-                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pl-2 sm:pl-4 pr-10 sm:pr-14 py-2 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                              style={{ borderColor: player2.color + '22', fontSize: '1.8vh' }}
+                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pr-10 sm:pr-14 text-slate-100 focus:outline-none uppercase font-bold transition-all"
+                              style={{ ...playerEntryStyle, borderColor: player2.color + '22' }}
                               placeholder={`P${idx + 1}`}
                             />
                             <button 
@@ -2338,7 +2399,12 @@ export default function App() {
               {/* Match Results Table */}
               <div id="matchups-table" className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black uppercase tracking-tight text-white whitespace-pre-wrap">Match  Results  Table</h3>
+                  <h3 
+                    className="font-black uppercase tracking-tight text-white whitespace-pre-wrap"
+                    style={{ fontSize: deviceInfo.isPhone ? '3.5vh' : (deviceInfo.isTablet ? '2.4vh' : `${2.2 * deviceInfo.scaleFactor}vw`) }}
+                  >
+                    Match Results Table
+                  </h3>
                 </div>
                 <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
                   <div className="overflow-x-auto scrollbar-hide">
@@ -2541,16 +2607,20 @@ export default function App() {
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
-                <h2 className="text-4xl font-black uppercase tracking-tight text-white">Settings</h2>
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Customize your scoring experience</p>
+                <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '5vh' : (deviceInfo.isTablet ? '3.2vh' : `${3 * deviceInfo.scaleFactor}vw`) }}>Settings</h2>
+                <p className="text-slate-500 font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '0.9vh' : `${0.7 * deviceInfo.scaleFactor}vw`) }}>Customize your scoring experience</p>
               </div>
 
               <div className="space-y-12">
                 {/* 1. Colour Preferences */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: player1.color,
+                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
                     Colour Preferences
                   </h3>
@@ -2566,10 +2636,15 @@ export default function App() {
                           '--player-color': p.color 
                         } as React.CSSProperties}
                       >
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Player {idx + 1} Name</label>
-                          <Palette className="w-4 h-4" style={{ color: p.color }} />
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <label 
+                          className="font-black uppercase tracking-widest text-slate-500" 
+                          style={{ fontSize: labelFontSize }}
+                        >
+                          Player {idx + 1} Name
+                        </label>
+                        <Palette className="w-4 h-4" style={{ color: p.color }} />
+                      </div>
                         <input
                           type="text"
                           value={p.name}
@@ -2645,8 +2720,12 @@ export default function App() {
                 {/* 2. Break Tracker */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: player1.color,
+                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
                     Break Tracker
                   </h3>
@@ -2673,8 +2752,12 @@ export default function App() {
                 {/* 3. Device Time */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: player1.color,
+                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
                     Device Time
                   </h3>
@@ -2728,7 +2811,7 @@ export default function App() {
                     {isShotClockEnabled && (
                       <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Timer Duration</label>
+                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: labelFontSize }}>Timer Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
                         </div>
                         <input 
@@ -2758,8 +2841,12 @@ export default function App() {
                 {/* 5. Match Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: player1.color,
+                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
                     Match Clock
                   </h3>
@@ -2787,7 +2874,7 @@ export default function App() {
                     {isMatchClockEnabled && (
                       <div className="space-y-6 pt-8 border-t border-slate-800">
                         <div className="flex items-center justify-between">
-                          <label className="text-sm font-black text-slate-400 uppercase tracking-widest">Match Duration</label>
+                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: labelFontSize }}>Match Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
                         </div>
                         <input 
@@ -2824,10 +2911,14 @@ export default function App() {
                 {/* 6. Restore Defaults */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player1.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: player1.color,
+                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
-                    System Settings
+                    Restore Defaults
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div 

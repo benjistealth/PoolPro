@@ -22,9 +22,9 @@
 
 @media (min-width: 1024px) {
   :root {
-    --sidebar-width: 8vw;
-    --gameplay-width: min(80vw, calc(100vw - 16vw));
-    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 6vw);
+    --sidebar-width: 10.4vw;
+    --gameplay-width: min(84vw, calc(100vw - 20.8vw));
+    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 7.8vw);
   }
 }
 
@@ -52,8 +52,8 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 38vh !important;
-      min-height: 28vh !important;
+      height: 40vh !important;
+      min-height: 30vh !important;
     }
   }
 
@@ -69,8 +69,8 @@
       @apply origin-bottom;
     }
     .gameplay-card {
-      height: 65vh !important;
-      min-height: 40vh !important;
+      height: 80vh !important;
+      min-height: 50vh !important;
     }
   }
 
@@ -152,6 +152,7 @@
   @media (min-width: 768px) {
     .floating-widget {
       width: 16vw;
+      height: 8vh !important;
     }
     .widget-finish-match {
       width: 20vw !important;
@@ -159,4 +160,17 @@
     .widget-text { font-size: 2.4vh !important; }
     .widget-label { font-size: 0.96vh !important; }
     .widget-icon { width: 3.2vh !important; height: 3.2vh !important; }
+  }
+
+  @media (min-width: 1024px) {
+    .floating-widget {
+      width: 20.8vw;
+      height: 10.4vh !important;
+    }
+    .widget-finish-match {
+      width: 26vw !important;
+    }
+    .widget-text { font-size: 3.12vh !important; }
+    .widget-label { font-size: 1.25vh !important; }
+    .widget-icon { width: 4.16vh !important; height: 4.16vh !important; }
   }
