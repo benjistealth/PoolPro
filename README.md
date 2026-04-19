@@ -1,5 +1,9 @@
+## Description
+
 Pool-Pro.uk pool scoring app for teams and singles.
-Features:
+
+
+## Features
 player names
 team names
 data export
@@ -19,9 +23,9 @@ API - send data to server
 epic auto sizing of long names to fit space
 Retracting top bar when keyboard is active
 
+## Screenshot of Gameplay Page
 
-
-<img alt="Screenshot_1" src="public\pool-pro.gameplay.png.png">
+<img alt="Screenshot_1" src="./public/pool-pro.gameplay.png.png">
 
 
 
