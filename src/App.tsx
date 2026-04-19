@@ -2013,7 +2013,7 @@ export default function App() {
         transition={{ duration: 0.4, ease: "easeInOut" }}
         className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom left-0 right-0`}
         style={{ 
-          maxWidth: view === 'scoreboard' ? (deviceInfo.isPhone ? '92vw' : 'var(--gameplay-width)') : (deviceInfo.isDesktop ? `min(95vw, ${985 * deviceInfo.scaleFactor}px)` : 'min(95vw, 985px)'),
+          maxWidth: view === 'scoreboard' ? (deviceInfo.isPhone ? '90vw' : 'var(--gameplay-width)') : (deviceInfo.isDesktop ? `min(95vw, ${985 * deviceInfo.scaleFactor}px)` : 'min(95vw, 985px)'),
           margin: '0 auto'
         }}
       >
