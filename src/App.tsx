@@ -55,6 +55,7 @@ export default function App() {
   const [currentMatchFrameDetails, setCurrentMatchFrameDetails] = useState<FrameDetail[]>([]);
   const [viewingMatchDetailsId, setViewingMatchDetailsId] = useState<string | null>(null);
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
   const frameStartTimeRef = useRef<number>(Date.now());
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -80,7 +81,7 @@ export default function App() {
     
     // We prioritize height for scaling tiers in landscape-intended apps.
     // Screens below 768px wide OR below 500px tall are treated as phone for compact top bars.
-    const isPhone = windowSize.width < 1200 || windowSize.height < 500;
+    const isPhone = windowSize.width < 768 || windowSize.height < 500;
     const isTablet = !isPhone && windowSize.width < 1024;
     const isDesktop = !isPhone && !isTablet;
     const isLandscape = windowSize.width > windowSize.height;
@@ -150,48 +151,60 @@ export default function App() {
 
   const labelFontSize = useMemo(() => {
     // We want 1pt bigger than Teamname field.
-    // teamEntryStyle baseFs: Phone: 4.8, Tablet: 3.2, Desktop: 1.8
-    // factor is 1.3 for Desktop, 1.0 otherwise.
+    // teamEntryStyle baseFs: Phone: 6, Tablet: 4, Desktop: 3
     const factor = deviceInfo.scaleFactor;
-    // 1pt approx 0.15vh as a safety buffer.
-    const offset = 0.2; 
-    if (deviceInfo.isPhone) return `${(4.8 + offset) * factor}vh`;
-    if (deviceInfo.isTablet) return `${(3.2 + offset) * factor}vh`;
-    return `${(1.8 + offset) * factor}vh`;
+    const offset = 0.5; 
+    if (deviceInfo.isPhone) return `${(6 + offset) * factor}vh`;
+    if (deviceInfo.isTablet) return `${(4 + offset) * factor}vh`;
+    return `${(3 + offset) * factor}vh`;
+  }, [deviceInfo]);
+
+  const settingsLabelFontSize = useMemo(() => {
+    const factor = deviceInfo.scaleFactor;
+    const offset = 0.5; 
+    const baseScale = 1.4;
+    if (deviceInfo.isPhone) return `${(6 + offset) * factor * baseScale}vh`;
+    if (deviceInfo.isTablet) return `${(4 + offset) * factor * baseScale}vh`;
+    return `${(3 + offset) * factor * baseScale}vh`;
   }, [deviceInfo]);
 
   const teamEntryStyle = useMemo(() => {
-    const isMobile = deviceInfo.isPhone || deviceInfo.isTablet;
-    const baseFs = deviceInfo.isPhone ? 4.8 : (deviceInfo.isTablet ? 3.2 : 1.8);
+    const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
     const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
     const style: React.CSSProperties = { fontSize: fs };
     
-    if (isMobile) {
-      const vPad = deviceInfo.isPhone ? '0.4vh' : '0.8vh';
-      const hPad = deviceInfo.isPhone ? '1.5vw' : '2.5vw';
-      style.paddingTop = vPad;
-      style.paddingBottom = vPad;
-      style.paddingLeft = hPad;
-      style.paddingRight = hPad;
-      style.lineHeight = '2.5';
-    }
+    // Generous padding for all devices
+    const vPad = deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '2vh' : '2.5vh');
+    const hPad = deviceInfo.isPhone ? '4vw' : (deviceInfo.isTablet ? '3vw' : '2vw');
+    style.paddingTop = vPad;
+    style.paddingBottom = vPad;
+    style.paddingLeft = hPad;
+    style.paddingRight = hPad;
+    style.lineHeight = '1.2';
+    
     return style;
   }, [deviceInfo]);
 
   const playerEntryStyle = useMemo(() => {
-    const isMobile = deviceInfo.isPhone || deviceInfo.isTablet;
-    const baseFs = deviceInfo.isPhone ? 4.8 : (deviceInfo.isTablet ? 3.2 : 1.8);
+    const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
     const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
     const style: React.CSSProperties = { fontSize: fs };
     
-    if (isMobile) {
-      const vPad = deviceInfo.isPhone ? '0.4vh' : '0.8vh';
-      style.paddingTop = vPad;
-      style.paddingBottom = vPad;
-      style.paddingLeft = deviceInfo.isPhone ? '2vw' : '3vw';
-      style.lineHeight = '2.5';
-    }
+    // Reduced padding for cleaner look as requested
+    const vPad = deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '2vh' : '2.5vh');
+    style.paddingTop = vPad;
+    style.paddingBottom = vPad;
+    style.paddingLeft = deviceInfo.isPhone ? '1vw' : '0.75vw';
+    style.lineHeight = '1.2';
+    
     return style;
+  }, [deviceInfo]);
+
+  const entryTotalHeight = useMemo(() => {
+    const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
+    const vPadValue = deviceInfo.isPhone ? 1.5 : (deviceInfo.isTablet ? 2 : 2.5);
+    const scale = deviceInfo.scaleFactor;
+    return `${(baseFs * scale * 1.2) + (vPadValue * 2)}vh`;
   }, [deviceInfo]);
 
   // Keyboard detection for mobile
@@ -250,9 +263,10 @@ export default function App() {
         
         const table = document.getElementById('matchups-table');
         if (table) {
-          const headerHeight = deviceInfo.isPhone ? 44 : (deviceInfo.isTablet ? 80 : 112);
+          const topBar = document.querySelector('nav');
+          const headerHeight = topBar ? topBar.getBoundingClientRect().height : (deviceInfo.isPhone ? window.innerHeight * 0.16 : window.innerHeight * 0.1);
           const elementPosition = table.getBoundingClientRect().top + window.pageYOffset;
-          const offsetPosition = elementPosition - headerHeight - 24; // 24px extra buffer for breathing room
+          const offsetPosition = elementPosition - headerHeight - (window.innerHeight * 0.03); // 3vh extra buffer for breathing room
 
           window.scrollTo({
             top: offsetPosition,
@@ -596,6 +610,17 @@ export default function App() {
     }
   }, [player2.name]);
 
+  // Ensure player names are fresh whenever entering gameplay view
+  useEffect(() => {
+    if (view === 'gameplay' && selectedMatchIndex !== null) {
+      const p1 = team1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      const p2 = team2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      
+      setPlayer1(prev => ({ ...prev, name: p1 }));
+      setPlayer2(prev => ({ ...prev, name: p2 }));
+    }
+  }, [view, selectedMatchIndex, team1Players, team2Players]);
+
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -882,6 +907,30 @@ export default function App() {
     setTeam1Players(t1Players);
     setTeam2Name(t2Name);
     setTeam2Players(t2Players);
+
+    // Sync active player names if a match is selected
+    if (selectedMatchIndex !== null) {
+      const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      setPlayer1(prev => ({ ...prev, name: p1 }));
+      setPlayer2(prev => ({ ...prev, name: p2 }));
+    }
+  };
+
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>, id: string) => {
+    setFocusedField(id);
+    const target = e.target;
+    const val = target.value;
+    
+    // Set cursor to end with a micro-delay to ensure browser focus logic completes
+    requestAnimationFrame(() => {
+      target.setSelectionRange(val.length, val.length);
+    });
+    
+    // Scroll into view to ensure it's above keyboard
+    setTimeout(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
   };
 
   const parseTime = (timeStr: string) => {
@@ -1519,14 +1568,27 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  const [finishButtonWidth, setFinishButtonWidth] = useState(0);
+  const finishInnerRef = useRef<HTMLButtonElement>(null);
+
+  // Measure finish button width for precise centering
+  useEffect(() => {
+    if (finishInnerRef.current && view === 'scoreboard') {
+      const width = finishInnerRef.current.offsetWidth;
+      if (width > 0) setFinishButtonWidth(width);
+    }
+  }, [view, deviceInfo]);
+
     // Calculate half-widths for centering widgets based on device and widget type
     const getWidgetHalfW = (type: 'clock' | 'finish') => {
       // Use the stable deviceInfo detection consistent with CSS
       if (type === 'finish') {
-        // Mobile: 22vw (!important), Tablet: 20vw, Desktop: 26vw
-        if (deviceInfo.isPhone) return windowSize.width * 0.11;
-        if (deviceInfo.isTablet) return windowSize.width * 0.1;
-        return windowSize.width * 0.13;
+        // Use measured width if available, otherwise fallback to reasonable estimates
+        if (finishButtonWidth > 0) return finishButtonWidth / 2;
+        // Fallbacks based on typical text length + padding
+        if (deviceInfo.isPhone) return windowSize.width * 0.1;
+        if (deviceInfo.isTablet) return windowSize.width * 0.09;
+        return windowSize.width * 0.11;
       }
       // Clocks - Mobile: 24vw, Tablet: 16vw, Desktop: 20.8vw
       if (deviceInfo.isPhone) return windowSize.width * 0.12;
@@ -1616,7 +1678,7 @@ export default function App() {
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-[0.5vw] nav-zoom`}
+        className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-2 sm:px-4`}
         style={{ 
           borderBottom: '2px solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
@@ -1780,7 +1842,7 @@ export default function App() {
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
               animate={{ 
-                opacity: 0.7, 
+                opacity: 1, 
                 x: 0,
                 y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
               }}
@@ -1803,7 +1865,7 @@ export default function App() {
             <motion.div 
               initial={{ opacity: 0, x: 50 }}
               animate={{ 
-                opacity: 0.7, 
+                opacity: 1, 
                 x: 0,
                 y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
               }}
@@ -1981,10 +2043,11 @@ export default function App() {
             style={{ left: 0, top: 0 }}
           >
             <button
+              ref={finishInnerRef}
               onClick={finishMatch}
-              className="hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border-2 active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
+              className="hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
               style={{ 
-                border: '2px solid transparent',
+                border: '1px solid transparent',
                 backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
                 backgroundOrigin: 'border-box',
                 backgroundClip: 'padding-box, border-box',
@@ -2011,9 +2074,9 @@ export default function App() {
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center sm:gap-4 lg:gap-6' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full responsive-zoom left-0 right-0`}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center gap-4' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full`}
         style={{ 
-          maxWidth: view === 'scoreboard' ? (deviceInfo.isPhone ? '90vw' : 'var(--gameplay-width)') : (deviceInfo.isDesktop ? `min(95vw, ${985 * deviceInfo.scaleFactor}px)` : 'min(95vw, 985px)'),
+          maxWidth: view === 'scoreboard' ? '100%' : (deviceInfo.isDesktop ? `min(95vw, ${62 * deviceInfo.scaleFactor}rem)` : 'min(95vw, 62rem)'),
           margin: '0 auto'
         }}
       >
@@ -2034,10 +2097,10 @@ export default function App() {
                 className="relative flex flex-col gap-2 min-h-0 flex-1 justify-center"
               >
               {/* Score Cards Grid */}
-              <div className="relative sm:flex-1 flex items-center justify-center w-full py-0 sm:py-2">
+              <div className="relative flex items-center justify-center w-full py-2">
                 <div 
-                  className={`grid w-full ${deviceInfo.isLandscape ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}
-                  style={{ gap: deviceInfo.isPhone ? '2vh' : (deviceInfo.isTablet ? '3vh' : '4vh') }}
+                  className="flex items-center justify-center w-full"
+                  style={{ gap: '4vw' }}
                 >
                   {[player1, player2].map((p, idx) => (
                       <div key={p.id} className="flex flex-col gap-1 relative">
@@ -2052,10 +2115,10 @@ export default function App() {
                           className={`relative transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card ${
                             p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
                             ? 'rounded-full aspect-square border-0' 
-                            : idx === 0 || idx === 1 ? 'rounded-b-3xl sm:rounded-3xl border-2' : 'rounded-3xl border-2'
+                            : 'rounded-3xl border-2'
                           }`}
                           style={{ 
-                            padding: deviceInfo.isPhone ? '1vh 2vh' : (deviceInfo.isTablet ? '1.5rem' : '2rem'),
+                            padding: '1vh 2vh',
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
                             backgroundImage: p.bgStyle === 'dial' ? 'linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.2) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.2) 75%)' : undefined,
@@ -2063,9 +2126,11 @@ export default function App() {
                             boxShadow: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
                               ? 'inset -20px -20px 60px rgba(0,0,0,0.8), inset 20px 20px 60px rgba(255,255,255,0.4), 0 20px 40px rgba(0,0,0,0.5)'
                               : `0 0 40px -15px ${p.color}66`,
-                            width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'calc(100% - 2rem)' : undefined,
-                            margin: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? '0 auto' : undefined,
-                            height: deviceInfo.isLandscape ? '70vh' : undefined
+                            width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '35vw',
+                            margin: '0 auto',
+                            height: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '65vh',
+                            maxHeight: '65vh',
+                            maxWidth: '35vw'
                           }}
                         >
                           {/* Pool Ball Visual Elements (Stripes & Reflections) - Only if Ball mode */}
@@ -2128,7 +2193,24 @@ export default function App() {
                               type="text"
                               value={p.name}
                               placeholder={`PLAYER ${idx + 1} NAME`}
-                              onChange={(e) => idx === 0 ? setPlayer1({...p, name: e.target.value}) : setPlayer2({...p, name: e.target.value})}
+                              onChange={(e) => {
+                                const newName = e.target.value.toUpperCase();
+                                if (idx === 0) {
+                                  setPlayer1({...p, name: newName});
+                                  if (selectedMatchIndex !== null) {
+                                    const newPlayers = [...team1Players];
+                                    newPlayers[selectedMatchIndex] = newName;
+                                    setTeam1Players(newPlayers);
+                                  }
+                                } else {
+                                  setPlayer2({...p, name: newName});
+                                  if (selectedMatchIndex !== null) {
+                                    const newPlayers = [...team2Players];
+                                    newPlayers[selectedMatchIndex] = newName;
+                                    setTeam2Players(newPlayers);
+                                  }
+                                }
+                              }}
                               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-1 text-center font-bold focus:outline-none focus:border-emerald-500 uppercase"
                               style={{ 
                                 color: p.color,
@@ -2153,7 +2235,7 @@ export default function App() {
                             className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 pb-15" 
                             style={{ 
                               color: p.color,
-                              fontSize: deviceInfo.isPhone ? '22vw' : (deviceInfo.isTablet ? '15vh' : `${20 * deviceInfo.scaleFactor}vh`)
+                              fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : `${35 * deviceInfo.scaleFactor}vh`)
                             }}
                           >
                             {p.score}
@@ -2205,36 +2287,36 @@ export default function App() {
                     onClick={() => setShowExportMenu(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
                     style={{ 
-                      borderColor: player2.color,
-                      color: player2.color,
-                      backgroundColor: player2.color + '22'
+                      borderColor: player1.color + '66',
+                      color: '#fff',
+                      backgroundColor: 'transparent'
                     }}
                   >
-                    <Download className="w-4 h-4" style={{ color: player2.color }} />
+                    <Download className="w-4 h-4" />
                     Export
                   </button>
                   <button 
                     onClick={uploadData}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
                     style={{ 
-                      borderColor: player2.color,
-                      color: player2.color,
-                      backgroundColor: player2.color + '11'
+                      borderColor: player1.color + '66',
+                      color: '#fff',
+                      backgroundColor: 'transparent'
                     }}
                   >
-                    <Upload className="w-4 h-4" style={{ color: player2.color }} />
+                    <Upload className="w-4 h-4" />
                     Import
                   </button>
                   <button 
                     onClick={() => setShowClearTeamsConfirm(true)}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all border-2"
                     style={{ 
-                      borderColor: player2.color,
-                      color: player2.color,
-                      backgroundColor: player2.color + '11'
+                      borderColor: player2.color + '66',
+                      color: '#fff',
+                      backgroundColor: 'transparent'
                     }}
                   >
-                    <Trash2 className="w-4 h-4" style={{ color: player2.color }} />
+                    <Trash2 className="w-4 h-4" />
                     Clear Team Data
                   </button>
                 </div>
@@ -2245,26 +2327,34 @@ export default function App() {
                 <div className="space-y-4 sm:space-y-8">
                   <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Team 1 Name</label>
-                      <Users className="w-4 h-4 text-slate-600" />
+                      <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Team 1 Name</label>
+                      <Users className="w-4 h-4" style={{ color: player1.color }} />
                     </div>
                     <input 
                       value={team1Name} 
                       onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
-                      onFocus={(e) => e.target.select()}
+                      onFocus={(e) => handleInputFocus(e, 'team1')}
+                      onBlur={() => setFocusedField(null)}
                       className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ ...teamEntryStyle, borderColor: player1.color }}
+                      style={{ 
+                        ...teamEntryStyle, 
+                        borderColor: focusedField === 'team1' ? player1.color : player1.color + '66' 
+                      }}
                       placeholder="TEAM 1"
                     />
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Players</label>
-                    <div className="space-y-2 sm:space-y-3">
+                    <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Players</label>
+                    <div className="space-y-4 sm:space-y-6">
                       {team1Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-2 sm:gap-3 group">
+                        <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
                           <div 
-                            className="w-8 sm:w-10 h-10 sm:h-12 flex items-center justify-center text-[10px] sm:text-xs font-black bg-black border-2 rounded-lg sm:rounded-xl"
-                            style={{ borderColor: player1.color + '33', color: player1.color }}
+                            className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
+                            style={{ 
+                              borderColor: player1.color + '33', 
+                              color: player1.color,
+                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh'
+                            }}
                           >
                             {idx + 1}
                           </div>
@@ -2277,9 +2367,13 @@ export default function App() {
                                 newPlayers[idx] = e.target.value.toUpperCase();
                                 updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                               }}
-                              onFocus={(e) => e.target.select()}
-                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pr-10 sm:pr-14 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                              style={{ ...playerEntryStyle, borderColor: player1.color + '22' }}
+                              onFocus={(e) => handleInputFocus(e, `p1-${idx}`)}
+                              onBlur={() => setFocusedField(null)}
+                              className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                              style={{ 
+                                ...playerEntryStyle, 
+                                borderColor: focusedField === `p1-${idx}` ? player1.color : player1.color + '66' 
+                              }}
                               placeholder={`P${idx + 1}`}
                             />
                             <button 
@@ -2289,14 +2383,14 @@ export default function App() {
                               }}
                               className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
                             >
-                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
                             </button>
                           </div>
                         </div>
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                        className="w-full py-2 sm:py-4 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[10px] sm:text-sm font-black uppercase tracking-widest"
+                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
                         style={{ 
                           borderColor: player1.color + '33', 
                           color: player1.color,
@@ -2311,7 +2405,7 @@ export default function App() {
                           e.currentTarget.style.borderColor = player1.color + '33';
                         }}
                       >
-                        <Plus className="w-9 h-9" />
+                        <Plus className="w-6 h-6" />
                         Add
                       </button>
                     </div>
@@ -2322,26 +2416,34 @@ export default function App() {
                 <div className="space-y-4 sm:space-y-8">
                   <div className="space-y-2 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Team 2 Name</label>
-                      <Users className="w-4 h-4 text-slate-600" />
+                      <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Team 2 Name</label>
+                      <Users className="w-4 h-4" style={{ color: player2.color }} />
                     </div>
                     <input 
                       value={team2Name} 
                       onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
-                      onFocus={(e) => e.target.select()}
+                      onFocus={(e) => handleInputFocus(e, 'team2')}
+                      onBlur={() => setFocusedField(null)}
                       className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ ...teamEntryStyle, borderColor: player2.color }}
+                      style={{ 
+                        ...teamEntryStyle, 
+                        borderColor: focusedField === 'team2' ? player2.color : player2.color + '66' 
+                      }}
                       placeholder="TEAM 2"
                     />
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    <label className="font-black uppercase tracking-widest text-slate-500" style={{ fontSize: labelFontSize }}>Players</label>
-                    <div className="space-y-2 sm:space-y-3">
+                    <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Players</label>
+                    <div className="space-y-4 sm:space-y-6">
                       {team2Players.map((player, idx) => (
-                        <div key={idx} className="flex gap-2 sm:gap-3 group">
+                        <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
                           <div 
-                            className="w-8 sm:w-10 h-10 sm:h-12 flex items-center justify-center text-[10px] sm:text-xs font-black bg-black border-2 rounded-lg sm:rounded-xl"
-                            style={{ borderColor: player2.color + '33', color: player2.color }}
+                            className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
+                            style={{ 
+                              borderColor: player2.color + '33', 
+                              color: player2.color,
+                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh'
+                            }}
                           >
                             {idx + 1}
                           </div>
@@ -2354,9 +2456,13 @@ export default function App() {
                                 newPlayers[idx] = e.target.value.toUpperCase();
                                 updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                               }}
-                              onFocus={(e) => e.target.select()}
-                              className="w-full bg-black/50 border rounded-lg sm:rounded-xl pr-10 sm:pr-14 text-slate-100 focus:outline-none uppercase font-bold transition-all"
-                              style={{ ...playerEntryStyle, borderColor: player2.color + '22' }}
+                              onFocus={(e) => handleInputFocus(e, `p2-${idx}`)}
+                              onBlur={() => setFocusedField(null)}
+                              className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                              style={{ 
+                                ...playerEntryStyle, 
+                                borderColor: focusedField === `p2-${idx}` ? player2.color : player2.color + '66' 
+                              }}
                               placeholder={`P${idx + 1}`}
                             />
                             <button 
@@ -2366,14 +2472,14 @@ export default function App() {
                               }}
                               className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
                             >
-                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
                             </button>
                           </div>
                         </div>
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
-                        className="w-full py-2 sm:py-4 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[10px] sm:text-sm font-black uppercase tracking-widest"
+                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
                         style={{ 
                           borderColor: player2.color + '33', 
                           color: player2.color,
@@ -2388,7 +2494,7 @@ export default function App() {
                           e.currentTarget.style.borderColor = player2.color + '33';
                         }}
                       >
-                        <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <Plus className="w-6 h-6" />
                         Add
                       </button>
                     </div>
@@ -2406,26 +2512,28 @@ export default function App() {
                     Match Results Table
                   </h3>
                 </div>
-                <div className="bg-black border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-                  <div className="overflow-x-auto scrollbar-hide">
-                    <table 
-                      className="w-full text-left border-collapse table-fixed"
-                    >
-                      <thead>
-                        <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
-                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
-                            <div className="truncate">{team1Name || 'TEAM A'}</div>
-                          </th>
-                          <th className="px-0.5 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
-                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
-                            <div className="truncate">{team2Name || 'TEAM B'}</div>
-                          </th>
-                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
-                          <th className="px-1 sm:px-6 py-4 text-xs sm:text-[15px] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear Score</th>
-                          <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[15px] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
-                        </tr>
-                      </thead>
+                  <div 
+                    className="bg-black border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
+                  >
+                    <div className="overflow-x-auto scrollbar-hide">
+                      <table 
+                        className="w-full text-left border-collapse table-fixed"
+                      >
+                        <thead>
+                          <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] sm:text-xs lg:text-[0.9375rem] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
+                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                              <div className="truncate">{team1Name || 'TEAM A'}</div>
+                            </th>
+                            <th className="px-0.5 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
+                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                              <div className="truncate">{team2Name || 'TEAM B'}</div>
+                            </th>
+                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
+                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] sm:text-xs lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
+                          </tr>
+                        </thead>
                     <tbody>
                       {Math.max(team1Players.length, team2Players.length) === 0 ? (
                         <tr>
@@ -2478,17 +2586,17 @@ export default function App() {
                                 className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                               >
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
+                                <td className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
                                   {p1 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
-                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px]">VS</td>
-                                <td className="px-1 sm:px-6 py-4 text-[10px] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
+                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[0.5rem]">VS</td>
+                                <td className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
                                   {p2 || <span className="text-slate-700 italic">EMPTY</span>}
                                 </td>
                                 <td className="px-1 sm:px-6 py-4">
                                   {displayScore ? (
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
-                                      <span className={`text-[8px] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${
+                                      <span className={`text-[0.5rem] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${
                                         displayScore.isLive 
                                           ? 'bg-blue-500/20 text-blue-400' 
                                           : (displayScore as any).winner === p1Name 
@@ -2499,10 +2607,10 @@ export default function App() {
                                       }`}>
                                         {displayScore.score1}-{displayScore.score2}
                                       </span>
-                                      <span className="text-[6px] sm:text-[10px] text-slate-600 font-bold uppercase whitespace-nowrap">{displayScore.isLive ? 'LIVE' : new Date((displayScore as any).date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
+                                      <span className="text-[0.375rem] sm:text-[1.125vh] text-slate-600 font-bold uppercase whitespace-nowrap">{displayScore.isLive ? 'LIVE' : new Date((displayScore as any).date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
                                     </div>
                                   ) : (
-                                    <span className="text-[8px] text-slate-700 font-bold uppercase">NONE</span>
+                                    <span className="text-[0.5rem] text-slate-700 font-bold uppercase">NONE</span>
                                   )}
                                 </td>
                                 <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
@@ -2536,11 +2644,11 @@ export default function App() {
                                 <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
                                   {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
                                     <div className="flex flex-col gap-0.5">
-                                      {lastMatch.shotClockSetting && <span className="text-[9px] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
-                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[9px] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                      {lastMatch.shotClockSetting && <span className="text-[0.5625rem] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
+                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[0.5625rem] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
                                     </div>
                                   ) : (
-                                    <span className="text-[10px] text-slate-600 font-bold uppercase">-</span>
+                                    <span className="text-[0.625rem] text-slate-600 font-bold uppercase">-</span>
                                   )}
                                 </td>
                               </tr>
@@ -2548,24 +2656,24 @@ export default function App() {
                           })}
                           {/* Totals Row */}
                           <tr className="bg-slate-900/80 border-t-2 border-slate-800 font-black">
-                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
+                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
                             <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
-                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team1Name}</span>
+                                <span className="text-[0.375rem] text-slate-500 uppercase tracking-tighter truncate max-w-[3.75rem] sm:max-w-none">{team1Name}</span>
                               </div>
                             </td>
-                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[8px] w-4 sm:w-8">SUM</td>
+                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[0.5rem] w-4 sm:w-8">SUM</td>
                             <td className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col">
                                 <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
-                                <span className="text-[6px] text-slate-500 uppercase tracking-tighter truncate max-w-[60px] sm:max-w-none">{team2Name}</span>
+                                <span className="text-[0.375rem] text-slate-500 uppercase tracking-tighter truncate max-w-[3.75rem] sm:max-w-none">{team2Name}</span>
                               </div>
                             </td>
                             <td colSpan={windowSize.width < 640 ? 1 : 2} className="px-1 sm:px-6 py-4">
                               <div className="flex flex-col items-end">
-                                <span className="text-[6px] sm:text-[10px] text-slate-600 uppercase font-bold">Overall Lead</span>
-                                <span className="text-[9px] sm:text-sm font-black text-slate-100 truncate max-w-full block">
+                                <span className="text-[0.625rem] sm:text-[0.875rem] text-slate-600 uppercase font-bold">Overall Lead</span>
+                                <span className="text-[0.5625rem] sm:text-sm font-black text-slate-100 truncate max-w-full block">
                                   {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
                                    teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
                                    `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
@@ -2608,7 +2716,7 @@ export default function App() {
                 }}
               >
                 <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '5vh' : (deviceInfo.isTablet ? '3.2vh' : `${3 * deviceInfo.scaleFactor}vw`) }}>Settings</h2>
-                <p className="text-slate-500 font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '0.9vh' : `${0.7 * deviceInfo.scaleFactor}vw`) }}>Customize your scoring experience</p>
+                <p className="text-white font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '2.8vh' : (deviceInfo.isTablet ? '1.8vh' : `${1.3 * deviceInfo.scaleFactor}vw`) }}>Customize your scoring experience</p>
               </div>
 
               <div className="space-y-12">
@@ -2618,8 +2726,8 @@ export default function App() {
                     className="font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: player1.color,
-                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
                     }}
                   >
                     Colour Preferences
@@ -2628,18 +2736,18 @@ export default function App() {
                     {[player1, player2].map((p, idx) => (
                       <div 
                         key={p.id} 
-                        className="relative p-8 rounded-[32px] border-2 space-y-6 shadow-xl transition-all duration-500"
+                        className="relative p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] border-2 space-y-6 shadow-xl transition-all duration-500"
                         style={{ 
                           backgroundColor: p.bgColor,
                           borderColor: p.color,
-                          boxShadow: `0 20px 50px -20px ${p.color}33`,
+                          boxShadow: `0 1rem 2.5rem -1rem ${p.color}33`,
                           '--player-color': p.color 
                         } as React.CSSProperties}
                       >
                       <div className="flex items-center justify-between">
                         <label 
                           className="font-black uppercase tracking-widest text-slate-500" 
-                          style={{ fontSize: labelFontSize }}
+                          style={{ fontSize: settingsLabelFontSize }}
                         >
                           Player {idx + 1} Name
                         </label>
@@ -2723,20 +2831,20 @@ export default function App() {
                     className="font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: player1.color,
-                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
                     }}
                   >
                     Break Tracker
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
                     style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Break Tracking</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a "white ball" break indicator that alternates with scores.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Break Tracking</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Display a "white ball" break indicator that alternates with scores.</p>
                       </div>
                       <button 
                         onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
@@ -2755,19 +2863,19 @@ export default function App() {
                     className="font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: player1.color,
-                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
                     }}
                   >
                     Device Time
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
                     style={{ borderColor: player1.color }}
                   >
                     <div className="space-y-1 text-center sm:text-left">
-                      <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Show Device Time</p>
-                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Display a draggable clock on the gameplay screen.</p>
+                      <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Show Device Time</p>
+                      <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Display a draggable clock on the gameplay screen.</p>
                     </div>
                     <button 
                       onClick={() => setShowDeviceTime(!showDeviceTime)}
@@ -2782,19 +2890,23 @@ export default function App() {
                 {/* 4. Shot Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="text-[10px] font-black uppercase tracking-widest pb-2 border-b-2"
-                    style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, color: player2.color }}
+                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                    }}
                   >
                     Shot Clock
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
                     style={{ borderColor: player2.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Shot Clock</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Toggle the visibility and timer on the scoreboard.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Enable Shot Clock</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Toggle the visibility and timer on the scoreboard.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -2811,7 +2923,7 @@ export default function App() {
                     {isShotClockEnabled && (
                       <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                         <div className="flex items-center justify-between">
-                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: labelFontSize }}>Timer Duration</label>
+                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Timer Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
                         </div>
                         <input 
@@ -2828,7 +2940,7 @@ export default function App() {
                           className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
                           style={{ accentColor: player2.color }}
                         />
-                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                        <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
                           <span>10s</span>
                           <span>60s</span>
                           <span>120s</span>
@@ -2844,20 +2956,20 @@ export default function App() {
                     className="font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: player1.color,
-                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
                     }}
                   >
                     Match Clock
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 space-y-8 shadow-xl" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
                     style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Enable Match Clock</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">A master countdown for the entire match.</p>
+                        <p className="text-lg sm:text-xl font-black text-slate-200 uppercase tracking-tight">Enable Match Clock</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest">A master countdown for the entire match.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -2874,7 +2986,7 @@ export default function App() {
                     {isMatchClockEnabled && (
                       <div className="space-y-6 pt-8 border-t border-slate-800">
                         <div className="flex items-center justify-between">
-                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: labelFontSize }}>Match Duration</label>
+                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Match Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
                         </div>
                         <input 
@@ -2891,7 +3003,7 @@ export default function App() {
                           className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
                           style={{ accentColor: player1.color }}
                         />
-                        <div className="flex justify-between text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                        <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
                           <span>5m</span>
                           <span>30m</span>
                           <span>60m</span>
@@ -2914,20 +3026,20 @@ export default function App() {
                     className="font-black uppercase tracking-widest pb-2 border-b-2"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: player1.color,
-                      fontSize: deviceInfo.isPhone ? '1.8vh' : (deviceInfo.isTablet ? '1.4vh' : `${1 * deviceInfo.scaleFactor}vh`)
+                      color: 'white',
+                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
                     }}
                   >
                     Restore Defaults
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-[32px] p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
                       style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1 text-center sm:text-left">
-                        <p className="text-xl font-black text-slate-200 uppercase tracking-tight">Restore Defaults</p>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
+                        <p className="text-lg sm:text-xl font-black text-slate-200 uppercase tracking-tight">Restore Defaults</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -2950,8 +3062,8 @@ export default function App() {
                         <Server className="w-6 h-6 text-emerald-400" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-black uppercase tracking-tight text-white">API Configuration</h3>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Outbound Tournament Data Sync</p>
+                        <h3 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`) }}>API Configuration</h3>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Outbound Tournament Data Sync</p>
                       </div>
                       {isApiLocked ? (
                         <div className="flex items-center gap-2">
@@ -2983,7 +3095,7 @@ export default function App() {
                     {!isApiLocked ? (
                       <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Target URL</label>
+                          <label className="text-[0.625rem] font-black uppercase tracking-widest text-slate-500">Target URL</label>
                           <input 
                             type="url"
                             value={apiConfig.url}
@@ -2993,7 +3105,7 @@ export default function App() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">API Key</label>
+                          <label className="text-[0.625rem] font-black uppercase tracking-widest text-slate-500">API Key</label>
                           <input 
                             type="password"
                             value={apiConfig.key}
@@ -3033,7 +3145,7 @@ export default function App() {
                               }
                             }}
                             disabled={isApiSending}
-                            className="w-full h-10 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all border border-slate-700 flex items-center justify-center gap-2"
+                            className="w-full h-10 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-xl text-[0.625rem] font-black uppercase tracking-widest text-slate-300 transition-all border border-slate-700 flex items-center justify-center gap-2"
                           >
                             {isApiSending ? (
                               <>
@@ -3052,7 +3164,7 @@ export default function App() {
                             <motion.div 
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className={`p-3 rounded-xl text-[10px] font-bold border ${
+                              className={`p-3 rounded-xl text-[0.625rem] font-bold border ${
                                 apiTestStatus.type === 'success' 
                                   ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' 
                                   : 'bg-rose-500/10 border-rose-500/50 text-rose-400'
@@ -3062,7 +3174,7 @@ export default function App() {
                             </motion.div>
                           )}
                         </div>
-                        <p className="text-[9px] text-slate-600 font-bold uppercase leading-relaxed">
+                        <p className="text-[0.5625rem] text-slate-600 font-bold uppercase leading-relaxed">
                           This configuration enables the "Send to Server" option in the export menu. 
                           The payload is a full JSON representation of the current tournament state.
                         </p>
@@ -3072,7 +3184,7 @@ export default function App() {
                         <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center">
                           <Layout className="w-8 h-8 text-slate-600" />
                         </div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Enter PIN to unlock API settings</p>
+                        <p className="text-[0.625rem] font-black uppercase tracking-widest text-slate-600">Enter PIN to unlock API settings</p>
                       </div>
                     )}
                   </div>
@@ -3116,7 +3228,7 @@ export default function App() {
                 </button>
                 <div className="space-y-1">
                   <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-white line-clamp-1">Match Details</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] sm:text-[10px]">Detailed Frame Analysis</p>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[0.5rem] sm:text-[0.625rem]">Detailed Frame Analysis</p>
                 </div>
               </div>
 
@@ -3127,32 +3239,32 @@ export default function App() {
                     {/* Header Info */}
                     <div className="grid grid-cols-2 gap-3 sm:gap-6">
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg">
-                          <p className="text-[8px] sm:text-[10px] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Players</p>
+                          <p className="text-[0.5rem] sm:text-[0.625rem] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Players</p>
                           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
-                            <span className="text-[8px] sm:text-xs text-slate-600 font-black">VS</span>
+                            <span className="text-[0.5rem] sm:text-xs text-slate-600 font-black">VS</span>
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
                           </div>
-                          {match.team1 && <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
+                          {match.team1 && <p className="text-[0.5rem] sm:text-[0.625rem] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
                        </div>
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 text-right shadow-lg">
-                          <p className="text-[8px] sm:text-[10px] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Outcome / Date</p>
+                          <p className="text-[0.5rem] sm:text-[0.625rem] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Outcome / Date</p>
                           <p className="text-base sm:text-2xl font-black text-emerald-400 tabular-nums">{match.score1} - {match.score2}</p>
-                          <p className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase mt-1.5">{new Date(match.date).toLocaleString('en-GB')}</p>
+                          <p className="text-[0.5rem] sm:text-[0.625rem] text-slate-500 font-bold uppercase mt-1.5">{new Date(match.date).toLocaleString('en-GB')}</p>
                        </div>
                     </div>
 
                     {/* Frame Table */}
                     <div className="overflow-hidden rounded-3xl border border-slate-800/50 shadow-2xl bg-black/40 backdrop-blur-3xl">
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[500px]">
+                        <table className="w-full text-left border-collapse min-w-full">
                           <thead>
                             <tr className="bg-slate-900/80 border-b-2 border-slate-800/50">
-                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[10%]">Frame</th>
-                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[25%]">Breaker</th>
-                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[25%]">Winner</th>
-                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 w-[20%]">Score</th>
-                              <th className="px-5 py-5 text-[9px] sm:text-[11px] uppercase tracking-widest font-black text-slate-500 text-right w-[20%]">Timestamp</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[10%]">Frame</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[25%]">Breaker</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[25%]">Winner</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[20%]">Score</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[20%]">Timestamp</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/30">
@@ -3173,13 +3285,13 @@ export default function App() {
                                 </td>
                                 <td className="px-5 py-4 text-right">
                                   <div className="flex flex-col items-end">
-                                    <span className="text-[10px] sm:text-xs font-black text-slate-400 tabular-nums">
+                                    <span className="text-[0.625rem] sm:text-xs font-black text-slate-400 tabular-nums">
                                       {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                     </span>
                                     {frame.duration !== undefined && (
                                       <div className="flex items-center gap-1 mt-0.5">
                                         <Clock className="w-2.5 h-2.5 text-slate-700" />
-                                        <span className="text-[8px] sm:text-[9px] font-black text-slate-600 uppercase tracking-tighter">
+                                        <span className="text-[0.5rem] sm:text-[0.5625rem] font-black text-slate-600 uppercase tracking-tighter">
                                           {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
                                         </span>
                                       </div>
@@ -3189,7 +3301,7 @@ export default function App() {
                               </tr>
                             )) : (
                               <tr>
-                                <td colSpan={5} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[10px]">No detailed frame data available.</td>
+                                <td colSpan={5} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[0.625rem]">No detailed frame data available.</td>
                               </tr>
                             )}
                           </tbody>
@@ -3200,12 +3312,12 @@ export default function App() {
                     <div className="flex justify-between items-center px-4">
                        <div className="flex items-center gap-2">
                           <div className="w-1 h-1 rounded-full bg-slate-800" />
-                          <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">End of Record</p>
+                          <p className="text-[0.5rem] font-black text-slate-700 uppercase tracking-widest">End of Record</p>
                        </div>
                        {match.shotClockSetting && (
                          <div className="flex items-center gap-2">
                             <Zap className="w-3 h-3 text-slate-700" />
-                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
+                            <p className="text-[0.5rem] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
                          </div>
                        )}
                     </div>
@@ -3217,7 +3329,7 @@ export default function App() {
                     <FileText className="w-10 h-10" />
                   </div>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Match record not found.</p>
-                  <button onClick={() => setView('history')} className="text-emerald-500 font-black uppercase text-[10px] hover:text-emerald-400 transition-colors">Return to History</button>
+                  <button onClick={() => setView('history')} className="text-emerald-500 font-black uppercase text-[0.625rem] hover:text-emerald-400 transition-colors">Return to History</button>
                 </div>
               )}
             </motion.div>
@@ -3268,7 +3380,7 @@ export default function App() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-black border-2 p-8 rounded-3xl max-w-md w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar"
+                className="bg-black border-2 p-4 sm:p-8 rounded-2xl sm:rounded-3xl max-w-md w-full shadow-2xl space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar"
                 style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
               >
                 <div className="flex items-center justify-between">
@@ -3331,7 +3443,7 @@ export default function App() {
                         </div>
                         <div className="flex-1">
                           <div className={`font-black uppercase tracking-tight ${exportMethod === method.id ? 'text-emerald-500' : 'text-slate-200'}`}>{method.label}</div>
-                          <div className="text-[11px] font-bold text-slate-100 uppercase tracking-widest">{method.desc}</div>
+                          <div className="text-[0.625rem] font-bold text-slate-500 uppercase tracking-widest">{method.desc}</div>
                         </div>
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${exportMethod === method.id ? 'border-emerald-500' : 'border-slate-700'}`}>
                           {exportMethod === method.id && <div className="w-3 h-3 bg-emerald-500 rounded-full" />}
@@ -3461,7 +3573,7 @@ export default function App() {
                 initial={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
                 animate={{ scale: !deviceInfo.isDesktop ? 0.7 : 1, opacity: 1, y: 0 }}
                 exit={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
-                className="bg-black border-2 p-6 sm:p-10 rounded-[30px] sm:rounded-[40px] max-w-2xl w-full space-y-6 sm:space-y-10 text-center"
+                className="bg-black border-2 p-6 sm:p-10 rounded-[1.875rem] sm:rounded-[2.5rem] max-w-2xl w-full space-y-6 sm:space-y-10 text-center"
                 style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
                   boxShadow: `0 0 50px ${player1.color}11`
@@ -3469,12 +3581,12 @@ export default function App() {
               >
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <div className="p-3 sm:p-4 rounded-full" style={{ backgroundColor: `${player1.color}22` }}>
+                    <div className="p-3 sm:p-4 rounded-full" style={{ backgroundColor: `${player1.color}11` }}>
                       <Trophy className="w-8 h-8 sm:w-12 sm:h-12" style={{ color: player1.color }} />
                     </div>
                   </div>
                   <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter text-white">Team Totals</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] sm:text-xs">Final Session Results</p>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[0.625rem] sm:text-xs">Final Session Results</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 sm:gap-8 items-center">
@@ -3521,7 +3633,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50 bar-zoom"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/90 backdrop-blur-xl border-2 p-2 rounded-2xl shadow-2xl md:hidden z-50"
             style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
           >
             <button 

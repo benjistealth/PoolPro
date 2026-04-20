@@ -20,7 +20,7 @@
   }
 }
 
-@media (min-width: 1300px) {
+@media (min-width: 1024px) {
   :root {
     --sidebar-width: 10.4vw;
     --gameplay-width: min(84vw, calc(100vw - 20.8vw));
@@ -36,55 +36,17 @@
 }
 
 @layer utilities {
-  .responsive-zoom {
-    @apply transition-all duration-500 origin-top;
+  .vertical-text {
+    writing-mode: vertical-rl;
+    white-space: nowrap;
   }
 
-  /* Mobile Portrait */
-  @media (max-width: 639px) and (orientation: portrait) {
-    .responsive-zoom {
-      @apply origin-top;
-    }
-    .nav-zoom {
-      @apply origin-top-left w-full;
-    }
-    .bar-zoom {
-      @apply origin-bottom;
-    }
-    .gameplay-card {
-      height: 40vh !important;
-      min-height: 30vh !important;
-    }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
-
-  /* Mobile Landscape */
-  @media (max-width: 1300px) and (orientation: landscape) {
-    .responsive-zoom {
-      @apply origin-top;
-    }
-    .nav-zoom {
-      @apply origin-top-left w-full;
-    }
-    .bar-zoom {
-      @apply origin-bottom;
-    }
-    .gameplay-card {
-      height: 80vh !important;
-      min-height: 50vh !important;
-    }
-  }
-
-  /* Tablet Landscape */
-  @media (min-width: 1301px) and (max-width: 1680px) and (orientation: landscape) {
-    .responsive-zoom {
-      @apply origin-top;
-    }
-    .nav-zoom {
-      @apply origin-top-left w-full;
-    }
-    .bar-zoom {
-      @apply origin-bottom;
-    }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
@@ -102,75 +64,23 @@
   @apply bg-slate-800 rounded-full hover:bg-slate-700 transition-colors;
 }
 
-  .vertical-text {
-    writing-mode: vertical-rl;
-    white-space: nowrap;
-  }
-
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .floating-widget {
-    @apply transition-all duration-300;
-    width: 16vw;
-    height: 6.4vh !important;
-    min-width: 12vw;
-    min-height: 4vh;
-  }
-
-  .widget-text { font-size: 2vh !important; }
-  .widget-label { font-size: 0.8vh !important; }
-  .widget-icon { width: 2.4vh !important; height: 2.4vh !important; }
-
-  /* Standardized Top Bar base styles */
-  nav.nav-zoom {
-    min-height: 48px !important;
-  }
-
   .floating-widget {
     @apply transition-all duration-300;
     width: 24vw;
-    height: 8vh !important;
-    min-width: 80px;
-    min-height: 4vh;
+    height: 5.5vh !important;
+    min-width: 5rem;
+    min-height: 3.5vh;
   }
 
-  .widget-text { font-size: 3vh !important; }
-  .widget-label { font-size: 1.2vh !important; }
-  .widget-icon { width: 4vh !important; height: 4vh !important; }
+  .widget-text { font-size: 2.8vh !important; }
+  .widget-label { font-size: 1.1vh !important; }
+  .widget-icon { width: 3.8vh !important; height: 3.8vh !important; }
 
   .widget-finish-match {
-    width: 22vw !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 1vh 2vh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
   }
 
-  /* Tablet & Desktop Layout Refinements */
-  @media (min-width: 768px) {
-    .floating-widget {
-      width: 16vw;
-      height: 8vh !important;
-    }
-    .widget-finish-match {
-      width: 20vw !important;
-    }
-    .widget-text { font-size: 2.4vh !important; }
-    .widget-label { font-size: 0.96vh !important; }
-    .widget-icon { width: 3.2vh !important; height: 3.2vh !important; }
-  }
-
-  @media (min-width: 1024px) {
-    .floating-widget {
-      width: 20.8vw;
-      height: 10.4vh !important;
-    }
-    .widget-finish-match {
-      width: 26vw !important;
-    }
-    .widget-text { font-size: 3.12vh !important; }
-    .widget-label { font-size: 1.25vh !important; }
-    .widget-icon { width: 4.16vh !important; height: 4.16vh !important; }
-  }

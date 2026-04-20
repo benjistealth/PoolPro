@@ -83,25 +83,25 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
   return (
     <div className="relative" ref={containerRef}>
-      <div className="flex items-center justify-between p-[min(1.5vh,1rem)] bg-slate-950/30 rounded-xl border transition-colors cursor-pointer group"
+      <div className="flex items-center justify-between p-[min(2vh,1.5rem)] bg-slate-950/30 rounded-xl border transition-colors cursor-pointer group"
            style={{ 
              borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
            }}
            onClick={() => onToggle(!isOpen)}>
         <div className="flex items-center gap-[1vw]">
-          <div className="p-[1vh] bg-slate-800 rounded-lg text-slate-400 transition-colors"
+          <div className="p-[1.5vh] bg-slate-800 rounded-lg text-slate-400 transition-colors"
                style={{ color: isOpen ? (themeColor || '#10b981') : undefined }}>
             {icon}
           </div>
           <div>
-            <p className="text-[min(1.2vh,10px)] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+            <p className="text-[min(2.2vh,18px)] font-bold uppercase tracking-wider text-slate-500">{label}</p>
             <div className="flex items-center gap-[0.5vw]">
-              <div className="w-[1.2vw] h-[1.2vw] min-w-[12px] min-h-[12px] rounded-full border border-white/20" style={{ backgroundColor: value }} />
-              <span className="text-[min(1.8vh,14px)] font-medium text-slate-200 uppercase">{value}</span>
+              <div className="w-[2.4vw] h-[2.4vw] min-w-[1.5rem] min-h-[1.5rem] rounded-full border border-white/20" style={{ backgroundColor: value }} />
+              <span className="text-[min(3.2vh,24px)] font-black text-slate-200 uppercase">{value}</span>
             </div>
           </div>
         </div>
-        <ChevronDown className={`w-[1.5vh] h-[1.5vh] text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-[2.5vh] h-[2.5vh] text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
       <AnimatePresence>
@@ -110,7 +110,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute left-1/2 -translate-x-1/2 top-full mt-[1vh] z-[100] p-[3vh] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl min-w-[80vw] sm:min-w-[340px] flex flex-col items-center gap-[3vh]"
+            className="absolute left-1/2 -translate-x-1/2 top-full mt-[1vh] z-[100] p-[3vh] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl min-w-[80vw] sm:min-w-[21.25rem] flex flex-col items-center gap-[3vh]"
             style={{ borderColor: (themeColor || '#10b981') + '33' }}
           >
             {allowedStyles.length > 1 && (
@@ -127,7 +127,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     <button
                       key={style}
                       onClick={() => onStyleChange?.(style)}
-                      className={`flex-1 min-w-[15vw] sm:min-w-[60px] flex items-center justify-center gap-[1vw] py-[1.5vh] rounded-xl transition-all ${pickerStyle === style ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                      className={`flex-1 min-w-[15vw] sm:min-w-[3.75rem] flex items-center justify-center gap-[1vw] py-[1.5vh] rounded-xl transition-all ${pickerStyle === style ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                     >
                       <span className="text-[1.2vh] font-black uppercase tracking-widest">{labelMap[style]}</span>
                     </button>
