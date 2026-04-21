@@ -188,7 +188,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                       className={`relative w-[12vw] h-[12vw] sm:w-[3rem] sm:h-[3rem] rounded-full transition-all duration-300 group ${isActive ? 'scale-125 ring-2 ring-white ring-offset-4 ring-offset-slate-900 z-10' : 'hover:scale-110'}`}
                       style={{ 
                         backgroundColor: ball.value,
-                        boxShadow: 'inset -4px -4px 10px rgba(0,0,0,0.5), inset 4px 4px 10px rgba(255,255,255,0.2), 0 4px 8px rgba(0,0,0,0.3)'
+                        boxShadow: 'inset -0.25rem -0.25rem 0.625rem rgba(0,0,0,0.5), inset 0.25rem 0.25rem 0.625rem rgba(255,255,255,0.2), 0 0.25rem 0.5rem rgba(0,0,0,0.3)'
                       }}
                       title={ball.name}
                     >
@@ -249,7 +249,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                       }}
                     >
                       <div 
-                        className={`w-full h-full rounded-full border-2 transition-all duration-300 ${isActive ? 'border-white scale-125 shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'border-slate-700 group-hover:scale-110 group-hover:border-slate-500'}`}
+                        className={`w-full h-full rounded-full border-2 transition-all duration-300 ${isActive ? 'border-white scale-125 shadow-[0_0_1rem_rgba(255,255,255,0.5)]' : 'border-slate-700 group-hover:scale-110 group-hover:border-slate-500'}`}
                         style={{ backgroundColor: color.value }}
                       />
                     </button>
@@ -289,8 +289,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         className="w-full h-[8vh] rounded-lg shadow-inner flex items-center justify-center overflow-hidden relative"
                         style={{ backgroundColor: cloth.value }}
                       >
-                         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '0.5vh 0.5vh' }} />
-                         <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.3)]" />
+                         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#000 0.0625rem, transparent 0.0625rem)', backgroundSize: '0.5vh 0.5vh' }} />
+                         <div className="absolute inset-0 shadow-[inset_0_0_1.25rem_rgba(0,0,0,0.3)]" />
                          {pickerStyle === 'speed' && (
                            <div className="absolute top-[0.5vh] right-[0.5vh]">
                              <Zap className="w-[1.2vh] h-[1.2vh] text-white/40" />

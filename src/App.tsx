@@ -137,23 +137,22 @@ export default function App() {
     const shouldHideDeviceTime = isPortrait || isCloserTo1_1Than1_2 || !showDeviceTime;
 
     const isShort = windowSize.height < 500;
-    const scaleFactor = isDesktop ? 1.3 : 1.0;
 
     // Unified title sizes based on device
     const titleSizes = {
-      page: isPhone ? '5vh' : (isTablet ? '3.2vh' : `${3 * scaleFactor}vw`),
-      subtitle: isPhone ? '2.8vh' : (isTablet ? '1.8vh' : `${1.3 * scaleFactor}vw`),
-      section: isPhone ? '4.6vh' : (isTablet ? '3.6vh' : `${2.56 * scaleFactor}vh`),
-      tile: isPhone ? '3vh' : '2.2vh',
-      tileDesc: isPhone ? '2.2vh' : (isTablet ? '1.6vh' : `${0.8 * scaleFactor}vh`)
+      page: isPhone ? '6.655vh' : (isTablet ? '5.324vh' : '4.84vh'),
+      subtitle: isPhone ? '3.5vh' : (isTablet ? '2.5vh' : '1.8vh'),
+      section: isPhone ? '6.05vh' : (isTablet ? '4.84vh' : '4.4vh'),
+      tile: isPhone ? '5.5vh' : (isTablet ? '4.4vh' : '4.0vh'),
+      tileDesc: isPhone ? '3.3vh' : (isTablet ? '2.6vh' : '2.0vh')
     };
 
-    return { isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, scaleFactor, shouldHideDeviceTime, titleSizes };
-  }, [windowSize.width, windowSize.height, showDeviceTime, player1.color, player2.color]); 
+    return { isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, shouldHideDeviceTime, titleSizes };
+  }, [windowSize.width, windowSize.height, showDeviceTime]); 
 
   // Calculate shared font size for team names to occupy 95% of vertical space
   const sharedTeamNameFontSize = useMemo(() => {
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * (0.1 * deviceInfo.scaleFactor);
+    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
     const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : topBarHeightVal;
     const availableHeight = windowSize.height - topBarHeight;
     const targetHeight = availableHeight * 0.9;
@@ -175,12 +174,12 @@ export default function App() {
   }, [windowSize.height, windowSize.width, team1Name, team2Name, deviceInfo, isNavVisible]);
 
   const sharedPlayerNameFontSize = useMemo(() => {
-    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.08 * deviceInfo.scaleFactor) : (windowSize.width * 0.08 * deviceInfo.scaleFactor));
-    const mainPadding = deviceInfo.isPhone ? (windowSize.width * 0.04) : (windowSize.width < 1024 ? (windowSize.width * 0.05 * deviceInfo.scaleFactor) : (windowSize.width * 0.04 * deviceInfo.scaleFactor));
+    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.08) : (windowSize.width * 0.08));
+    const mainPadding = deviceInfo.isPhone ? (windowSize.width * 0.04) : (windowSize.width < 1024 ? (windowSize.width * 0.05) : (windowSize.width * 0.04));
     let availableWidth = windowSize.width - (sidebarWidth * 2) - mainPadding;
     
     if (windowSize.width >= 1024) {
-      availableWidth = Math.min(windowSize.width * 0.8 * deviceInfo.scaleFactor, availableWidth);
+      availableWidth = Math.min(windowSize.width * 0.8, availableWidth);
     }
 
     let cardWidth;
@@ -213,11 +212,10 @@ export default function App() {
   const labelFontSize = useMemo(() => {
     // We want 1pt bigger than Teamname field.
     // teamEntryStyle baseFs: Phone: 6, Tablet: 4, Desktop: 3
-    const factor = deviceInfo.scaleFactor;
     const offset = 0.5; 
-    if (deviceInfo.isPhone) return `${(6 + offset) * factor}vh`;
-    if (deviceInfo.isTablet) return `${(4 + offset) * factor}vh`;
-    return `${(3 + offset) * factor}vh`;
+    if (deviceInfo.isPhone) return `${(6 + offset)}vh`;
+    if (deviceInfo.isTablet) return `${(4 + offset)}vh`;
+    return `${(3 + offset)}vh`;
   }, [deviceInfo]);
 
   const playerPrefLabelFontSize = useMemo(() => {
@@ -228,17 +226,16 @@ export default function App() {
   }, [labelFontSize]);
 
   const settingsLabelFontSize = useMemo(() => {
-    const factor = deviceInfo.scaleFactor;
     const offset = 0.5; 
     const baseScale = 1.4;
-    if (deviceInfo.isPhone) return `${(6 + offset) * factor * baseScale}vh`;
-    if (deviceInfo.isTablet) return `${(4 + offset) * factor * baseScale}vh`;
-    return `${(3 + offset) * factor * baseScale}vh`;
+    if (deviceInfo.isPhone) return `${(6 + offset) * baseScale}vh`;
+    if (deviceInfo.isTablet) return `${(4 + offset) * baseScale}vh`;
+    return `${(3 + offset) * baseScale}vh`;
   }, [deviceInfo]);
 
   const teamEntryStyle = useMemo(() => {
     const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
-    const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
+    const fs = `${baseFs}vh`;
     const style: React.CSSProperties = { fontSize: fs };
     
     // Generous padding for all devices
@@ -255,7 +252,7 @@ export default function App() {
 
   const playerEntryStyle = useMemo(() => {
     const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
-    const fs = `${baseFs * deviceInfo.scaleFactor}vh`;
+    const fs = `${baseFs}vh`;
     const style: React.CSSProperties = { fontSize: fs };
     
     // Reduced padding for cleaner look as requested
@@ -271,8 +268,7 @@ export default function App() {
   const entryTotalHeight = useMemo(() => {
     const baseFs = deviceInfo.isPhone ? 6 : (deviceInfo.isTablet ? 4 : 3);
     const vPadValue = deviceInfo.isPhone ? 1.5 : (deviceInfo.isTablet ? 2 : 2.5);
-    const scale = deviceInfo.scaleFactor;
-    return `${(baseFs * scale * 1.2) + (vPadValue * 2)}vh`;
+    return `${(baseFs * 1.2) + (vPadValue * 2)}vh`;
   }, [deviceInfo]);
 
   // Keyboard detection for mobile
@@ -1627,12 +1623,12 @@ export default function App() {
       return windowSize.width * 0.104;
     };
 
-    const halfH = deviceInfo.isPhone ? (windowSize.height * 0.025) : (windowSize.height * (0.04 * deviceInfo.scaleFactor));
-    const gap = windowSize.height * (0.05 * deviceInfo.scaleFactor);
+    const halfH = deviceInfo.isPhone ? (windowSize.height * 0.025) : (windowSize.height * 0.04);
+    const gap = windowSize.height * 0.05;
 
     // Default positional offsets to ensure centralized alignment with score digits
-    const vOffset = windowSize.height * (0.04 * deviceInfo.scaleFactor); // Back to 4vh raise
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * (0.1 * deviceInfo.scaleFactor);
+    const vOffset = windowSize.height * 0.04; // Back to 4vh raise
+    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
     const topBarOffset = (deviceInfo.isPhone && !isNavVisible) ? -topBarHeightVal : topBarHeightVal;
     const centerY = (windowSize.height + topBarOffset) / 2;
     const centerX = windowSize.width / 2;
@@ -1709,11 +1705,11 @@ export default function App() {
           opacity: 1
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-2 sm:px-4`}
+        className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-[2.5vw]`}
         style={{ 
           borderBottom: '0.125rem solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-          height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh`
+          height: deviceInfo.isPhone ? '16vh' : '10vh'
         }}
       >
         <div className="flex items-center gap-[1vw] shrink-0 transform-none">
@@ -1721,14 +1717,14 @@ export default function App() {
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: deviceInfo.isPhone ? '12vh' : `${8 * deviceInfo.scaleFactor}vh`,
-              height: deviceInfo.isPhone ? '12vh' : `${8 * deviceInfo.scaleFactor}vh`
+              width: deviceInfo.isPhone ? '12vh' : '8vh',
+              height: deviceInfo.isPhone ? '12vh' : '8vh'
             }}
           />
           <h1 
             className={`transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''} flex items-center`}
             style={{ 
-              height: deviceInfo.isPhone ? '11vh' : `${9 * deviceInfo.scaleFactor}vh`,
+              height: deviceInfo.isPhone ? '11vh' : '9vh',
             }}
           >
             <svg 
@@ -1764,13 +1760,16 @@ export default function App() {
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
           {!deviceInfo.shouldHideDeviceTime && (
             <div 
-              className="flex items-center justify-center px-4 rounded-lg bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
-              style={{ height: `${9 * deviceInfo.scaleFactor}vh` }}
+              className="flex items-center justify-center px-4 bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
+              style={{ 
+                height: '9vh',
+                borderRadius: '1.5vh'
+              }}
             >
               <span 
                 className="font-mono font-black text-white tracking-wider tabular-nums leading-none"
                 style={{
-                  fontSize: `${6 * deviceInfo.scaleFactor}vh`
+                  fontSize: '6vh'
                 }}
               >
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -1782,10 +1781,11 @@ export default function App() {
         <div className="flex items-center gap-[1vw] shrink-0 justify-end">
           <button 
             onClick={toggleFullscreen}
-            className="rounded-xl flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 flex"
+            className="flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50"
             style={{
-              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
-              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
+              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              borderRadius: '1.5vh'
             }}
             title="Toggle Fullscreen"
           >
@@ -1793,33 +1793,34 @@ export default function App() {
               <Minimize 
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
-                  height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
+                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
+                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
                 }} 
               /> : 
               <Maximize 
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
-                  height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
+                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
+                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
                 }} 
               />
             }
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'scoreboard' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
-              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
+              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              borderRadius: '1.5vh'
             }}
           >
             <Trophy 
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
-                height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
+                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
+                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
               }} 
             />
           </button>
@@ -1828,11 +1829,12 @@ export default function App() {
               setView('teams');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'teams' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
-              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
+              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              borderRadius: '1.5vh'
             }}
           >
             <Users 
@@ -1848,18 +1850,19 @@ export default function App() {
               setView('settings');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`rounded-xl flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
             style={{
               backgroundColor: view === 'settings' ? `${player2.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`,
-              height: deviceInfo.isPhone ? '12.5vh' : `${8 * deviceInfo.scaleFactor}vh`
+              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              borderRadius: '1.5vh'
             }}
           >
             <Settings 
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`,
-                height: deviceInfo.isPhone ? '9.5vh' : `${7 * deviceInfo.scaleFactor}vh`
+                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
+                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
               }} 
             />
           </button>
@@ -1880,7 +1883,7 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh` }} />
+              <div style={{ height: deviceInfo.isPhone ? '16vh' : '10vh' }} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -1903,7 +1906,7 @@ export default function App() {
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh` }} />
+              <div style={{ height: deviceInfo.isPhone ? '16vh' : '10vh' }} />
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
@@ -2055,19 +2058,20 @@ export default function App() {
         initial={false}
         animate={{ 
           paddingTop: (view === 'teams' || view === 'settings')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + 4vh)`
+            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 4vh)`
             : (view === 'match-details'
-                ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + 1vh)`
+                ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 1vh)`
                 : (view === 'scoreboard' 
-                    ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)) 
+                    ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
                     : 0)),
           y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center gap-4' : 'justify-start pb-24'} px-4 sm:px-6 mx-auto w-full`}
+        className={`relative z-10 min-h-[100dvh] flex flex-col ${view === 'scoreboard' ? 'justify-center gap-4' : 'justify-start pb-24'} ${(view === 'teams' || view === 'settings' || view === 'match-details') ? 'px-0' : 'px-4 sm:px-6'} mx-auto w-full`}
         style={{ 
-          maxWidth: view === 'scoreboard' ? '100%' : (deviceInfo.isDesktop ? `min(95vw, ${62 * deviceInfo.scaleFactor}rem)` : 'min(95vw, 62rem)'),
+          maxWidth: (view === 'teams' || view === 'settings' || view === 'match-details') ? '95vw' : (view === 'scoreboard' ? '100%' : 'min(95vw, 62rem)'),
+          width: (view === 'teams' || view === 'settings' || view === 'match-details') ? '95vw' : 'auto',
           margin: '0 auto'
         }}
       >
@@ -2091,10 +2095,15 @@ export default function App() {
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
                   <button
                     onClick={finishMatch}
-                    className="pointer-events-auto hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
+                    className="pointer-events-auto hover:bg-black/40 backdrop-blur-md flex items-center justify-center font-black transition-all shadow-2xl active:scale-95 floating-widget widget-finish-match whitespace-nowrap"
                     style={{ 
-                      border: '0.0625rem solid transparent',
-                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                      width: 'auto',
+                      padding: '2vh 1vw',
+                      height: 'auto',
+                      fontSize: !deviceInfo.isDesktop ? '4.5vh' : '4vh',
+                      borderRadius: '1.5vh',
+                      border: '0.2vh solid transparent',
+                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${!deviceInfo.isDesktop ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
                       backgroundOrigin: 'border-box',
                       backgroundClip: 'padding-box, border-box',
                       color: '#fff'
@@ -2134,7 +2143,7 @@ export default function App() {
                     backgroundSize: '0.25rem 0.25rem',
                             boxShadow: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
                               ? 'inset -1.25rem -1.25rem 3.75rem rgba(0,0,0,0.8), inset 1.25rem 1.25rem 3.75rem rgba(255,255,255,0.4), 0 1.25rem 2.5rem rgba(0,0,0,0.3)'
-                              : `0 0 40px -15px ${p.color}66`,
+                              : `0 0 2.5rem -0.9375rem ${p.color}66`,
                             width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '35vw',
                             margin: '0 auto',
                             height: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '65vh',
@@ -2154,7 +2163,7 @@ export default function App() {
                                      )}
                                      {/* Rotated Numeral Circle */}
                                      <div className={`absolute z-10 top-[15%] ${idx === 0 ? 'right-[15%]' : 'left-[15%]'} w-[25%] aspect-square bg-white rounded-full flex items-center justify-center shadow-lg`}>
-                                        <span className="text-black font-black text-sm lg:text-xl leading-none">{ball?.number}</span>
+                                        <span className="text-black font-black text-[min(1.25rem,2vh)] leading-none">{ball?.number}</span>
                                      </div>
                                      {/* 3D Highlight shadow wrap */}
                                      <div className="absolute inset-0 z-0 pointer-events-none rounded-full shadow-[inset_-2.5rem_-2.5rem_5rem_rgba(0,0,0,0.6)]" />
@@ -2178,7 +2187,7 @@ export default function App() {
                                  backgroundColor: p.color
                                }}
                              >
-                               <Plus className="w-5 h-5 font-bold" />
+                               <Plus className="w-[1.25rem] h-[1.25rem] font-bold" />
                              </button>
 
                              <button
@@ -2192,7 +2201,7 @@ export default function App() {
                                  height: '12vh'
                                }}
                              >
-                               <Minus className="w-4 h-4" />
+                               <Minus className="w-[1rem] h-[1rem]" />
                              </button>
                               
 
@@ -2244,7 +2253,7 @@ export default function App() {
                             className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 pb-15" 
                             style={{ 
                               color: p.color,
-                              fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : `${35 * deviceInfo.scaleFactor}vh`)
+                              fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh')
                             }}
                           >
                             {p.score}
@@ -2262,22 +2271,24 @@ export default function App() {
                                   setMatchStartTime(new Date().toISOString());
                                 }
                                 frameStartTimeRef.current = Date.now();
-                                if (currentBreakPlayerId === 'none') {
-                                  setCurrentBreakPlayerId(p.id as '1' | '2');
-                                } else {
-                                  // Clicking an already set breaker toggles to the other, 
-                                  // common pattern for manual overrides
-                                  setCurrentBreakPlayerId(p.id === '1' ? '2' : '1');
-                                }
+                                // Manual Override: Always set to this player's side when clicked
+                                setCurrentBreakPlayerId(p.id as '1' | '2');
                               }
                             }}
-                            className={`absolute w-10 h-10 rounded-full border-4 transition-all duration-500 z-50 flex items-center justify-center 
-                              ${idx === 0 ? 'left-[1vh] top-[1vh]' : 'right-[1vh] top-[1vh]'}
+                            className={`absolute rounded-full transition-all duration-500 z-50 flex items-center justify-center 
                               ${currentBreakPlayerId === p.id 
-                                ? 'bg-white border-white shadow-[0_0_25px_rgba(255,255,255,1)] scale-125 z-50' 
+                                ? 'bg-white border-white shadow-[0_0_1.5rem_rgba(255,255,255,1)] scale-125 z-50' 
                                 : (currentBreakPlayerId === 'none' 
                                     ? 'bg-white/30 border-white/20 scale-100 opacity-40 grayscale-[0.5]' 
                                     : 'bg-white/10 border-white/5 scale-90 opacity-10 grayscale')}`}
+                            style={{
+                              width: '6vh',
+                              height: '6vh',
+                              borderWidth: '0.4vh',
+                              borderStyle: 'solid',
+                              top: deviceInfo.isPhone ? '1.8vh' : '0.8vh',
+                              [idx === 0 ? 'left' : 'right']: deviceInfo.isPhone ? '1.8vh' : '0.8vh'
+                            } as any}
                             title={currentBreakPlayerId === 'none' ? "Select Starting Breaker" : "Break Indicator"}
                           />
                       )}
@@ -2300,17 +2311,16 @@ export default function App() {
               className="space-y-12 pb-10"
             >
               <div 
-                className="relative flex items-center justify-center pb-8 transition-all duration-500 mb-12 w-[100vw]"
+                className="relative flex items-center justify-center pb-8 transition-all duration-500 mb-12 w-full"
                 style={{ 
                   borderBottom: '0.125rem solid',
-                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                  marginLeft: 'calc(-1 * (50vw - 50%))'
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
                 <div className="space-y-1 text-center">
                   <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.titleSizes.page }}>Team Setup</h2>
                 </div>
-                <div className="absolute right-0 bottom-[1vh] flex items-center gap-3">
+                <div className="absolute right-[2.5vw] bottom-[1vh] flex items-center gap-3">
                   <button 
                     onClick={() => setShowExportMenu(true)}
                     className="flex items-center justify-between gap-5 px-4 sm:px-5 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg sm:rounded-xl transition-all border-2"
@@ -2326,14 +2336,14 @@ export default function App() {
                   </button>
                   <button 
                     onClick={uploadData}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg sm:rounded-xl transition-all font-bold text-[10px] sm:text-sm border-2"
+                    className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg sm:rounded-xl transition-all font-bold text-[0.625rem] sm:text-sm border-2"
                     style={{ 
                       borderColor: player1.color + '66',
                       color: '#fff',
                       backgroundColor: 'transparent'
                     }}
                   >
-                    <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <Upload className="w-[0.75rem] h-[0.75rem] sm:w-[1rem] sm:h-[1rem]" />
                     Import
                   </button>
                 </div>
@@ -2370,7 +2380,8 @@ export default function App() {
                             style={{ 
                               borderColor: player1.color + '33', 
                               color: player1.color,
-                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh'
+                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
+                              minWidth: '2vw'
                             }}
                           >
                             {idx + 1}
@@ -2459,7 +2470,8 @@ export default function App() {
                             style={{ 
                               borderColor: player2.color + '33', 
                               color: player2.color,
-                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh'
+                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
+                              minWidth: '2vw'
                             }}
                           >
                             {idx + 1}
@@ -2522,13 +2534,11 @@ export default function App() {
               {/* Match Results Table */}
               <div id="matchups-table" className="space-y-8 pt-12 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
                 <h3 
-                  className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                  className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                   style={{ 
                     borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                     color: 'white',
-                    fontSize: deviceInfo.titleSizes.section,
-                    marginLeft: 'calc(-1 * (50vw - 50%))',
-                    paddingLeft: '15vw'
+                    fontSize: deviceInfo.titleSizes.section
                   }}
                 >
                   Match Results
@@ -2542,17 +2552,17 @@ export default function App() {
                       >
                         <thead>
                           <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] sm:text-xs lg:text-[0.9375rem] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
-                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] sm:text-xs lg:text-[0.9375rem] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
+                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
                               <div className="truncate">{team1Name || 'TEAM A'}</div>
                             </th>
-                            <th className="px-0.5 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
-                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
+                            <th className="px-0.5 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
+                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
                               <div className="truncate">{team2Name || 'TEAM B'}</div>
                             </th>
-                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
-                            <th className="px-1 sm:px-6 py-4 text-[10px] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear</th>
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[10px] sm:text-xs lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
+                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
+                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] sm:text-xs lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
                           </tr>
                         </thead>
                     <tbody>
@@ -2727,7 +2737,7 @@ export default function App() {
                   borderColor: player2.color + '44',
                   color: player2.color,
                   backgroundColor: 'rgba(0,0,0,0.5)',
-                  backdropBlur: '10px'
+                  backdropBlur: '0.625rem'
                 }}
               >
                 <Trash2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -2746,11 +2756,10 @@ export default function App() {
               className="space-y-12 pb-20"
             >
               <div 
-                className="space-y-1 pb-8 transition-all duration-500 text-center w-[100vw]"
+                className="space-y-1 pb-8 transition-all duration-500 text-center w-full"
                 style={{ 
                   borderBottom: '0.125rem solid',
-                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                  marginLeft: 'calc(-1 * (50vw - 50%))'
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
                 <h2 className="font-black uppercase tracking-tight text-white uppercase" style={{ fontSize: deviceInfo.titleSizes.page }}>Settings</h2>
@@ -2760,13 +2769,11 @@ export default function App() {
                 {/* 1. Colour Preferences */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Colour Preferences
@@ -2780,7 +2787,8 @@ export default function App() {
                           backgroundColor: p.bgColor,
                           borderColor: p.color,
                           boxShadow: `0 1rem 2.5rem -1rem ${p.color}33`,
-                          '--player-color': p.color 
+                          '--player-color': p.color,
+                          '--card-padding': deviceInfo.isPhone ? '1rem' : '2rem'
                         } as React.CSSProperties}
                       >
                       <div className="flex items-center justify-between">
@@ -2847,13 +2855,15 @@ export default function App() {
                               allowedStyles={['default', 'cloth', 'speed', 'dial']}
                               onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, screenStyle: style})) : setPlayer2(prev => ({...prev, screenStyle: style}))}
                             />
-                            {/* Screen Color Indicator Circle - 3rem (w-12 h-12) */}
+                            {/* Screen Color Indicator Circle - 3rem (w-12 h-12) - Attached to Card Edge */}
                             <div 
                               className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-2 ${idx === 0 ? 'left-0' : 'right-0'}`}
                               style={{ 
                                 backgroundColor: p.screenColor,
                                 borderColor: p.color,
-                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * var(--circle-offset)))' : 'translateX(var(--circle-offset))'}`,
+                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * (var(--card-padding) + 1.5rem)))' : 'translateX(calc(var(--card-padding) + 1.5rem))'}`,
+                                opacity: 1,
+                                filter: `drop-shadow(0 0 1rem ${p.color}44)`
                               } as any}
                               title="Screen Background Color"
                             />
@@ -2867,37 +2877,42 @@ export default function App() {
                 {/* 2. Break Tracker */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Break Tracker
                   </h3>
                   <div 
                     onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
                     style={{ borderColor: player1.color }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Break Tracking</p>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
+                    {/* Title Box - Top */}
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Break Tracking</p>
+                    </div>
+
+                    {/* Content Box - Description & Toggle */}
+                    <div className="flex items-center justify-between gap-[4vw]">
+                      <div className="flex-1">
+                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsBreakTrackingEnabled(!isBreakTrackingEnabled);
-                        }}
-                        className={`w-14 h-7 rounded-full transition-colors relative`}
-                        style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
-                      >
-                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
-                      </button>
+                      <div className="shrink-0">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsBreakTrackingEnabled(!isBreakTrackingEnabled);
+                          }}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
+                        >
+                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -2905,49 +2920,54 @@ export default function App() {
                 {/* 3. Device Time */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Device Time
                   </h3>
                   <div 
                     onClick={() => setShowDeviceTime(!showDeviceTime)}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl cursor-pointer"
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative"
                     style={{ borderColor: player1.color }}
                   >
-                    <div className="space-y-1 text-center sm:text-left">
-                      <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Show Device Time</p>
-                      <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
+                    {/* Title Box - Top */}
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Show Device Time</p>
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowDeviceTime(!showDeviceTime);
-                      }}
-                      className={`w-14 h-7 rounded-full transition-colors relative`}
-                      style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
-                    >
-                      <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
-                    </button>
+
+                    {/* Content Box - Description & Toggle */}
+                    <div className="flex items-center justify-between gap-[4vw]">
+                      <div className="flex-1">
+                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
+                      </div>
+                      <div className="shrink-0">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeviceTime(!showDeviceTime);
+                          }}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
+                        >
+                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </section>
 
                 {/* 4. Shot Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Shot Clock
@@ -2957,25 +2977,32 @@ export default function App() {
                       setIsShotClockEnabled(!isShotClockEnabled);
                       if (isShotClockEnabled) pauseTimer();
                     }}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
                     style={{ borderColor: player2.color }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Shot Clock</p>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
+                    {/* Title Box - Top */}
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Shot Clock</p>
+                    </div>
+
+                    {/* Content Box - Description & Toggle */}
+                    <div className="flex items-center justify-between gap-[4vw]">
+                      <div className="flex-1 text-left">
+                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsShotClockEnabled(!isShotClockEnabled);
-                          if (isShotClockEnabled) pauseTimer();
-                        }}
-                        className={`w-14 h-7 rounded-full transition-colors relative`}
-                        style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
-                      >
-                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
-                      </button>
+                      <div className="shrink-0">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsShotClockEnabled(!isShotClockEnabled);
+                            if (isShotClockEnabled) pauseTimer();
+                          }}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
+                        >
+                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                        </button>
+                      </div>
                     </div>
 
                     {isShotClockEnabled && (
@@ -3015,13 +3042,11 @@ export default function App() {
                 {/* 5. Match Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Match Clock
@@ -3031,25 +3056,32 @@ export default function App() {
                       setIsMatchClockEnabled(!isMatchClockEnabled);
                       if (isMatchClockEnabled) pauseTimer();
                     }}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
                     style={{ borderColor: player1.color }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Match Clock</p>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>A master countdown for the entire match.</p>
+                    {/* Title Box - Top */}
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Match Clock</p>
+                    </div>
+
+                    {/* Content Box - Description & Toggle */}
+                    <div className="flex items-center justify-between gap-[4vw]">
+                      <div className="flex-1 text-left">
+                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>A master countdown for the entire match.</p>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsMatchClockEnabled(!isMatchClockEnabled);
-                          if (isMatchClockEnabled) pauseTimer();
-                        }}
-                        className={`w-14 h-7 rounded-full transition-colors relative`}
-                        style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
-                      >
-                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
-                      </button>
+                      <div className="shrink-0">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMatchClockEnabled(!isMatchClockEnabled);
+                            if (isMatchClockEnabled) pauseTimer();
+                          }}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
+                        >
+                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                        </button>
+                      </div>
                     </div>
 
                     {isMatchClockEnabled && (
@@ -3092,34 +3124,39 @@ export default function App() {
                 {/* 6. Restore Defaults */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     Restore Defaults
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
                       style={{ borderColor: player1.color }}
                     >
-                      <div className="space-y-1 text-center sm:text-left">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Restore Defaults</p>
+                      {/* Title Box - Top */}
+                      <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Restore Defaults</p>
+                      </div>
+
+                      {/* Content Box - Description */}
+                      <div className="w-full text-left">
                         <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Resets colors and clock settings to default.</p>
                       </div>
+
+                      {/* Restore Button - Absolute corner */}
                       <button 
                         onClick={() => {
                           setShowRestoreDefaultsConfirm(true);
                           setDeviceTimePosition(null);
                         }}
-                        className="px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
+                        className="absolute bottom-[2vw] right-[2vw] px-[4vw] sm:px-8 py-[2vw] sm:py-4 bg-slate-800 hover:bg-slate-700 rounded-xl sm:rounded-2xl text-[2.5vw] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className="w-[3vw] sm:w-4 h-[3vw] sm:h-4" />
                         Restore Defaults
                       </button>
                     </div>
@@ -3128,24 +3165,27 @@ export default function App() {
 
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.titleSizes.section,
-                      marginLeft: 'calc(-1 * (50vw - 50%))',
-                      paddingLeft: '15vw'
+                      fontSize: deviceInfo.titleSizes.section
                     }}
                   >
                     API Configuration
                   </h3>
-                  <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-6 shadow-xl relative overflow-hidden">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                  <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative overflow-hidden">
+                    {/* Title Box - Top */}
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                       <p className="font-black text-slate-200 uppercase tracking-tight text-center leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Tournament Sync</p>
+                    </div>
+
+                    {/* Content Box */}
+                    <div className="flex items-center gap-4 w-full">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
                         <Server className="w-6 h-6 text-emerald-400" />
                       </div>
-                      <div className="flex-1">
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Outbound Tournament Data Sync</p>
+                      <div className="flex-1 w-full text-center sm:text-left">
                       </div>
                       {isApiLocked ? (
                         <div className="flex items-center gap-2">
@@ -3296,13 +3336,12 @@ export default function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="space-y-8 pb-20"
+              className="space-y-8 pb-20 w-full max-w-[95vw] mx-auto"
             >
               <div 
-                className="relative flex items-center justify-center pb-8 border-b-2 min-h-[5rem] sm:min-h-[7rem] w-[100vw]"
+                className="relative flex items-center justify-center pb-8 border-b-2 min-h-[5rem] sm:min-h-[7rem] w-full"
                 style={{ 
-                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                  marginLeft: 'calc(-1 * (50vw - 50%))'
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
                 <div className="absolute left-0 bottom-[1vh]">
@@ -3372,49 +3411,49 @@ export default function App() {
                     {/* Frame Table */}
                     <div className="overflow-hidden rounded-3xl border border-slate-800/50 shadow-2xl bg-black/40 backdrop-blur-3xl">
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-full">
+                        <table className="w-full text-left border-collapse table-fixed">
                           <thead>
                             <tr className="bg-slate-900/80 border-b-2 border-slate-800/50">
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%]">Frame</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[17%]">Breaker</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[17%]">Winner</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[13%]">Score</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[15%]">Start</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[15%]">Finish</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[15%]">Duration</th>
+                              <th className="pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.6vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[2%] whitespace-nowrap">#</th>
+                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%]">Breaker</th>
+                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] text-left">Winner</th>
+                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] text-center">Score</th>
+                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] text-center">Start</th>
+                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] text-center whitespace-nowrap">Finish</th>
+                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[14%] pr-[2vw]">Duration</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/30">
                             {match.frameDetails && match.frameDetails.length > 0 ? match.frameDetails.map((frame, fidx) => (
                               <tr key={fidx} className="hover:bg-emerald-500/5 transition-colors group">
-                                <td className="px-5 py-4 text-xs sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors">#{frame.frameNumber}</td>
-                                <td className="px-5 py-4">
-                                  <span className="text-xs sm:text-sm font-bold text-slate-300 uppercase letter-spacing-tight">{frame.breakerName}</span>
+                                <td className="pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap">#{frame.frameNumber}</td>
+                                <td className="px-[1vw] sm:px-5 py-[2vh]">
+                                  <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase letter-spacing-tight truncate block">{frame.breakerName}</span>
                                 </td>
-                                <td className="px-5 py-4">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-xs sm:text-sm font-black text-emerald-400 uppercase tracking-tight">{frame.winnerName}</span>
+                                <td className="px-[1vw] sm:px-5 py-[2vh]">
+                                  <div className="flex items-center gap-[0.5vw] sm:gap-2">
+                                    <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
                                   </div>
                                 </td>
-                                <td className="px-5 py-4 font-mono text-xs sm:text-base text-slate-500 font-bold tabular-nums">
-                                  {frame.score1}<span className="text-slate-700 mx-1">-</span>{frame.score2}
+                                <td className="px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap text-center">
+                                  {frame.score1}<span className="text-slate-700 mx-[0.2vw] sm:mx-1">-</span>{frame.score2}
                                 </td>
-                                <td className="px-5 py-4">
-                                  <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 tabular-nums">
+                                <td className="px-[0.5vw] sm:px-5 py-[2vh] text-center">
+                                  <span className="text-[1.8vw] sm:text-xs font-black text-slate-500 tabular-nums whitespace-nowrap">
                                     {frame.startTime ? new Date(frame.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (frame.duration ? new Date(new Date(frame.timestamp).getTime() - (frame.duration * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-')}
                                   </span>
                                 </td>
-                                <td className="px-5 py-4">
-                                  <span className="text-[0.625rem] sm:text-xs font-black text-slate-400 tabular-nums">
+                                <td className="px-[0.5vw] sm:px-5 py-[2vh] text-center">
+                                  <span className="text-[1.8vw] sm:text-xs font-black text-slate-400 tabular-nums whitespace-nowrap">
                                     {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                   </span>
                                 </td>
-                                <td className="px-5 py-4 text-right">
+                                <td className="px-[1vw] sm:px-5 py-[2vh] text-right pr-[2vw]">
                                   {frame.duration !== undefined && (
-                                    <div className="flex items-center justify-end gap-1 mt-0.5">
-                                      <Clock className="w-2.5 h-2.5 text-slate-700 font-bold" />
-                                      <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 uppercase tabular-nums">
+                                    <div className="flex items-center justify-end gap-[0.5vw] sm:gap-1 mt-0.5">
+                                      <Clock className="w-[2vw] sm:w-2.5 h-[2vw] sm:h-2.5 text-slate-700 font-bold" />
+                                      <span className="text-[2vw] sm:text-xs font-black text-slate-500 uppercase tabular-nums whitespace-nowrap">
                                         {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
                                       </span>
                                     </div>
@@ -3423,37 +3462,39 @@ export default function App() {
                               </tr>
                             )) : (
                               <tr>
-                                <td colSpan={7} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[0.625rem]">No detailed frame data available.</td>
+                                <td colSpan={7} className="px-[2vw] py-[8vh] text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[1.8vw]">No detailed frame data available.</td>
                               </tr>
                             )}
                           </tbody>
-                          {match.frameDetails && match.frameDetails.length > 0 && (
-                            <tfoot>
-                              <tr className="bg-slate-900/60 border-t-2 border-slate-800/50">
-                                <td className="px-5 py-6 text-xs sm:text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Totals</td>
-                                <td className="px-5 py-6" colSpan={2}></td>
-                                <td className="px-5 py-6 font-mono text-lg sm:text-2xl font-black tabular-nums" style={{ color: 'white' }}>
-                                  <span style={{ color: player1.color }}>{match.score1}</span>
-                                  <span className="text-slate-700 mx-2">-</span>
-                                  <span style={{ color: player2.color }}>{match.score2}</span>
-                                </td>
-                                <td className="px-5 py-6" colSpan={2}></td>
-                                <td className="px-5 py-6 text-right">
-                                  <div className="flex flex-col items-end">
-                                    <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Total Duration</span>
-                                    <span className="text-sm sm:text-lg font-black text-white tabular-nums">
-                                      {(() => {
-                                        const totalSec = match.frameDetails.reduce((acc, f) => acc + (f.duration || 0), 0);
-                                        return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`;
-                                      })()}
-                                    </span>
-                                  </div>
-                                </td>
-                              </tr>
-                            </tfoot>
-                          )}
                         </table>
                       </div>
+
+                      {/* Totals Section - Dedicated Element */}
+                      {match.frameDetails && match.frameDetails.length > 0 && (
+                        <div className="bg-slate-900/60 border-t-2 border-slate-800/50 px-[2vw] py-[2vh] sm:py-[3vh]">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-[2vw]">
+                              <span className="text-[2.2vw] sm:text-sm font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">Totals</span>
+                            </div>
+
+                            <div className="absolute left-1/2 -translate-x-1/2 flex items-center font-mono text-[4.5vw] sm:text-3xl font-black tabular-nums">
+                              <span style={{ color: player1.color }}>{match.score1}</span>
+                              <span className="text-slate-700 mx-[1vw] sm:mx-3">-</span>
+                              <span style={{ color: player2.color }}>{match.score2}</span>
+                            </div>
+
+                            <div className="flex flex-col items-end">
+                              <span className="text-[1.8vw] sm:text-xs font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Total Duration</span>
+                              <span className="text-[2.5vw] sm:text-lg font-black text-white tabular-nums">
+                                {(() => {
+                                  const totalSec = match.frameDetails.reduce((acc, f) => acc + (f.duration || 0), 0);
+                                  return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`;
+                                })()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex justify-between items-center px-4">
@@ -3766,7 +3807,7 @@ export default function App() {
                 className="bg-black border-2 p-6 sm:p-10 rounded-[1.875rem] sm:rounded-[2.5rem] max-w-2xl w-full space-y-6 sm:space-y-10 text-center"
                 style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-                  boxShadow: `0 0 50px ${player1.color}11`
+                  boxShadow: `0 0 3.125rem ${player1.color}11`
                 }}
               >
                 <div className="space-y-2">
@@ -3802,7 +3843,7 @@ export default function App() {
                   className="w-full h-14 sm:h-20 text-slate-950 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-2xl uppercase tracking-widest transition-all active:scale-95"
                   style={{ 
                     backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
-                    boxShadow: `0 10px 20px ${player1.color}33`
+                    boxShadow: `0 0.625rem 1.25rem ${player1.color}33`
                   }}
                 >
                   Close Results
@@ -3814,11 +3855,11 @@ export default function App() {
       </motion.main>
 
       {/* Navigation Bar Spacing for history view */}
-      {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && <div className="h-16 lg:h-32" />}
+      {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && view !== 'match-details' && <div className="h-16 lg:h-32" />}
 
       {/* Quick Actions Floating Bar (Mobile) */}
       <AnimatePresence>
-        {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && (
+        {view !== 'scoreboard' && view !== 'teams' && view !== 'settings' && view !== 'match-details' && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

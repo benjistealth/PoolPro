@@ -9,14 +9,12 @@
 :root {
   --sidebar-width: 12vw;
   --gameplay-width: calc(100vw - 24vw);
-  --circle-offset: calc(100% + 4vw);
 }
 
 @media (min-width: 640px) {
   :root {
     --sidebar-width: 10vw;
     --gameplay-width: calc(100vw - 20vw);
-    --circle-offset: calc(100% + 3vw);
   }
 }
 
@@ -24,7 +22,6 @@
   :root {
     --sidebar-width: 10.4vw;
     --gameplay-width: min(84vw, calc(100vw - 20.8vw));
-    --circle-offset: calc((100vw - var(--gameplay-width)) / 4 + 7.8vw);
   }
 }
 
@@ -66,10 +63,7 @@
 
   .floating-widget {
     @apply transition-all duration-300;
-    width: 24vw;
-    height: 5.5vh !important;
     min-width: 5rem;
-    min-height: 3.5vh;
   }
 
   .widget-text { font-size: 2.8vh !important; }
@@ -77,9 +71,6 @@
   .widget-icon { width: 3.8vh !important; height: 3.8vh !important; }
 
   .widget-finish-match {
-    width: auto !important;
-    height: auto !important;
-    padding: 1vh 2vh !important;
     min-width: 0 !important;
     min-height: 0 !important;
   }
