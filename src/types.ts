@@ -27,6 +27,7 @@ export interface MatchupSettings {
 
 export interface FrameDetail {
   frameNumber: number;
+  startTime?: string;
   timestamp: string;
   score1: number;
   score2: number;
@@ -40,6 +41,7 @@ export interface FrameDetail {
 export interface MatchHistoryEntry {
   id: string;
   date: string;
+  startTime?: string;
   player1: string;
   player2: string;
   team1?: string;

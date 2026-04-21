@@ -57,27 +57,73 @@ export default function App() {
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
-  const frameStartTimeRef = useRef<number>(Date.now());
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const isKeyboardOpenRef = useRef(false);
   const [windowSize, setWindowSize] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
     height: typeof window !== 'undefined' ? window.innerHeight : 768 
   });
+  const [activePicker, setActivePicker] = useState<string | null>(null);
+  const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
+  const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
+  const [isShotClockEnabled, setIsShotClockEnabled] = useState(false);
+  const [matchClock, setMatchClock] = useState(600);
+  const [matchClockDuration, setMatchClockDuration] = useState(600);
+  const [isMatchClockEnabled, setIsMatchClockEnabled] = useState(false);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isEditingNames, setIsEditingNames] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showClearTeamsConfirm, setShowClearTeamsConfirm] = useState(false);
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showTeamTotals, setShowTeamTotals] = useState(false);
+  const [isBreakTrackingEnabled, setIsBreakTrackingEnabled] = useState(true);
+  const [currentBreakPlayerId, setCurrentBreakPlayerId] = useState<'1' | '2' | 'none'>('none');
+  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
+  const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'server'>('download');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exportEmail, setExportEmail] = useState('');
+  const [apiConfig, setApiConfig] = useState({ url: '', key: '' });
+  const [isApiLocked, setIsApiLocked] = useState(true);
+  const [pinInput, setPinInput] = useState('');
+  const [isApiSending, setIsApiSending] = useState(false);
+  const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
+  const [showDeviceTime, setShowDeviceTime] = useState(true);
+  const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
+  const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
+  const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const frameStartTimeRef = useRef<number>(Date.now());
+  const isKeyboardOpenRef = useRef(false);
+  const clockRef = useRef<HTMLDivElement>(null);
+  const matchClockRef = useRef<HTMLDivElement>(null);
+  const shotClockRef = useRef<HTMLDivElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    
+    // Update current time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearInterval(timeInterval);
+    };
   }, []);
 
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
-    const isTabletUA = ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"));
     
     // We prioritize height for scaling tiers in landscape-intended apps.
     // Screens below 768px wide OR below 500px tall are treated as phone for compact top bars.
@@ -85,11 +131,25 @@ export default function App() {
     const isTablet = !isPhone && windowSize.width < 1024;
     const isDesktop = !isPhone && !isTablet;
     const isLandscape = windowSize.width > windowSize.height;
+    const isPortrait = windowSize.width <= windowSize.height;
+    const aspectRatioHW = windowSize.height / windowSize.width;
+    const isCloserTo1_1Than1_2 = aspectRatioHW > 0.75;
+    const shouldHideDeviceTime = isPortrait || isCloserTo1_1Than1_2 || !showDeviceTime;
+
     const isShort = windowSize.height < 500;
     const scaleFactor = isDesktop ? 1.3 : 1.0;
 
-    return { isPhone, isTablet, isDesktop, isLandscape, isShort, scaleFactor };
-  }, [windowSize.width, windowSize.height]); 
+    // Unified title sizes based on device
+    const titleSizes = {
+      page: isPhone ? '5vh' : (isTablet ? '3.2vh' : `${3 * scaleFactor}vw`),
+      subtitle: isPhone ? '2.8vh' : (isTablet ? '1.8vh' : `${1.3 * scaleFactor}vw`),
+      section: isPhone ? '4.6vh' : (isTablet ? '3.6vh' : `${2.56 * scaleFactor}vh`),
+      tile: isPhone ? '3vh' : '2.2vh',
+      tileDesc: isPhone ? '2.2vh' : (isTablet ? '1.6vh' : `${0.8 * scaleFactor}vh`)
+    };
+
+    return { isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, scaleFactor, shouldHideDeviceTime, titleSizes };
+  }, [windowSize.width, windowSize.height, showDeviceTime, player1.color, player2.color]); 
 
   // Calculate shared font size for team names to occupy 95% of vertical space
   const sharedTeamNameFontSize = useMemo(() => {
@@ -144,7 +204,8 @@ export default function App() {
     const fs2 = getFontSize(player2.name);
     const shared = Math.min(fs1, fs2);
 
-    const maxFs = deviceInfo.isPhone ? (windowSize.width * 0.08) : (windowSize.width < 1024 ? (windowSize.width * 0.04) : (windowSize.width * 0.03));
+    // Coordinate max font size with the TeamName scale (~14.4vw Phone, ~8.4vw Tablet/Desktop) - Reduced by another 20% from previous reduction
+    const maxFs = sidebarWidth * (deviceInfo.isPhone ? 0.768 : 0.672);
     
     return `${(Math.min(shared, maxFs) / windowSize.width) * 100}vw`;
   }, [windowSize.width, player1.name, player2.name, deviceInfo]);
@@ -158,6 +219,13 @@ export default function App() {
     if (deviceInfo.isTablet) return `${(4 + offset) * factor}vh`;
     return `${(3 + offset) * factor}vh`;
   }, [deviceInfo]);
+
+  const playerPrefLabelFontSize = useMemo(() => {
+    // 0.6x of the standard label font size
+    const base = parseFloat(labelFontSize);
+    const unit = labelFontSize.includes('vh') ? 'vh' : 'vw';
+    return `${base * 0.6}${unit}`;
+  }, [labelFontSize]);
 
   const settingsLabelFontSize = useMemo(() => {
     const factor = deviceInfo.scaleFactor;
@@ -291,53 +359,6 @@ export default function App() {
     }
   }, [view, team1Players.length, team2Players.length, isKeyboardOpen, deviceInfo]);
 
-  const [activePicker, setActivePicker] = useState<string | null>(null);
-  const [shotClock, setShotClock] = useState(SHOT_CLOCK_DEFAULT);
-  const [shotClockDuration, setShotClockDuration] = useState(SHOT_CLOCK_DEFAULT);
-  const [isShotClockEnabled, setIsShotClockEnabled] = useState(false);
-  const [matchClock, setMatchClock] = useState(600);
-  const [matchClockDuration, setMatchClockDuration] = useState(600);
-  const [isMatchClockEnabled, setIsMatchClockEnabled] = useState(false);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [isEditingNames, setIsEditingNames] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showClearTeamsConfirm, setShowClearTeamsConfirm] = useState(false);
-  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showTeamTotals, setShowTeamTotals] = useState(false);
-  const [isBreakTrackingEnabled, setIsBreakTrackingEnabled] = useState(false);
-  const [currentBreakPlayerId, setCurrentBreakPlayerId] = useState<'1' | '2'>('1');
-  const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
-  const [exportMethod, setExportMethod] = useState<'download' | 'share' | 'server'>('download');
-  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
-  const [exportEmail, setExportEmail] = useState('');
-  const emailInputRef = useRef<HTMLInputElement>(null);
-
-  const [apiConfig, setApiConfig] = useState({ url: '', key: '' });
-  const [isApiLocked, setIsApiLocked] = useState(true);
-  const [pinInput, setPinInput] = useState('');
-  const [isApiSending, setIsApiSending] = useState(false);
-  const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [showDeviceTime, setShowDeviceTime] = useState(true);
-  const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
-  const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
-  const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
-  const [finishButtonPosition, setFinishButtonPosition] = useState<{ x: number, y: number } | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const clockRef = useRef<HTMLDivElement>(null);
-  const matchClockRef = useRef<HTMLDivElement>(null);
-  const shotClockRef = useRef<HTMLDivElement>(null);
-  const finishButtonRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // --- Refs ---
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -419,6 +440,8 @@ export default function App() {
       
       if (state.gameData?.shotClock !== undefined) setShotClock(state.gameData.shotClock);
       if (state.gameData?.matchClock !== undefined) setMatchClock(state.gameData.matchClock);
+      if (state.gameData?.matchStartTime !== undefined) setMatchStartTime(state.gameData.matchStartTime);
+      if (state.gameData?.currentMatchFrameDetails !== undefined) setCurrentMatchFrameDetails(state.gameData.currentMatchFrameDetails);
 
       // Prepare Player Objects
       let p1 = { ...player1 };
@@ -430,8 +453,20 @@ export default function App() {
         if (state.userPreferences.isShotClockEnabled !== undefined) setIsShotClockEnabled(state.userPreferences.isShotClockEnabled);
         if (state.userPreferences.matchClockDuration !== undefined) setMatchClockDuration(state.userPreferences.matchClockDuration);
         if (state.userPreferences.isMatchClockEnabled !== undefined) setIsMatchClockEnabled(state.userPreferences.isMatchClockEnabled);
-        if (state.userPreferences.isBreakTrackingEnabled !== undefined) setIsBreakTrackingEnabled(state.userPreferences.isBreakTrackingEnabled);
-        if (state.userPreferences.currentBreakPlayerId !== undefined) setCurrentBreakPlayerId(state.userPreferences.currentBreakPlayerId);
+        
+        // Force break tracking to enabled for this version if it hasn't been explicitly migrated/toggled in this update session
+        const forceEnabled = !state.userPreferences.breakTrackingV2Applied;
+        if (forceEnabled) {
+          setIsBreakTrackingEnabled(true);
+        } else if (state.userPreferences.isBreakTrackingEnabled !== undefined) {
+          setIsBreakTrackingEnabled(state.userPreferences.isBreakTrackingEnabled);
+        }
+        
+        if (state.userPreferences.currentBreakPlayerId !== undefined) {
+          // Only load saved breaker if there is an active score, otherwise default to "none" (Ready state)
+          const hasActiveScore = (state.gameData?.player1Score || 0) > 0 || (state.gameData?.player2Score || 0) > 0;
+          setCurrentBreakPlayerId(hasActiveScore ? state.userPreferences.currentBreakPlayerId : 'none');
+        }
         
         if (state.userPreferences.player1) {
           p1 = { 
@@ -474,7 +509,6 @@ export default function App() {
       if (state.userPreferences?.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
       if (state.userPreferences?.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
       if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
-      if (state.userPreferences?.finishButtonPosition !== undefined) setFinishButtonPosition(state.userPreferences.finishButtonPosition);
 
       // Finalize loading after state updates are scheduled
       setTimeout(() => setIsLoaded(true), 10);
@@ -496,7 +530,9 @@ export default function App() {
         player2Score: player2.score, 
         selectedMatchIndex, 
         shotClock, 
-        matchClock 
+        matchClock,
+        matchStartTime,
+        currentMatchFrameDetails
       },
       userPreferences: {
         player1: { 
@@ -516,14 +552,14 @@ export default function App() {
         matchClockDuration,
         isMatchClockEnabled,
         isBreakTrackingEnabled,
+        breakTrackingV2Applied: true,
         currentBreakPlayerId,
         view,
         isNavVisible,
         showDeviceTime,
         deviceTimePosition,
         matchClockPosition,
-        shotClockPosition,
-        finishButtonPosition
+        shotClockPosition
       },
       matchupSettings,
       playerPreferences,
@@ -535,9 +571,9 @@ export default function App() {
     team1Name, team2Name, team1Players, team2Players,
     matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    isBreakTrackingEnabled, currentBreakPlayerId,
+    isBreakTrackingEnabled, currentBreakPlayerId, matchStartTime, currentMatchFrameDetails,
     view, isNavVisible,
-    showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition, finishButtonPosition,
+    showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
     matchupSettings, playerPreferences, apiConfig
   ]);
 
@@ -551,6 +587,13 @@ export default function App() {
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [saveState]);
+
+  // Handle scrolling to top when switching to match details
+  useEffect(() => {
+    if (view === 'match-details') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [view]);
 
   // Sync current player preferences when they change
   useEffect(() => {
@@ -673,6 +716,7 @@ export default function App() {
     
     const frameDetail: FrameDetail = {
       frameNumber: (player1.score + player2.score) + 1,
+      startTime: new Date(frameStartTimeRef.current).toISOString(),
       timestamp: new Date().toISOString(),
       score1: nextScore1,
       score2: nextScore2,
@@ -692,9 +736,16 @@ export default function App() {
       setPlayer2(prev => ({ ...prev, score: prev.score + 1 }));
     }
     
-    // Swap break indicator if tracking is enabled
+    if (!matchStartTime) {
+      setMatchStartTime(new Date().toISOString());
+    }
+
     if (isBreakTrackingEnabled) {
-      setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+      if (currentBreakPlayerId === 'none') {
+        setCurrentBreakPlayerId(playerId === '1' ? '2' : '1');
+      } else {
+        setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+      }
     }
     
     resetTimer();
@@ -723,6 +774,7 @@ export default function App() {
     const newEntry: MatchHistoryEntry = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
+      startTime: matchStartTime || undefined,
       player1: player1.name,
       player2: player2.name,
       team1: team1Name || undefined,
@@ -738,7 +790,9 @@ export default function App() {
     const updatedHistory = [newEntry, ...matchHistory];
     setMatchHistory(updatedHistory);
     setCurrentMatchFrameDetails([]);
+    setMatchStartTime(null);
     frameStartTimeRef.current = Date.now();
+    setCurrentBreakPlayerId('none');
     
     // Move to next matchup if available
     if (selectedMatchIndex !== null) {
@@ -839,6 +893,7 @@ export default function App() {
     }));
     
     setSelectedMatchIndex(index);
+    setCurrentBreakPlayerId('none');
     setView('scoreboard');
     resetTimer();
     resetMatchClock();
@@ -891,6 +946,7 @@ export default function App() {
     setMatchHistory([]);
     setMatchupSettings({});
     setSelectedMatchIndex(null);
+    setCurrentBreakPlayerId('none');
     setShotClock(shotClockDuration);
     setMatchClock(matchClockDuration);
     
@@ -1037,10 +1093,6 @@ export default function App() {
     if (shotClockPosition) {
       csvContent += `Shot Clock Position X,"${shotClockPosition.x}"\n`;
       csvContent += `Shot Clock Position Y,"${shotClockPosition.y}"\n`;
-    }
-    if (finishButtonPosition) {
-      csvContent += `Finish Button Position X,"${finishButtonPosition.x}"\n`;
-      csvContent += `Finish Button Position Y,"${finishButtonPosition.y}"\n`;
     }
 
     csvContent += "\nSECTION: PLAYER PREFERENCES\n";
@@ -1310,7 +1362,6 @@ export default function App() {
               if (state.userPreferences.deviceTimePosition !== undefined) setDeviceTimePosition(state.userPreferences.deviceTimePosition);
               if (state.userPreferences.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
               if (state.userPreferences.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
-              if (state.userPreferences.finishButtonPosition !== undefined) setFinishButtonPosition(state.userPreferences.finishButtonPosition);
               
               if (state.userPreferences.player1) {
                 setPlayer1(prev => ({ 
@@ -1427,8 +1478,6 @@ export default function App() {
                 if (key === 'Match Clock Position Y') setMatchClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
                 if (key === 'Shot Clock Position X') setShotClockPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
                 if (key === 'Shot Clock Position Y') setShotClockPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
-                if (key === 'Finish Button Position X') setFinishButtonPosition(prev => ({ x: parseFloat(val), y: prev?.y || 0 }));
-                if (key === 'Finish Button Position Y') setFinishButtonPosition(prev => ({ x: prev?.x || 0, y: parseFloat(val) }));
               } else if (currentSection === 'PLAYER PREFERENCES') {
                 if (values[0] === 'Player Name') return;
                 const name = values[0];
@@ -1569,27 +1618,9 @@ export default function App() {
   }, []);
 
   const [finishButtonWidth, setFinishButtonWidth] = useState(0);
-  const finishInnerRef = useRef<HTMLButtonElement>(null);
-
-  // Measure finish button width for precise centering
-  useEffect(() => {
-    if (finishInnerRef.current && view === 'scoreboard') {
-      const width = finishInnerRef.current.offsetWidth;
-      if (width > 0) setFinishButtonWidth(width);
-    }
-  }, [view, deviceInfo]);
 
     // Calculate half-widths for centering widgets based on device and widget type
-    const getWidgetHalfW = (type: 'clock' | 'finish') => {
-      // Use the stable deviceInfo detection consistent with CSS
-      if (type === 'finish') {
-        // Use measured width if available, otherwise fallback to reasonable estimates
-        if (finishButtonWidth > 0) return finishButtonWidth / 2;
-        // Fallbacks based on typical text length + padding
-        if (deviceInfo.isPhone) return windowSize.width * 0.1;
-        if (deviceInfo.isTablet) return windowSize.width * 0.09;
-        return windowSize.width * 0.11;
-      }
+    const getWidgetHalfW = (type: 'clock') => {
       // Clocks - Mobile: 24vw, Tablet: 16vw, Desktop: 20.8vw
       if (deviceInfo.isPhone) return windowSize.width * 0.12;
       if (deviceInfo.isTablet) return windowSize.width * 0.08;
@@ -1634,7 +1665,7 @@ export default function App() {
                     className="w-full h-full border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_10vh_rgba(0,0,0,0.5)]" 
                     style={{ backgroundColor: p.screenColor }}
                   >
-                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: p.screenStyle === 'speed' ? 'radial-gradient(#000 0.5px, transparent 0.5px)' : 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: p.screenStyle === 'speed' ? '0.8vw 0.8vw' : '1.5vw 1.5vw' }} />
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: p.screenStyle === 'speed' ? 'radial-gradient(#000 0.03rem, transparent 0.03rem)' : 'radial-gradient(#000 0.06rem, transparent 0.06rem)', backgroundSize: p.screenStyle === 'speed' ? '0.8vw 0.8vw' : '1.5vw 1.5vw' }} />
                     {/* Corner Pockets */}
                     <div className={`absolute top-0 left-0 w-[8vw] h-[8vw] bg-black rounded-br-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
                     <div className={`absolute top-0 right-0 w-[8vw] h-[8vw] bg-black rounded-bl-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
@@ -1651,7 +1682,7 @@ export default function App() {
                   className="absolute inset-0 opacity-40 z-0" 
                   style={{ 
                     backgroundImage: 'linear-gradient(45deg, #111 25.5%, transparent 25.5%), linear-gradient(-45deg, #111 25.5%, transparent 25.5%), linear-gradient(45deg, transparent 74.5%, #111 74.5%), linear-gradient(-45deg, transparent 74.5%, #111 74.5%)',
-                    backgroundSize: '8px 8px',
+                    backgroundSize: '0.5rem 0.5rem',
                     backgroundColor: '#1a1a1a'
                   }}
                 />
@@ -1680,7 +1711,7 @@ export default function App() {
         transition={{ duration: 0.4, ease: "easeInOut" }}
         className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-2 sm:px-4`}
         style={{ 
-          borderBottom: '2px solid',
+          borderBottom: '0.125rem solid',
           borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
           height: deviceInfo.isPhone ? '16vh' : `${10 * deviceInfo.scaleFactor}vh`
         }}
@@ -1712,17 +1743,17 @@ export default function App() {
                   <stop offset="100%" stopColor={player2.color} />
                 </linearGradient>
               </defs>
-              <text 
-                x="0" 
-                y="32" 
-                fill="url(#logo-grad-svg)" 
-                style={{ 
-                  fontFamily: 'Inter, sans-serif', 
-                  fontWeight: 900, 
-                  fontSize: '32px', 
-                  letterSpacing: '-0.03em' 
-                }}
-              >
+                <text 
+                  x="0" 
+                  y="32" 
+                  fill="url(#logo-grad-svg)" 
+                  style={{ 
+                    fontFamily: 'Inter, sans-serif', 
+                    fontWeight: 900, 
+                    fontSize: '2rem', 
+                    letterSpacing: '-0.03em' 
+                  }}
+                >
                 P<tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan><tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan>l<tspan textLength="6" lengthAdjust="spacingAndGlyphs" dx="1">-</tspan><tspan dx="1">P</tspan>r<tspan textLength="13" lengthAdjust="spacingAndGlyphs">o</tspan>.uk
               </text>
             </svg>
@@ -1731,7 +1762,7 @@ export default function App() {
 
         {/* Centered Device Time */}
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
-          {showDeviceTime && (
+          {!deviceInfo.shouldHideDeviceTime && (
             <div 
               className="flex items-center justify-center px-4 rounded-lg bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
               style={{ height: `${9 * deviceInfo.scaleFactor}vh` }}
@@ -1916,7 +1947,7 @@ export default function App() {
             <div 
               className="flex items-center justify-between px-1 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl floating-widget"
               style={{ 
-                border: '2px solid transparent',
+                border: '0.125rem solid transparent',
                 backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player1.color}, ${player2.color})`,
                 backgroundOrigin: 'border-box',
                 backgroundClip: 'padding-box, border-box'
@@ -1973,7 +2004,7 @@ export default function App() {
             <div 
               className="flex items-center justify-between px-1 sm:px-3 rounded-2xl bg-black border-2 shadow-2xl floating-widget"
               style={{ 
-                border: '2px solid transparent',
+                border: '0.125rem solid transparent',
                 backgroundImage: `linear-gradient(#000, #000), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
                 backgroundOrigin: 'border-box',
                 backgroundClip: 'padding-box, border-box'
@@ -2016,60 +2047,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Finish Match Button - Centered between cards at root level to avoid transform issues */}
-      <AnimatePresence>
-        {view === 'scoreboard' && (
-          <motion.div 
-            ref={finishButtonRef}
-            key="finish-button"
-            drag
-            dragMomentum={false}
-            onDragEnd={() => {
-              if (finishButtonRef.current) {
-                const rect = finishButtonRef.current.getBoundingClientRect();
-                setFinishButtonPosition({ x: rect.left, y: rect.top });
-              }
-            }}
-            initial={finishButtonPosition || { 
-              x: centerX - getWidgetHalfW('finish'), 
-              y: centerY - halfH - vOffset
-            }}
-            animate={finishButtonPosition ? { x: finishButtonPosition.x, y: finishButtonPosition.y } : {
-              x: centerX - getWidgetHalfW('finish'),
-              y: centerY - halfH - vOffset
-            }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            className="fixed z-[100] cursor-move pointer-events-auto touch-none"
-            style={{ left: 0, top: 0 }}
-          >
-            <button
-              ref={finishInnerRef}
-              onClick={finishMatch}
-              className="hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
-              style={{ 
-                border: '1px solid transparent',
-                backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
-                backgroundOrigin: 'border-box',
-                backgroundClip: 'padding-box, border-box',
-                color: '#fff'
-              }}
-            >
-              <span className="leading-none uppercase tracking-wider">Finish Match</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Finish Match Button - Static layout between cards */}
 
 
 
       <motion.main 
         initial={false}
         animate={{ 
-          paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + ${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)})`
-            : (view === 'scoreboard' 
-                ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)) 
-                : 0),
+          paddingTop: (view === 'teams' || view === 'settings')
+            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + 4vh)`
+            : (view === 'match-details'
+                ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)} + 1vh)`
+                : (view === 'scoreboard' 
+                    ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : `${10 * deviceInfo.scaleFactor}vh`)) 
+                    : 0)),
           y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
           paddingBottom: 0 
         }}
@@ -2096,8 +2087,26 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
                 className="relative flex flex-col gap-2 min-h-0 flex-1 justify-center"
               >
-              {/* Score Cards Grid */}
-              <div className="relative flex items-center justify-center w-full py-2">
+                {/* Fixed Centered Finish Match Button */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                  <button
+                    onClick={finishMatch}
+                    className="pointer-events-auto hover:bg-black/40 backdrop-blur-md rounded-2xl flex items-center justify-center font-black transition-all shadow-2xl border active:scale-95 floating-widget widget-finish-match whitespace-nowrap widget-text"
+                    style={{ 
+                      border: '0.0625rem solid transparent',
+                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${deviceInfo.isPhone ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                      backgroundOrigin: 'border-box',
+                      backgroundClip: 'padding-box, border-box',
+                      color: '#fff'
+                    }}
+                  >
+                    <span className="leading-none uppercase tracking-wider">Finish Match</span>
+                  </button>
+                </div>
+
+                {/* Score Cards Grid */}
+                <div className="relative flex items-center justify-center w-full py-2">
+
                 <div 
                   className="flex items-center justify-center w-full"
                   style={{ gap: '4vw' }}
@@ -2122,9 +2131,9 @@ export default function App() {
                             borderColor: p.color,
                             backgroundColor: p.bgColor,
                             backgroundImage: p.bgStyle === 'dial' ? 'linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.2) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.2) 75%)' : undefined,
-                            backgroundSize: p.bgStyle === 'dial' ? '4px 4px' : undefined,
+                    backgroundSize: '0.25rem 0.25rem',
                             boxShadow: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
-                              ? 'inset -20px -20px 60px rgba(0,0,0,0.8), inset 20px 20px 60px rgba(255,255,255,0.4), 0 20px 40px rgba(0,0,0,0.5)'
+                              ? 'inset -1.25rem -1.25rem 3.75rem rgba(0,0,0,0.8), inset 1.25rem 1.25rem 3.75rem rgba(255,255,255,0.4), 0 1.25rem 2.5rem rgba(0,0,0,0.3)'
                               : `0 0 40px -15px ${p.color}66`,
                             width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '35vw',
                             margin: '0 auto',
@@ -2148,7 +2157,7 @@ export default function App() {
                                         <span className="text-black font-black text-sm lg:text-xl leading-none">{ball?.number}</span>
                                      </div>
                                      {/* 3D Highlight shadow wrap */}
-                                     <div className="absolute inset-0 z-0 pointer-events-none rounded-full shadow-[inset_-40px_-40px_80px_rgba(0,0,0,0.6)]" />
+                                     <div className="absolute inset-0 z-0 pointer-events-none rounded-full shadow-[inset_-2.5rem_-2.5rem_5rem_rgba(0,0,0,0.6)]" />
                                    </>
                                  );
                                })()}
@@ -2244,14 +2253,33 @@ export default function App() {
                       </motion.div>
                       {/* White Ball Break Indicator - Outside clipped container to maintain visibility in ball mode */}
                       {isBreakTrackingEnabled && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentBreakPlayerId(p.id as '1' | '2');
-                          }}
-                          className={`absolute top-2 ${idx === 0 ? 'left-2' : 'right-2'} w-8 h-8 rounded-full border-2 transition-all duration-300 z-50 flex items-center justify-center ${currentBreakPlayerId === p.id ? 'bg-white border-white shadow-[0_0_15px_rgba(255,255,255,0.8)] scale-110' : 'bg-slate-700/50 border-slate-600 scale-90 opacity-40'}`}
-                          title="Break Indicator"
-                        />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isBreakTrackingEnabled) {
+                                // Start game timestamp on first break selection
+                                if (currentBreakPlayerId === 'none') {
+                                  setMatchStartTime(new Date().toISOString());
+                                }
+                                frameStartTimeRef.current = Date.now();
+                                if (currentBreakPlayerId === 'none') {
+                                  setCurrentBreakPlayerId(p.id as '1' | '2');
+                                } else {
+                                  // Clicking an already set breaker toggles to the other, 
+                                  // common pattern for manual overrides
+                                  setCurrentBreakPlayerId(p.id === '1' ? '2' : '1');
+                                }
+                              }
+                            }}
+                            className={`absolute w-10 h-10 rounded-full border-4 transition-all duration-500 z-50 flex items-center justify-center 
+                              ${idx === 0 ? 'left-[1vh] top-[1vh]' : 'right-[1vh] top-[1vh]'}
+                              ${currentBreakPlayerId === p.id 
+                                ? 'bg-white border-white shadow-[0_0_25px_rgba(255,255,255,1)] scale-125 z-50' 
+                                : (currentBreakPlayerId === 'none' 
+                                    ? 'bg-white/30 border-white/20 scale-100 opacity-40 grayscale-[0.5]' 
+                                    : 'bg-white/10 border-white/5 scale-90 opacity-10 grayscale')}`}
+                            title={currentBreakPlayerId === 'none' ? "Select Starting Breaker" : "Break Indicator"}
+                          />
                       )}
                     </div>
                   ))}
@@ -2272,52 +2300,41 @@ export default function App() {
               className="space-y-12 pb-10"
             >
               <div 
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 transition-all duration-500"
+                className="relative flex items-center justify-center pb-8 transition-all duration-500 mb-12 w-[100vw]"
                 style={{ 
-                  borderBottom: '2px solid',
-                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+                  borderBottom: '0.125rem solid',
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                  marginLeft: 'calc(-1 * (50vw - 50%))'
                 }}
               >
-                <div className="space-y-1">
-                  <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '5vh' : (deviceInfo.isTablet ? '3.2vh' : `${3 * deviceInfo.scaleFactor}vw`) }}>Team Setup</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '1.5vh' : (deviceInfo.isTablet ? '0.9vh' : `${0.7 * deviceInfo.scaleFactor}vw`) }}>Configure your session players</p>
+                <div className="space-y-1 text-center">
+                  <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.titleSizes.page }}>Team Setup</h2>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="absolute right-0 bottom-[1vh] flex items-center gap-3">
                   <button 
                     onClick={() => setShowExportMenu(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
+                    className="flex items-center justify-between gap-5 px-4 sm:px-5 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg sm:rounded-xl transition-all border-2"
                     style={{ 
                       borderColor: player1.color + '66',
                       color: '#fff',
-                      backgroundColor: 'transparent'
+                      backgroundColor: 'transparent',
+                      minWidth: 'fit-content'
                     }}
                   >
-                    <Download className="w-4 h-4" />
-                    Export
+                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+                    <Download className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
                   </button>
                   <button 
                     onClick={uploadData}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-bold text-sm border-2"
+                    className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg sm:rounded-xl transition-all font-bold text-[10px] sm:text-sm border-2"
                     style={{ 
                       borderColor: player1.color + '66',
                       color: '#fff',
                       backgroundColor: 'transparent'
                     }}
                   >
-                    <Upload className="w-4 h-4" />
+                    <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
                     Import
-                  </button>
-                  <button 
-                    onClick={() => setShowClearTeamsConfirm(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all border-2"
-                    style={{ 
-                      borderColor: player2.color + '66',
-                      color: '#fff',
-                      backgroundColor: 'transparent'
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Clear Team Data
                   </button>
                 </div>
               </div>
@@ -2503,15 +2520,19 @@ export default function App() {
               </div>
 
               {/* Match Results Table */}
-              <div id="matchups-table" className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
-                <div className="space-y-1">
-                  <h3 
-                    className="font-black uppercase tracking-tight text-white whitespace-pre-wrap"
-                    style={{ fontSize: deviceInfo.isPhone ? '3.5vh' : (deviceInfo.isTablet ? '2.4vh' : `${2.2 * deviceInfo.scaleFactor}vw`) }}
-                  >
-                    Match Results Table
-                  </h3>
-                </div>
+              <div id="matchups-table" className="space-y-8 pt-12 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
+                <h3 
+                  className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                  style={{ 
+                    borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                    color: 'white',
+                    fontSize: deviceInfo.titleSizes.section,
+                    marginLeft: 'calc(-1 * (50vw - 50%))',
+                    paddingLeft: '15vw'
+                  }}
+                >
+                  Match Results
+                </h3>
                   <div 
                     className="bg-black border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
                   >
@@ -2683,9 +2704,9 @@ export default function App() {
                             <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
                               <button 
                                 onClick={() => setShowTeamTotals(true)}
-                                className="inline-flex w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0 active:scale-95 transition-all hover:bg-emerald-500/20"
+                                className="inline-flex w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0 active:scale-95 transition-all hover:bg-emerald-500/20"
                               >
-                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
+                                <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400" style={{ transform: 'scale(1.4)' }} />
                               </button>
                             </td>
                             <td className="hidden sm:table-cell px-3 sm:px-6 py-4" />
@@ -2696,6 +2717,22 @@ export default function App() {
                   </table>
                 </div>
               </div>
+            </div>
+
+            <div className="flex justify-center pt-8">
+              <button 
+                onClick={() => setShowClearTeamsConfirm(true)}
+                className="flex items-center gap-3 px-8 py-4 text-sm sm:text-base font-black uppercase tracking-[0.2em] rounded-2xl transition-all border-2 group hover:scale-105 active:scale-95 shadow-2xl"
+                style={{ 
+                  borderColor: player2.color + '44',
+                  color: player2.color,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  backdropBlur: '10px'
+                }}
+              >
+                <Trash2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                Clear Team Data
+              </button>
             </div>
           </motion.div>
           )}
@@ -2709,25 +2746,27 @@ export default function App() {
               className="space-y-12 pb-20"
             >
               <div 
-                className="space-y-1 pb-8 transition-all duration-500"
+                className="space-y-1 pb-8 transition-all duration-500 text-center w-[100vw]"
                 style={{ 
-                  borderBottom: '2px solid',
-                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
+                  borderBottom: '0.125rem solid',
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                  marginLeft: 'calc(-1 * (50vw - 50%))'
                 }}
               >
-                <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '5vh' : (deviceInfo.isTablet ? '3.2vh' : `${3 * deviceInfo.scaleFactor}vw`) }}>Settings</h2>
-                <p className="text-white font-bold uppercase tracking-widest leading-none" style={{ fontSize: deviceInfo.isPhone ? '2.8vh' : (deviceInfo.isTablet ? '1.8vh' : `${1.3 * deviceInfo.scaleFactor}vw`) }}>Customize your scoring experience</p>
+                <h2 className="font-black uppercase tracking-tight text-white uppercase" style={{ fontSize: deviceInfo.titleSizes.page }}>Settings</h2>
               </div>
 
               <div className="space-y-12">
                 {/* 1. Colour Preferences */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Colour Preferences
@@ -2747,7 +2786,7 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <label 
                           className="font-black uppercase tracking-widest text-slate-500" 
-                          style={{ fontSize: settingsLabelFontSize }}
+                          style={{ fontSize: playerPrefLabelFontSize }}
                         >
                           Player {idx + 1} Name
                         </label>
@@ -2828,30 +2867,36 @@ export default function App() {
                 {/* 2. Break Tracker */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Break Tracker
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
+                    onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
                     style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Break Tracking</p>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Display a "white ball" break indicator that alternates with scores.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Break Tracking</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
                       </div>
                       <button 
-                        onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsBreakTrackingEnabled(!isBreakTrackingEnabled);
+                        }}
                         className={`w-14 h-7 rounded-full transition-colors relative`}
                         style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
                       >
-                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-8' : 'left-1'}`} />
+                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
                       </button>
                     </div>
                   </div>
@@ -2860,29 +2905,35 @@ export default function App() {
                 {/* 3. Device Time */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Device Time
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl"
+                    onClick={() => setShowDeviceTime(!showDeviceTime)}
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl cursor-pointer"
                     style={{ borderColor: player1.color }}
                   >
                     <div className="space-y-1 text-center sm:text-left">
-                      <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Show Device Time</p>
-                      <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Display a draggable clock on the gameplay screen.</p>
+                      <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Show Device Time</p>
+                      <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
                     </div>
                     <button 
-                      onClick={() => setShowDeviceTime(!showDeviceTime)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeviceTime(!showDeviceTime);
+                      }}
                       className={`w-14 h-7 rounded-full transition-colors relative`}
                       style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
                     >
-                      <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${showDeviceTime ? 'left-8' : 'left-1'}`} />
+                      <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
                     </button>
                   </div>
                 </section>
@@ -2890,38 +2941,49 @@ export default function App() {
                 {/* 4. Shot Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Shot Clock
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
+                    onClick={() => {
+                      setIsShotClockEnabled(!isShotClockEnabled);
+                      if (isShotClockEnabled) pauseTimer();
+                    }}
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
                     style={{ borderColor: player2.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.isPhone ? '3vh' : '2.2vh' }}>Enable Shot Clock</p>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Toggle the visibility and timer on the scoreboard.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Shot Clock</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
                       </div>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setIsShotClockEnabled(!isShotClockEnabled);
                           if (isShotClockEnabled) pauseTimer();
                         }}
                         className={`w-14 h-7 rounded-full transition-colors relative`}
                         style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
                       >
-                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-8' : 'left-1'}`} />
+                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
                       </button>
                     </div>
 
                     {isShotClockEnabled && (
-                      <div className="space-y-6 pt-8 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
+                      <div 
+                        className="space-y-6 pt-8 border-t-2" 
+                        style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-between">
                           <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Timer Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
@@ -2953,38 +3015,45 @@ export default function App() {
                 {/* 5. Match Clock */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Match Clock
                   </h3>
                   <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl" 
+                    onClick={() => {
+                      setIsMatchClockEnabled(!isMatchClockEnabled);
+                      if (isMatchClockEnabled) pauseTimer();
+                    }}
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[32px] p-4 sm:p-8 space-y-8 shadow-xl cursor-pointer" 
                     style={{ borderColor: player1.color }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="text-lg sm:text-xl font-black text-slate-200 uppercase tracking-tight">Enable Match Clock</p>
-                        <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest">A master countdown for the entire match.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Match Clock</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>A master countdown for the entire match.</p>
                       </div>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setIsMatchClockEnabled(!isMatchClockEnabled);
                           if (isMatchClockEnabled) pauseTimer();
                         }}
                         className={`w-14 h-7 rounded-full transition-colors relative`}
                         style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
                       >
-                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-8' : 'left-1'}`} />
+                        <div className={`absolute top-[0.25rem] w-[1.25rem] h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[2rem]' : 'left-[0.25rem]'}`} />
                       </button>
                     </div>
 
                     {isMatchClockEnabled && (
-                      <div className="space-y-6 pt-8 border-t border-slate-800">
+                      <div className="space-y-6 pt-8 border-t border-slate-800" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                           <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Match Duration</label>
                           <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
@@ -3023,11 +3092,13 @@ export default function App() {
                 {/* 6. Restore Defaults */}
                 <section className="space-y-6">
                   <h3 
-                    className="font-black uppercase tracking-widest pb-2 border-b-2"
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
                     style={{ 
                       borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
                       color: 'white',
-                      fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`)
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
                     }}
                   >
                     Restore Defaults
@@ -3038,8 +3109,8 @@ export default function App() {
                       style={{ borderColor: player1.color }}
                     >
                       <div className="space-y-1 text-center sm:text-left">
-                        <p className="text-lg sm:text-xl font-black text-slate-200 uppercase tracking-tight">Restore Defaults</p>
-                        <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest">Resets colors and clock settings to default.</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight" style={{ fontSize: deviceInfo.titleSizes.tile }}>Restore Defaults</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Resets colors and clock settings to default.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -3055,15 +3126,26 @@ export default function App() {
                   </div>
                 </section>
 
-                <section className="pt-8">
+                <section className="space-y-6">
+                  <h3 
+                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-[100vw]"
+                    style={{ 
+                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                      color: 'white',
+                      fontSize: deviceInfo.titleSizes.section,
+                      marginLeft: 'calc(-1 * (50vw - 50%))',
+                      paddingLeft: '15vw'
+                    }}
+                  >
+                    API Configuration
+                  </h3>
                   <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 space-y-6 shadow-xl relative overflow-hidden">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                         <Server className="w-6 h-6 text-emerald-400" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.isPhone ? '3.6vh' : (deviceInfo.isTablet ? '2.8vh' : `${2 * deviceInfo.scaleFactor}vh`) }}>API Configuration</h3>
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.isPhone ? '2.2vh' : (deviceInfo.isTablet ? '1.6vh' : `${0.8 * deviceInfo.scaleFactor}vh`) }}>Outbound Tournament Data Sync</p>
+                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Outbound Tournament Data Sync</p>
                       </div>
                       {isApiLocked ? (
                         <div className="flex items-center gap-2">
@@ -3217,19 +3299,52 @@ export default function App() {
               className="space-y-8 pb-20"
             >
               <div 
-                className="flex items-center gap-4 pb-8 border-b-2"
-                style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+                className="relative flex items-center justify-center pb-8 border-b-2 min-h-[5rem] sm:min-h-[7rem] w-[100vw]"
+                style={{ 
+                  borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
+                  marginLeft: 'calc(-1 * (50vw - 50%))'
+                }}
               >
-                <button 
-                  onClick={() => setView('history')}
-                  className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-white hover:bg-slate-800 transition-all flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12"
-                >
-                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-                <div className="space-y-1">
-                  <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-white line-clamp-1">Match Details</h2>
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[0.5rem] sm:text-[0.625rem]">Detailed Frame Analysis</p>
+                <div className="absolute left-0 bottom-[1vh]">
+                  <button 
+                    onClick={() => setView('teams')}
+                    className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all"
+                    style={{ 
+                        filter: `drop-shadow(0 0 1rem ${player1.color}22)`,
+                        width: deviceInfo.isPhone ? '27vw' : '13vw'
+                    }}
+                  >
+                    {/* Chunky Arrow Border Layer */}
+                    <div 
+                      className="absolute inset-0" 
+                      style={{ 
+                        background: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                        clipPath: 'polygon(1.5rem 0%, 100% 0%, 100% 100%, 1.5rem 100%, 0% 50%)'
+                      }} 
+                    />
+                    {/* Chunky Arrow Inner Layer (Black) */}
+                    <div 
+                      className="absolute inset-[0.125rem] bg-black flex items-center justify-center gap-2 pr-2 group-hover:bg-slate-900 transition-colors"
+                      style={{ 
+                        clipPath: 'polygon(1.4rem 0%, 100% 0%, 100% 100%, 1.4rem 100%, 0.1rem 50%)',
+                        paddingLeft: '1.4rem'
+                      }}
+                    >
+                        <ChevronLeft className="w-5 h-5 shrink-0" style={{ color: player1.color }} />
+                        <span 
+                          className="text-sm sm:text-lg font-black uppercase tracking-tight leading-none"
+                          style={{ 
+                            backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent'
+                          }}
+                        >
+                          Back
+                        </span>
+                    </div>
+                  </button>
                 </div>
+                <h2 className="font-black uppercase tracking-tight text-white line-clamp-1 leading-none text-center" style={{ fontSize: deviceInfo.titleSizes.page }}>Match Details</h2>
               </div>
 
               {matchHistory.find(m => m.id === viewingMatchDetailsId) ? (() => {
@@ -3238,11 +3353,11 @@ export default function App() {
                   <div className="space-y-6">
                     {/* Header Info */}
                     <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                       <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg">
-                          <p className="text-[0.5rem] sm:text-[0.625rem] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Players</p>
+                       <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg flex flex-col items-center text-center">
+                          <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">Detailed Frame Analysis</p>
                           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
-                            <span className="text-[0.5rem] sm:text-xs text-slate-600 font-black">VS</span>
+                            <span className="text-[0.5rem] sm:text-xs text-slate-600 font-black px-1">VS</span>
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
                           </div>
                           {match.team1 && <p className="text-[0.5rem] sm:text-[0.625rem] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
@@ -3260,11 +3375,13 @@ export default function App() {
                         <table className="w-full text-left border-collapse min-w-full">
                           <thead>
                             <tr className="bg-slate-900/80 border-b-2 border-slate-800/50">
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[10%]">Frame</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[25%]">Breaker</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[25%]">Winner</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[20%]">Score</th>
-                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[20%]">Timestamp</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%]">Frame</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[17%]">Breaker</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[17%]">Winner</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[13%]">Score</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[15%]">Start</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[15%]">Finish</th>
+                              <th className="px-3 sm:px-5 py-3 sm:py-5 text-[0.625rem] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[15%]">Duration</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/30">
@@ -3283,28 +3400,58 @@ export default function App() {
                                 <td className="px-5 py-4 font-mono text-xs sm:text-base text-slate-500 font-bold tabular-nums">
                                   {frame.score1}<span className="text-slate-700 mx-1">-</span>{frame.score2}
                                 </td>
+                                <td className="px-5 py-4">
+                                  <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 tabular-nums">
+                                    {frame.startTime ? new Date(frame.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (frame.duration ? new Date(new Date(frame.timestamp).getTime() - (frame.duration * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-')}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span className="text-[0.625rem] sm:text-xs font-black text-slate-400 tabular-nums">
+                                    {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                  </span>
+                                </td>
                                 <td className="px-5 py-4 text-right">
-                                  <div className="flex flex-col items-end">
-                                    <span className="text-[0.625rem] sm:text-xs font-black text-slate-400 tabular-nums">
-                                      {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                    </span>
-                                    {frame.duration !== undefined && (
-                                      <div className="flex items-center gap-1 mt-0.5">
-                                        <Clock className="w-2.5 h-2.5 text-slate-700" />
-                                        <span className="text-[0.5rem] sm:text-[0.5625rem] font-black text-slate-600 uppercase tracking-tighter">
-                                          {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {frame.duration !== undefined && (
+                                    <div className="flex items-center justify-end gap-1 mt-0.5">
+                                      <Clock className="w-2.5 h-2.5 text-slate-700 font-bold" />
+                                      <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 uppercase tabular-nums">
+                                        {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
+                                      </span>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             )) : (
                               <tr>
-                                <td colSpan={5} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[0.625rem]">No detailed frame data available.</td>
+                                <td colSpan={7} className="px-5 py-16 text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[0.625rem]">No detailed frame data available.</td>
                               </tr>
                             )}
                           </tbody>
+                          {match.frameDetails && match.frameDetails.length > 0 && (
+                            <tfoot>
+                              <tr className="bg-slate-900/60 border-t-2 border-slate-800/50">
+                                <td className="px-5 py-6 text-xs sm:text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Totals</td>
+                                <td className="px-5 py-6" colSpan={2}></td>
+                                <td className="px-5 py-6 font-mono text-lg sm:text-2xl font-black tabular-nums" style={{ color: 'white' }}>
+                                  <span style={{ color: player1.color }}>{match.score1}</span>
+                                  <span className="text-slate-700 mx-2">-</span>
+                                  <span style={{ color: player2.color }}>{match.score2}</span>
+                                </td>
+                                <td className="px-5 py-6" colSpan={2}></td>
+                                <td className="px-5 py-6 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-[0.625rem] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Total Duration</span>
+                                    <span className="text-sm sm:text-lg font-black text-white tabular-nums">
+                                      {(() => {
+                                        const totalSec = match.frameDetails.reduce((acc, f) => acc + (f.duration || 0), 0);
+                                        return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`;
+                                      })()}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
                         </table>
                       </div>
                     </div>
@@ -3320,6 +3467,49 @@ export default function App() {
                             <p className="text-[0.5rem] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
                          </div>
                        )}
+                    </div>
+
+                    <div className="pt-12 flex justify-start">
+                       <button 
+                         onClick={() => setView('teams')}
+                         className="group relative h-[calc(5rem+1vh)] active:scale-95 transition-all"
+                         style={{ 
+                            filter: `drop-shadow(0 0 1.25rem ${player1.color}22)`,
+                            width: deviceInfo.isPhone ? '48vw' : '21vw'
+                         }}
+                       >
+                         {/* Chunky Arrow Border Layer */}
+                         <div 
+                           className="absolute inset-0" 
+                           style={{ 
+                             background: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                             clipPath: 'polygon(2.5rem 0%, 100% 0%, 100% 100%, 2.5rem 100%, 0% 50%)'
+                           }} 
+                         />
+                         {/* Chunky Arrow Inner Layer (Black) */}
+                         <div 
+                           className="absolute inset-[0.125rem] bg-black flex items-center justify-center gap-4 pr-6 group-hover:bg-slate-900 transition-colors"
+                           style={{ 
+                             clipPath: 'polygon(2.4rem 0%, 100% 0%, 100% 100%, 2.4rem 100%, 0.15rem 50%)',
+                             paddingLeft: '2.4rem'
+                           }}
+                         >
+                            <ChevronLeft className="w-8 h-8 shrink-0" style={{ color: player1.color }} />
+                            <div className="flex flex-col items-start pt-1">
+                               <span 
+                                 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none"
+                                 style={{ 
+                                   backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                                   WebkitBackgroundClip: 'text',
+                                   WebkitTextFillColor: 'transparent'
+                                 }}
+                               >
+                                 Back
+                               </span>
+                               <span className="text-[0.5rem] sm:text-[0.625rem] font-bold text-slate-600 uppercase tracking-widest mt-1">Team Setup</span>
+                            </div>
+                         </div>
+                       </button>
                     </div>
                   </div>
                 );
@@ -3522,7 +3712,7 @@ export default function App() {
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
-                      setFinishButtonPosition(null);
+                      setCurrentBreakPlayerId('none');
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"

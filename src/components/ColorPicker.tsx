@@ -94,10 +94,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             {icon}
           </div>
           <div>
-            <p className="text-[min(2.2vh,18px)] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+            <p className="text-[min(2.2vh,1.125rem)] font-bold uppercase tracking-wider text-slate-500">{label}</p>
             <div className="flex items-center gap-[0.5vw]">
               <div className="w-[2.4vw] h-[2.4vw] min-w-[1.5rem] min-h-[1.5rem] rounded-full border border-white/20" style={{ backgroundColor: value }} />
-              <span className="text-[min(3.2vh,24px)] font-black text-slate-200 uppercase">{value}</span>
+              <span className="text-[min(3.2vh,1.5rem)] font-black text-slate-200 uppercase">{value}</span>
             </div>
           </div>
         </div>
