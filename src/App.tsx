@@ -38,6 +38,9 @@ import {
   SPEED_CLOTH_COLORS 
 } from './constants';
 import { ColorPicker } from './components/ColorPicker';
+import { AuthTile } from './components/AuthTile';
+import { useGoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 import portraitBackdrop from './assets/portrait_mode_backdrop.png';
 
 const SHOT_CLOCK_DEFAULT = 30;
@@ -91,6 +94,8 @@ export default function App() {
   const [isApiSending, setIsApiSending] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [isLoaded, setIsLoaded] = useState(false);
+  const [user, setUser] = useState<{name: string, email: string, photo?: string} | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
@@ -467,6 +472,10 @@ export default function App() {
       if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
       if (state.apiConfig) setApiConfig(state.apiConfig);
 
+      // Load User
+      const savedUser = localStorage.getItem('pool_user');
+      if (savedUser) setUser(JSON.parse(savedUser));
+
       // Prepare Player Objects
       let p1 = { ...player1 };
       let p2 = { ...player2 };
@@ -538,6 +547,62 @@ export default function App() {
       setIsLoaded(true);
     }
   }, []);
+
+  // --- Authentication ---
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsLoggingIn(true);
+      try {
+        // For 'implicit' flow (default), we get an access_token.
+        // If we want profile info, we usually fetch it from Google's userInfo endpoint
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const data = await res.json();
+        
+        if (data) {
+          const newUser = {
+            name: data.name || data.given_name || 'User',
+            email: data.email,
+            photo: data.picture
+          };
+          setUser(newUser);
+          localStorage.setItem('pool_user', JSON.stringify(newUser));
+        }
+      } catch (err) {
+        console.error('Google Login Error:', err);
+      } finally {
+        setIsLoggingIn(false);
+      }
+    },
+    onError: () => {
+      setIsLoggingIn(false);
+      console.error('Login Failed');
+    },
+  });
+
+  const handleLogin = (provider: string) => {
+    if (provider === 'google') {
+      googleLogin();
+      return;
+    }
+    
+    setIsLoggingIn(true);
+    // Simulate OAuth delay for other providers
+    setTimeout(() => {
+      setUser({
+        name: 'Demo Admin',
+        email: `admin@pool-pro.uk`,
+        photo: '' 
+      });
+      setIsLoggingIn(false);
+    }, 1500);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('pool_user');
+  };
 
   // --- Persistence (Single JSON Source) ---
   const getSelectionName = (value: string, style: string, type: 'bg' | 'screen') => {
@@ -2504,12 +2569,11 @@ export default function App() {
               >
                 <button
                   onClick={goPrevMatch}
-                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
+                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
                     width: '10vh',
                     height: '10vh',
                     borderColor: `${player1.color}44`,
-                    boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`,
                     position: 'relative'
                   }}
                   title="Previous Match"
@@ -2522,12 +2586,11 @@ export default function App() {
 
                 <button
                   onClick={goNextMatch}
-                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
+                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
                     width: '10vh',
                     height: '10vh',
                     borderColor: `${player2.color}44`,
-                    boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`,
                     position: 'relative'
                   }}
                   title="Next Match"
@@ -2549,7 +2612,7 @@ export default function App() {
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
                   <button
                     onClick={finishMatch}
-                    className="pointer-events-auto flex items-center justify-center font-black transition-all active:translate-y-1 active:shadow-inner hover:scale-105 hover:brightness-110 floating-widget widget-finish-match whitespace-nowrap overflow-hidden group cursor-pointer"
+                    className="pointer-events-auto flex items-center justify-center font-black transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 floating-widget widget-finish-match whitespace-nowrap overflow-hidden group cursor-pointer"
                     style={{ 
                       width: 'auto',
                       padding: '2.4vh 1.5vw',
@@ -2560,7 +2623,6 @@ export default function App() {
                       backgroundImage: `linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), linear-gradient(to right, ${player1.color}, ${player2.color})`,
                       backgroundOrigin: 'border-box',
                       backgroundClip: 'padding-box, border-box',
-                      boxShadow: `0 1vh 0 0 rgba(0,0,0,0.7), 0 1.5vh 3vh rgba(0,0,0,0.5)`,
                       color: '#fff',
                       position: 'relative'
                     }}
@@ -2568,7 +2630,7 @@ export default function App() {
                     {/* 3D Reflection Gloss */}
                     <div className="absolute top-[5%] left-[5%] w-[90%] h-[25%] bg-white/10 rounded-full blur-[2px] pointer-events-none" />
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
-                    <span className="leading-none uppercase tracking-widest relative z-10 drop-shadow-md">Finish Match</span>
+                    <span className="leading-none uppercase tracking-widest relative z-10">Finish Match</span>
                   </button>
                 </div>
 
@@ -2632,13 +2694,12 @@ export default function App() {
                                  e.stopPropagation();
                                  incrementScore(p.id);
                                }}
-                               className="absolute bottom-[2vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 active:shadow-inner hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
+                               className="absolute bottom-[3vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
                                style={{ 
                                  width: p.bgStyle === 'balls' ? '12vh' : '15vh',
                                  height: p.bgStyle === 'balls' ? '12vh' : '15vh',
                                  background: `radial-gradient(circle at 35% 35%, ${p.color}, ${p.color}dd 40%, ${p.color}aa 100%)`,
                                  right: p.bgStyle === 'balls' ? '18vh' : '1.5vh',
-                                 boxShadow: `0 1vh 0 0 ${p.color}88, 0 1.5vh 3vh rgba(0,0,0,0.5)`,
                                  border: `0.4vh solid ${p.color}ff`
                                }}
                              >
@@ -2646,7 +2707,7 @@ export default function App() {
                                <div className="absolute top-[5%] left-[15%] w-[40%] h-[20%] bg-white/40 rounded-[100%] blur-[1px] rotate-[-25deg] pointer-events-none" />
                                <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
                                <Plus 
-                                 className="w-[5.5vh] h-[5.5vh] font-bold drop-shadow-sm transition-transform group-active:scale-90" 
+                                 className="w-[5.5vh] h-[5.5vh] font-bold transition-transform group-active:scale-90" 
                                  strokeWidth={3}
                                />
                              </button>
@@ -2656,13 +2717,12 @@ export default function App() {
                                  e.stopPropagation();
                                  decrementScore(p.id);
                                }}
-                               className="absolute bottom-[2.5vh] rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
+                               className="absolute bottom-[3.5vh] rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
                                style={{ 
                                  width: p.bgStyle === 'balls' ? '8vh' : '10vh',
                                  height: p.bgStyle === 'balls' ? '8vh' : '10vh',
-                                 left: p.bgStyle === 'balls' ? '16vh' : '2vh',
-                                 borderColor: `${p.color}44`,
-                                 boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`
+                                 left: p.bgStyle === 'balls' ? '17vh' : '3vh',
+                                 borderColor: `${p.color}44`
                                }}
                              >
                                {/* Mini Reflection */}
@@ -3702,6 +3762,17 @@ export default function App() {
                   </div>
                 </section>
 
+                {/* 7. Authentication */}
+                <AuthTile 
+                  user={user}
+                  onLogin={handleLogin}
+                  onLogout={handleLogout}
+                  isLoggingIn={isLoggingIn}
+                  themeColor={player1.color}
+                  deviceInfo={deviceInfo}
+                />
+
+                {/* 8. API Configuration */}
                 <section className="space-y-6">
                   <h3 
                     className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
