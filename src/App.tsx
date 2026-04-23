@@ -1875,7 +1875,7 @@ export default function App() {
             let t1Name = '';
             let t2Name = '';
             let importedHistory: MatchHistoryEntry[] = [];
-            let importedPlayerPreferences: Record<string, { color: string, bgColor: string, screenColor: string }> = { ...playerPreferences };
+            let importedPlayerPreferences: Record<string, { color: string, bgColor: string, screenColor: string, bgStyle: string, screenStyle: string }> = { ...playerPreferences } as any;
 
             lines.forEach(line => {
               if (line.startsWith('SECTION:')) {
