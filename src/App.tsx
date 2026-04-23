@@ -3773,7 +3773,7 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div 
-npm                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
                       style={{ borderColor: player1.color }}
                     >
                       {/* Title Box - Top */}
