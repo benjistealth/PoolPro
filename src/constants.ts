@@ -55,23 +55,30 @@ export const BACKGROUND_COLORS = [
 ];
 
 export const POOL_BALLS = [
-  { number: 1, name: 'Yellow', value: '#FFD700', image: new URL('./assets/Pool_Balls/yellow_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/yellow_poolball_thumb.png', import.meta.url).href },
-  { number: 2, name: 'Blue', value: '#0000FF', image: new URL('./assets/Pool_Balls/dark_blue_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/dark_blue_poolball_thumb.png', import.meta.url).href },
+  // REDS
   { number: 3, name: 'Red', value: '#FF0000', image: new URL('./assets/Pool_Balls/red_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/red_poolball_thumb.png', import.meta.url).href },
-  { number: 4, name: 'Purple', value: '#800080', image: new URL('./assets/Pool_Balls/dark_purple_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/dark_purple_poolball_thumb.png', import.meta.url).href },
-  { number: 5, name: 'Orange', value: '#FFA500', image: new URL('./assets/Pool_Balls/orange_light_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/orange_light_poolball_thumb.png', import.meta.url).href },
-  { number: 6, name: 'Green', value: '#008000', image: new URL('./assets/Pool_Balls/green_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/green_poolball_thumb.png', import.meta.url).href },
-  { number: 7, name: 'Dark Red', value: '#7F1D1D', image: new URL('./assets/Pool_Balls/red_dark_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/red_dark_poolball_thumb.png', import.meta.url).href },
-  { number: 9, name: 'Pink', value: '#F472B6', image: new URL('./assets/Pool_Balls/pink_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/pink_poolball_thumb.png', import.meta.url).href },
-  { number: 10, name: 'Lilac', value: '#D8B4FE', image: new URL('./assets/Pool_Balls/lilac_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/lilac_poolball_thumb.png', import.meta.url).href },
   { number: 11, name: 'Redish', value: '#F87171', image: new URL('./assets/Pool_Balls/redish_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/redish_poolball_thumb.png', import.meta.url).href },
-  { number: 12, name: 'White', value: '#FFFFFF', image: new URL('./assets/Pool_Balls/white_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/white_poolball_thumb.png', import.meta.url).href },
-  { number: 13, name: 'Dark Orange', value: '#7C2D12', image: new URL('./assets/Pool_Balls/orange_dark_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/orange_dark_poolball_thumb.png', import.meta.url).href },
-  { number: 14, name: 'Black', value: '#111111', image: new URL('./assets/Pool_Balls/black-Poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/black-Poolball_thumb.png', import.meta.url).href },
-  { number: 15, name: 'Bright Yellow', value: '#FFFF00', image: new URL('./assets/Pool_Balls/yellow_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/yellow_poolball_thumb.png', import.meta.url).href },
+  { number: 7, name: 'Dark Red', value: '#7F1D1D', image: new URL('./assets/Pool_Balls/red_dark_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/red_dark_poolball_thumb.png', import.meta.url).href },
+  // ORANGES
   { number: 16, name: 'Bright Orange', value: '#FF8C00', image: new URL('./assets/Pool_Balls/orange_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/orange_light_poolball_thumb.png', import.meta.url).href },
-  { number: 17, name: 'Bright Pink', value: '#FF69B4', image: new URL('./assets/Pool_Balls/pink_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/pink_poolball_thumb.png', import.meta.url).href },
+  { number: 5, name: 'Orange', value: '#FFA500', image: new URL('./assets/Pool_Balls/orange_light_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/orange_light_poolball_thumb.png', import.meta.url).href },
+  { number: 13, name: 'Dark Orange', value: '#7C2D12', image: new URL('./assets/Pool_Balls/orange_dark_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/orange_dark_poolball_thumb.png', import.meta.url).href },
+  // YELLOWS
+  { number: 15, name: 'Bright Yellow', value: '#FFFF00', image: new URL('./assets/Pool_Balls/yellow_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/yellow_poolball_thumb.png', import.meta.url).href },
+  { number: 1, name: 'Yellow', value: '#FFD700', image: new URL('./assets/Pool_Balls/yellow_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/yellow_poolball_thumb.png', import.meta.url).href },
+  // GREENS
   { number: 18, name: 'Bright Green', value: '#00FF00', image: new URL('./assets/Pool_Balls/green_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/green_poolball_thumb.png', import.meta.url).href },
+  { number: 6, name: 'Green', value: '#008000', image: new URL('./assets/Pool_Balls/green_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/green_poolball_thumb.png', import.meta.url).href },
+  // BLUES
+  { number: 2, name: 'Blue', value: '#0000FF', image: new URL('./assets/Pool_Balls/dark_blue_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/dark_blue_poolball_thumb.png', import.meta.url).href },
+  // PURPLES / PINKS
+  { number: 10, name: 'Lilac', value: '#D8B4FE', image: new URL('./assets/Pool_Balls/lilac_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/lilac_poolball_thumb.png', import.meta.url).href },
+  { number: 4, name: 'Purple', value: '#800080', image: new URL('./assets/Pool_Balls/dark_purple_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/dark_purple_poolball_thumb.png', import.meta.url).href },
+  { number: 17, name: 'Bright Pink', value: '#FF69B4', image: new URL('./assets/Pool_Balls/pink_bright_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/pink_poolball_thumb.png', import.meta.url).href },
+  { number: 9, name: 'Pink', value: '#F472B6', image: new URL('./assets/Pool_Balls/pink_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/pink_poolball_thumb.png', import.meta.url).href },
+  // NEUTRALS
+  { number: 12, name: 'White', value: '#FFFFFF', image: new URL('./assets/Pool_Balls/white_poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/white_poolball_thumb.png', import.meta.url).href },
+  { number: 14, name: 'Black', value: '#111111', image: new URL('./assets/Pool_Balls/black-Poolball.png', import.meta.url).href, thumbnail: new URL('./assets/Pool_Balls/mini_balls/black-Poolball_thumb.png', import.meta.url).href },
 ];
 
 export const CLOTH_COLORS = [

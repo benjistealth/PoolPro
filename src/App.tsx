@@ -19,6 +19,7 @@ import {
   Download,
   Upload,
   X,
+  Check,
   PlusCircle,
   Share2,
   Server,
@@ -42,8 +43,14 @@ import portraitBackdrop from './assets/portrait_mode_backdrop.png';
 
 const SHOT_CLOCK_DEFAULT = 30;
 
+type SetupTab = 'singles' | 'group' | 'match';
+
 export default function App() {
   // --- State ---
+  const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('match');
+  const [matchModeBreakSide, setMatchModeBreakSide] = useState<'1' | '2' | 'none'>('none');
+  const [showDoublesPicker, setShowDoublesPicker] = useState<{ team: 1 | 2, isOpen: boolean }>({ team: 1, isOpen: false });
+  const [doublesSelection, setDoublesSelection] = useState<string[]>([]);
   const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFF33', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
   const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FF001C', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
   const [matchupSettings, setMatchupSettings] = useState<Record<number, MatchupSettings>>({});
@@ -91,6 +98,7 @@ export default function App() {
   const [isApiSending, setIsApiSending] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [breakBalls, setBreakBalls] = useState<number[]>([]);
+  const [pairTrackerSettings, setPairTrackerSettings] = useState<Record<string, { breakBalls: number[], currentBreakPlayerId: '1' | '2' | 'none' }>>({});
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
@@ -462,6 +470,7 @@ export default function App() {
       if (state.gameData?.matchStartTime !== undefined) setMatchStartTime(state.gameData.matchStartTime);
       if (state.gameData?.currentMatchFrameDetails !== undefined) setCurrentMatchFrameDetails(state.gameData.currentMatchFrameDetails);
       if (state.gameData?.breakBalls !== undefined) setBreakBalls(state.gameData.breakBalls);
+      if (state.pairTrackerSettings) setPairTrackerSettings(state.pairTrackerSettings);
 
       // Load Other Data (Load preferences early so they can be applied to player objects)
       const loadedPrefs = state.playerPreferences || {};
@@ -605,6 +614,7 @@ export default function App() {
       },
       matchupSettings,
       playerPreferences,
+      pairTrackerSettings,
       apiConfig
     };
     localStorage.setItem('pool_app_state', JSON.stringify(stateToSave));
@@ -616,7 +626,7 @@ export default function App() {
     isBreakTrackingEnabled, currentBreakPlayerId, matchStartTime, currentMatchFrameDetails,
     view, isNavVisible,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
-    matchupSettings, playerPreferences, apiConfig
+    matchupSettings, playerPreferences, pairTrackerSettings, apiConfig
   ]);
 
   useEffect(() => {
@@ -717,6 +727,42 @@ export default function App() {
     player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
     matchupSettings, playerPreferences, currentBreakPlayerId
   ]);
+
+  // --- Ball Tracker Persistence Logic ---
+  const pairKey = useMemo(() => {
+    if (!player1.name || !player2.name) return null;
+    return `${player1.name}|${player2.name}`;
+  }, [player1.name, player2.name]);
+
+  // Load from Pair Persistence when players change
+  useEffect(() => {
+    if (!isLoaded || !pairKey) return;
+    const saved = pairTrackerSettings[pairKey];
+    if (saved) {
+      setBreakBalls(saved.breakBalls);
+      setCurrentBreakPlayerId(saved.currentBreakPlayerId);
+    } else {
+      // It's a new pair of players - reset to defaults
+      setBreakBalls([]);
+      setCurrentBreakPlayerId('none');
+    }
+  }, [pairKey, isLoaded]);
+
+  // Save to Pair Persistence when state changes
+  useEffect(() => {
+    if (!isLoaded || !pairKey) return;
+    
+    // Only save if the values are actually different to avoid unnecessary state updates
+    const current = pairTrackerSettings[pairKey];
+    if (!current || 
+        JSON.stringify(current.breakBalls) !== JSON.stringify(breakBalls) || 
+        current.currentBreakPlayerId !== currentBreakPlayerId) {
+      setPairTrackerSettings(prev => ({
+        ...prev,
+        [pairKey]: { breakBalls, currentBreakPlayerId }
+      }));
+    }
+  }, [breakBalls, currentBreakPlayerId, pairKey, isLoaded]);
 
   // Load matchup settings when match index changes
   useEffect(() => {
@@ -945,7 +991,6 @@ export default function App() {
     };
     
     setCurrentMatchFrameDetails(prev => [...prev, frameDetail]);
-    setBreakBalls([]); // Reset for next frame
     frameStartTimeRef.current = now;
 
     if (playerId === '1') {
@@ -1010,7 +1055,6 @@ export default function App() {
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     frameStartTimeRef.current = Date.now();
-    setCurrentBreakPlayerId('none');
     
     // Also reset live matchup settings for this specific slot so it's fresh if revisited
     if (selectedMatchIndex !== null) {
@@ -1019,9 +1063,7 @@ export default function App() {
         [selectedMatchIndex]: {
           ...prev[selectedMatchIndex],
           score1: 0,
-          score2: 0,
-          currentBreakPlayerId: 'none',
-          breakBalls: []
+          score2: 0
         }
       }));
     }
@@ -1132,7 +1174,14 @@ export default function App() {
     }));
     
     setSelectedMatchIndex(index);
-    setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
+    
+    // Match Mode Alternating Break Logic
+    if (activeSetupTab === 'match') {
+      setCurrentBreakPlayerId(matchModeBreakSide);
+    } else {
+      setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
+    }
+    
     setBreakBalls(settings?.breakBalls || []);
     setView('scoreboard');
     resetTimer();
@@ -1322,6 +1371,130 @@ export default function App() {
         };
       });
     }
+  };
+
+  const handleAddDoubles = (team: 1 | 2) => {
+    setDoublesSelection([]);
+    setShowDoublesPicker({ team, isOpen: true });
+  };
+
+  const confirmDoubles = (team: 1 | 2) => {
+    if (doublesSelection.length !== 2) return;
+    
+    const doublesName = `${doublesSelection[0]} / ${doublesSelection[1]}`;
+    if (team === 1) {
+      const newPlayers = [...team1Players, doublesName];
+      const newIndex = newPlayers.length - 1;
+      setMatchupSettings(prev => ({
+        ...prev,
+        [newIndex]: {
+          ...prev[newIndex],
+          isDoubles: true,
+          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
+          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+        }
+      }));
+      updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+    } else {
+      const newPlayers = [...team2Players, doublesName];
+      const newIndex = newPlayers.length - 1;
+       setMatchupSettings(prev => ({
+        ...prev,
+        [newIndex]: {
+          ...prev[newIndex],
+          isDoubles: true,
+          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
+          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+        }
+      }));
+      updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+    }
+    setShowDoublesPicker({ ...showDoublesPicker, isOpen: false });
+  };
+
+  // --- Rendering Helpers ---
+  const renderSetupTabs = () => (
+    <div className="flex items-center justify-center gap-2 mb-8">
+      {(['singles', 'group', 'match'] as SetupTab[]).map(tab => (
+        <button
+          key={tab}
+          onClick={() => setActiveSetupTab(tab)}
+          className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${
+            activeSetupTab === tab 
+              ? 'bg-white text-slate-950 scale-105 shadow-lg' 
+              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+          }`}
+          style={activeSetupTab === tab ? { backgroundColor: player1.color } : {}}
+        >
+          {tab === 'group' ? 'Group Practise' : tab}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderDoublesPicker = () => {
+    if (!showDoublesPicker.isOpen) return null;
+    const teamIdx = showDoublesPicker.team;
+    const players = teamIdx === 1 ? team1Players : team2Players;
+    const availablePlayers = players.filter(p => p && !p.includes('/')).filter((v, i, a) => a.indexOf(v) === i);
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md bg-slate-900 border-2 border-white/10 rounded-[2rem] p-8 space-y-6 shadow-2xl"
+          style={{ borderColor: teamIdx === 1 ? player1.color : player2.color }}
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-black uppercase tracking-tight text-white">Select Doubles Pair</h3>
+            <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false })} className="p-2 text-slate-400 hover:text-white">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
+            {availablePlayers.length < 2 && (
+              <p className="text-slate-500 italic text-center py-4 uppercase font-bold">Add at least 2 unique players to create a doubles pair.</p>
+            )}
+            {availablePlayers.map((name) => (
+              <button
+                key={name}
+                onClick={() => {
+                  if (doublesSelection.includes(name)) {
+                    setDoublesSelection(doublesSelection.filter(n => n !== name));
+                  } else if (doublesSelection.length < 2) {
+                    setDoublesSelection([...doublesSelection, name]);
+                  }
+                }}
+                className={`w-full p-4 rounded-xl font-bold uppercase transition-all flex items-center justify-between ${
+                  doublesSelection.includes(name) 
+                    ? 'bg-white/20 border-2' 
+                    : 'bg-white/5 border border-white/5'
+                }`}
+                style={{ borderColor: doublesSelection.includes(name) ? (teamIdx === 1 ? player1.color : player2.color) : 'transparent' }}
+              >
+                <span className={doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}>{name}</span>
+                {doublesSelection.includes(name) && <Check className="w-5 h-5 text-emerald-400" />}
+              </button>
+            ))}
+          </div>
+
+          <button
+            disabled={doublesSelection.length !== 2}
+            onClick={() => confirmDoubles(teamIdx)}
+            className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all ${
+              doublesSelection.length === 2 
+                ? 'opacity-100 scale-105 shadow-xl' 
+                : 'opacity-50 cursor-not-allowed'
+            }`}
+            style={{ backgroundColor: teamIdx === 1 ? player1.color : player2.color, color: '#000' }}
+          >
+            Confirm Pair
+          </button>
+        </motion.div>
+      </div>
+    );
   };
 
   const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>, id: string) => {
@@ -2589,11 +2762,11 @@ export default function App() {
                     className="pointer-events-auto flex items-center justify-center font-black transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 floating-widget widget-finish-match whitespace-nowrap overflow-hidden group cursor-pointer"
                     style={{ 
                       width: 'auto',
-                      padding: '2.4vh 1.5vw',
+                      padding: deviceInfo.isTablet ? '1.92vh 1.2vw' : '2.4vh 1.5vw',
                       height: 'auto',
-                      fontSize: !deviceInfo.isDesktop ? '4.5vh' : '4vh',
-                      borderRadius: '2.5vh',
-                      border: '0.4vh solid rgba(255,255,255,0.2)',
+                      fontSize: deviceInfo.isTablet ? '3.6vh' : (!deviceInfo.isDesktop ? '4.5vh' : '4vh'),
+                      borderRadius: deviceInfo.isTablet ? '2vh' : '2.5vh',
+                      border: `${deviceInfo.isTablet ? '0.32vh' : '0.4vh'} solid rgba(255,255,255,0.2)`,
                       backgroundImage: `linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), linear-gradient(to right, ${player1.color}, ${player2.color})`,
                       backgroundOrigin: 'border-box',
                       backgroundClip: 'padding-box, border-box',
@@ -2668,12 +2841,13 @@ export default function App() {
                                  e.stopPropagation();
                                  incrementScore(p.id);
                                }}
-                               className="absolute bottom-[3vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
+                               className="absolute rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
                                style={{ 
                                  width: p.bgStyle === 'balls' ? '12vh' : '15vh',
                                  height: p.bgStyle === 'balls' ? '12vh' : '15vh',
+                                 bottom: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '7vh' : '5vh') : '3vh',
                                  background: `radial-gradient(circle at 35% 35%, ${p.color}, ${p.color}dd 40%, ${p.color}aa 100%)`,
-                                 right: p.bgStyle === 'balls' ? '18vh' : '1.5vh',
+                                 right: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '6.5vw' : '7.5vw') : '1.5vh',
                                  border: `0.4vh solid ${p.color}ff`
                                }}
                              >
@@ -2691,11 +2865,12 @@ export default function App() {
                                  e.stopPropagation();
                                  decrementScore(p.id);
                                }}
-                               className="absolute bottom-[3.5vh] rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
+                               className="absolute rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
                                style={{ 
                                  width: p.bgStyle === 'balls' ? '8vh' : '10vh',
                                  height: p.bgStyle === 'balls' ? '8vh' : '10vh',
-                                 left: p.bgStyle === 'balls' ? '17vh' : '3vh',
+                                 bottom: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '9.5vh' : '6.5vh') : '3.5vh',
+                                 left: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '10vw' : '9vw') : '3vh',
                                  borderColor: `${p.color}44`
                                }}
                              >
@@ -2887,7 +3062,7 @@ export default function App() {
                 }}
               >
                 <div className="space-y-1 text-center">
-                  <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.titleSizes.page }}>Team Setup</h2>
+                  <h2 className="font-black uppercase tracking-tight text-white" style={{ fontSize: deviceInfo.titleSizes.page }}>Setup</h2>
                 </div>
                 <div className="absolute right-[2.5vw] bottom-[1vh] flex items-center gap-3">
                   <button 
@@ -2918,187 +3093,297 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 sm:gap-10">
-                {/* Team 1 Setup */}
-                <div className="space-y-4 sm:space-y-8">
-                  <div className="space-y-2 sm:space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Team 1 Name</label>
-                      <Users className="w-4 h-4" style={{ color: player1.color }} />
-                    </div>
-                    <input 
-                      value={team1Name} 
-                      onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
-                      onFocus={(e) => handleInputFocus(e, 'team1')}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ 
-                        ...teamEntryStyle, 
-                        borderColor: focusedField === 'team1' ? player1.color : player1.color + '66' 
-                      }}
-                      placeholder="TEAM 1"
-                    />
-                  </div>
-                  <div className="space-y-3 sm:space-y-4">
-                    <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Players</label>
-                    <div className="space-y-4 sm:space-y-6">
-                      {team1Players.map((player, idx) => (
-                        <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
-                          <div 
-                            className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
-                            style={{ 
-                              borderColor: player1.color + '33', 
-                              color: player1.color,
-                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
-                              minWidth: '2vw'
-                            }}
-                          >
-                            {idx + 1}
-                          </div>
-                          <div className="relative flex-1 group">
-                            <input 
-                              value={player}
-                              autoFocus={idx === team1Players.length - 1 && player === ''}
-                              onChange={(e) => {
-                                const newPlayers = [...team1Players];
-                                newPlayers[idx] = e.target.value.toUpperCase();
-                                updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                              }}
-                              onFocus={(e) => handleInputFocus(e, `p1-${idx}`)}
-                              onBlur={() => setFocusedField(null)}
-                              className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
-                              style={{ 
-                                ...playerEntryStyle, 
-                                borderColor: focusedField === `p1-${idx}` ? player1.color : player1.color + '66' 
-                              }}
-                              placeholder={`P${idx + 1}`}
-                            />
-                            <button 
-                              onClick={() => {
-                                const newPlayers = team1Players.filter((_, i) => i !== idx);
-                                updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                              }}
-                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all active:scale-90"
-                            >
-                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      <button 
-                        onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
-                        style={{ 
-                          borderColor: player1.color + '33', 
-                          color: player1.color,
-                          backgroundColor: 'transparent'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = player1.color + '11';
-                          e.currentTarget.style.borderColor = player1.color + '66';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = player1.color + '33';
-                        }}
-                      >
-                        <Plus className="w-6 h-6" />
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              {renderSetupTabs()}
+              {renderDoublesPicker()}
 
-                {/* Team 2 Setup */}
-                <div className="space-y-4 sm:space-y-8">
-                  <div className="space-y-2 sm:space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Team 2 Name</label>
-                      <Users className="w-4 h-4" style={{ color: player2.color }} />
+              {activeSetupTab === 'singles' ? (
+                <div className="space-y-12">
+                  <div className="grid grid-cols-2 gap-4 sm:gap-10">
+                    <div className="space-y-4">
+                      <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player1.color }}>Player 1</label>
+                      <input 
+                        value={player1.name} 
+                        onChange={(e) => setPlayer1(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                        onFocus={(e) => handleInputFocus(e, 'p1-singles')}
+                        onBlur={() => setFocusedField(null)}
+                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
+                        style={{ 
+                          ...teamEntryStyle, 
+                          borderColor: focusedField === 'p1-singles' ? player1.color : player1.color + '66',
+                          fontSize: '8vh'
+                        }}
+                        placeholder="NAME"
+                      />
                     </div>
-                    <input 
-                      value={team2Name} 
-                      onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
-                      onFocus={(e) => handleInputFocus(e, 'team2')}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
-                      style={{ 
-                        ...teamEntryStyle, 
-                        borderColor: focusedField === 'team2' ? player2.color : player2.color + '66' 
-                      }}
-                      placeholder="TEAM 2"
-                    />
+                    <div className="space-y-4">
+                      <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player2.color }}>Player 2</label>
+                      <input 
+                        value={player2.name} 
+                        onChange={(e) => setPlayer2(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                        onFocus={(e) => handleInputFocus(e, 'p2-singles')}
+                        onBlur={() => setFocusedField(null)}
+                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
+                        style={{ 
+                          ...teamEntryStyle, 
+                          borderColor: focusedField === 'p2-singles' ? player2.color : player2.color + '66',
+                          fontSize: '8vh'
+                        }}
+                        placeholder="NAME"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-3 sm:space-y-4">
-                    <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Players</label>
-                    <div className="space-y-4 sm:space-y-6">
-                      {team2Players.map((player, idx) => (
-                        <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
-                          <div 
-                            className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
-                            style={{ 
-                              borderColor: player2.color + '33', 
-                              color: player2.color,
-                              fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
-                              minWidth: '2vw'
-                            }}
-                          >
-                            {idx + 1}
-                          </div>
-                          <div className="relative flex-1 group">
+                  <div className="flex justify-center">
+                    <button 
+                      onClick={() => {
+                        setSelectedMatchIndex(null);
+                        setView('scoreboard');
+                      }}
+                      className="px-12 py-6 rounded-3xl font-black uppercase tracking-[0.3em] text-2xl transition-all hover:scale-105 active:scale-95 shadow-2xl"
+                      style={{ backgroundColor: player1.color, color: '#000' }}
+                    >
+                      Start Game
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                    <div className="grid grid-cols-2 gap-4 sm:gap-10">
+                      {/* Team 1 Setup */}
+                      <div className="space-y-4 sm:space-y-8">
+                        {activeSetupTab !== 'group' && (
+                          <div className="space-y-2 sm:space-y-4">
+                            <div className="flex items-center justify-between">
+                              <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Team 1 Name</label>
+                              <Users className="w-4 h-4" style={{ color: player1.color }} />
+                            </div>
                             <input 
-                              value={player}
-                              autoFocus={idx === team2Players.length - 1 && player === ''}
-                              onChange={(e) => {
-                                const newPlayers = [...team2Players];
-                                newPlayers[idx] = e.target.value.toUpperCase();
-                                updateTeamData(team1Name, team1Players, team2Name, newPlayers);
-                              }}
-                              onFocus={(e) => handleInputFocus(e, `p2-${idx}`)}
+                              value={team1Name} 
+                              onChange={(e) => updateTeamData(e.target.value.toUpperCase(), team1Players, team2Name, team2Players)}
+                              onFocus={(e) => handleInputFocus(e, 'team1')}
                               onBlur={() => setFocusedField(null)}
-                              className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                              className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
                               style={{ 
-                                ...playerEntryStyle, 
-                                borderColor: focusedField === `p2-${idx}` ? player2.color : player2.color + '66' 
+                                ...teamEntryStyle, 
+                                borderColor: focusedField === 'team1' ? player1.color : player1.color + '66' 
                               }}
-                              placeholder={`P${idx + 1}`}
+                              placeholder="TEAM 1"
                             />
-                            <button 
-                              onClick={() => {
-                                const newPlayers = team2Players.filter((_, i) => i !== idx);
-                                updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                          </div>
+                        )}
+                        <div className="space-y-3 sm:space-y-4">
+                          <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Players</label>
+                          <div className="space-y-4 sm:space-y-6">
+                        {team1Players.map((player, idx) => (
+                          <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
+                            <div 
+                              className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
+                              style={{ 
+                                borderColor: player1.color + '33', 
+                                color: player1.color,
+                                fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
+                                minWidth: '2vw'
                               }}
-                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
                             >
-                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                              {idx + 1}
+                            </div>
+                            <div className="relative flex-1 group">
+                              <input 
+                                value={player}
+                                autoFocus={idx === team1Players.length - 1 && player === ''}
+                                onChange={(e) => {
+                                  const newPlayers = [...team1Players];
+                                  newPlayers[idx] = e.target.value.toUpperCase();
+                                  updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                                }}
+                                onFocus={(e) => handleInputFocus(e, `p1-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                style={{ 
+                                  ...playerEntryStyle, 
+                                  borderColor: focusedField === `p1-${idx}` ? player1.color : player1.color + '66' 
+                                }}
+                                placeholder={`P${idx + 1}`}
+                                readOnly={player.includes('/')}
+                              />
+                              <button 
+                                onClick={() => {
+                                  const newPlayers = team1Players.filter((_, i) => i !== idx);
+                                  updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                                }}
+                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all active:scale-90"
+                              >
+                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {activeSetupTab === 'match' || activeSetupTab === 'group' ? (
+                          <div className="flex gap-2">
+                             <button 
+                              onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
+                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              style={{ 
+                                borderColor: player1.color + '44', 
+                                color: player1.color,
+                                backgroundColor: 'rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+                              Add Player
+                            </button>
+                            <button 
+                              onClick={() => handleAddDoubles(1)}
+                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              style={{ 
+                                borderColor: player1.color + '44', 
+                                color: player1.color,
+                                backgroundColor: 'rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+                              Add Doubles
                             </button>
                           </div>
+                        ) : (
+                            <button 
+                              onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
+                              className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              style={{ 
+                                borderColor: player1.color + '44', 
+                                color: player1.color,
+                                backgroundColor: 'rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                              <Plus className="w-6 h-6 transition-transform group-hover:rotate-90" />
+                              Add
+                            </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Team 2 Setup */}
+                  <div className="space-y-4 sm:space-y-8">
+                    {activeSetupTab !== 'group' && (
+                      <div className="space-y-2 sm:space-y-4">
+                        <div className="flex items-center justify-between">
+                          <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Team 2 Name</label>
+                          <Users className="w-4 h-4" style={{ color: player2.color }} />
                         </div>
-                      ))}
-                      <button 
-                        onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
-                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
-                        style={{ 
-                          borderColor: player2.color + '33', 
-                          color: player2.color,
-                          backgroundColor: 'transparent'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = player2.color + '11';
-                          e.currentTarget.style.borderColor = player2.color + '66';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = player2.color + '33';
-                        }}
-                      >
-                        <Plus className="w-6 h-6" />
-                        Add
-                      </button>
+                        <input 
+                          value={team2Name} 
+                          onChange={(e) => updateTeamData(team1Name, team1Players, e.target.value.toUpperCase(), team2Players)}
+                          onFocus={(e) => handleInputFocus(e, 'team2')}
+                          onBlur={() => setFocusedField(null)}
+                          className="w-full bg-black border-2 rounded-xl sm:rounded-2xl font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl" 
+                          style={{ 
+                            ...teamEntryStyle, 
+                            borderColor: focusedField === 'team2' ? player2.color : player2.color + '66' 
+                          }}
+                          placeholder="TEAM 2"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-3 sm:space-y-4">
+                      <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Players</label>
+                      <div className="space-y-4 sm:space-y-6">
+                        {team2Players.map((player, idx) => (
+                          <div key={idx} className="flex items-stretch gap-2 sm:gap-4 group">
+                            <div 
+                              className="flex items-center justify-center font-black bg-black border-2 rounded-lg sm:rounded-xl aspect-square"
+                              style={{ 
+                                borderColor: player2.color + '33', 
+                                color: player2.color,
+                                fontSize: deviceInfo.isPhone ? '4vh' : '2.5vh',
+                                minWidth: '2vw'
+                              }}
+                            >
+                              {idx + 1}
+                            </div>
+                            <div className="relative flex-1 group">
+                              <input 
+                                value={player}
+                                autoFocus={idx === team2Players.length - 1 && player === ''}
+                                onChange={(e) => {
+                                  const newPlayers = [...team2Players];
+                                  newPlayers[idx] = e.target.value.toUpperCase();
+                                  updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                                }}
+                                onFocus={(e) => handleInputFocus(e, `p2-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                style={{ 
+                                  ...playerEntryStyle, 
+                                  borderColor: focusedField === `p2-${idx}` ? player2.color : player2.color + '66' 
+                                }}
+                                placeholder={`P${idx + 1}`}
+                                readOnly={player.includes('/')}
+                              />
+                              <button 
+                                onClick={() => {
+                                  const newPlayers = team2Players.filter((_, i) => i !== idx);
+                                  updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                                }}
+                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
+                              >
+                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {activeSetupTab === 'match' || activeSetupTab === 'group' ? (
+                          <div className="flex gap-2">
+                             <button 
+                              onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
+                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              style={{ 
+                                borderColor: player2.color + '44', 
+                                color: player2.color,
+                                backgroundColor: 'rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+                              Add Player
+                            </button>
+                            <button 
+                              onClick={() => handleAddDoubles(2)}
+                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              style={{ 
+                                borderColor: player2.color + '44', 
+                                color: player2.color,
+                                backgroundColor: 'rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
+                              Add Doubles
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
+                            className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                            style={{ 
+                              borderColor: player2.color + '44', 
+                              color: player2.color,
+                              backgroundColor: 'rgba(0,0,0,0.2)'
+                            }}
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                            <Plus className="w-6 h-6 transition-transform group-hover:rotate-90" />
+                            Add
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Match Results Table */}
               <div id="matchups-table" className="space-y-8 pt-12 border-t-2" style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}>
@@ -3120,11 +3405,11 @@ export default function App() {
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
                         <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {team1Name || 'TEAM A'}
+                          {activeSetupTab === 'group' ? 'PLAYER A' : (team1Name || 'TEAM A')}
                         </div>
                         <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {team2Name || 'TEAM B'}
+                          {activeSetupTab === 'group' ? 'PLAYER B' : (team2Name || 'TEAM B')}
                         </div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
                         <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
@@ -3138,6 +3423,10 @@ export default function App() {
                         ) : (
                           <>
                             {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
+                              // In non-match modes, only show the selected pair to avoid overwhelming the user
+                              // If no match is selected, show all to allow selection
+                              if (activeSetupTab !== 'match' && selectedMatchIndex !== null && selectedMatchIndex !== idx) return null;
+                              
                               const p1 = team1Players[idx];
                               const p2 = team2Players[idx];
                               
@@ -3179,12 +3468,30 @@ export default function App() {
                                   className={`group flex items-center cursor-pointer transition-colors border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                                 >
                                   <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate w-[27%] sm:w-[22%] items-center">
-                                    {p1 || <span className="text-slate-700 italic">EMPTY</span>}
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                    <div className="flex flex-col">
+                                      {matchup?.isDoubles && p1 && p1.includes('/') ? (
+                                        <>
+                                          <span className="truncate leading-none">{p1.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none mt-1 opacity-60 text-[0.8em]">{p1.split('/')[1].trim()}</span>
+                                        </>
+                                      ) : (
+                                        <span className="truncate">{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate w-[27%] sm:w-[22%] items-center">
-                                    {p2 || <span className="text-slate-700 italic">EMPTY</span>}
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                    <div className="flex flex-col">
+                                      {matchup?.isDoubles && p2 && p2.includes('/') ? (
+                                        <>
+                                          <span className="truncate leading-none">{p2.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none mt-1 opacity-60 text-[0.8em]">{p2.split('/')[1].trim()}</span>
+                                        </>
+                                      ) : (
+                                        <span className="truncate">{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
                                     {displayScore ? (
@@ -3208,7 +3515,8 @@ export default function App() {
                                   </div>
                                   <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
                                     <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                      {(lastMatch || (selectedMatchIndex === idx && currentMatchFrameDetails.length > 0)) && (
+                                      {/* Only show row button in non-match modes */}
+                                      {activeSetupTab !== 'match' && (lastMatch || (selectedMatchIndex === idx && currentMatchFrameDetails.length > 0)) && (
                                         <button 
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -3220,7 +3528,7 @@ export default function App() {
                                           <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
                                         </button>
                                       )}
-                                      {(lastMatch || matchup) && (
+                                      {(lastMatch || (selectedMatchIndex === idx && (player1.score > 0 || player2.score > 0))) && (
                                         <button 
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -3247,6 +3555,80 @@ export default function App() {
                                 </div>
                               );
                             })}
+                            
+                            {/* Match Session Details Button - Only for Match Mode */}
+                            {activeSetupTab === 'match' && (matchHistory.length > 0 || currentMatchFrameDetails.length > 0) && (
+                              <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex justify-center">
+                                <button 
+                                  onClick={() => viewMatchDetails('session')}
+                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  View Detailed Match Progress
+                                </button>
+                              </div>
+                            )}
+
+                            {/* History rows for Singles/Group mode (only show for selected pair) */}
+                            {activeSetupTab !== 'match' && selectedMatchIndex !== null && (() => {
+                              const p1 = team1Players[selectedMatchIndex];
+                              const p2 = team2Players[selectedMatchIndex];
+                              if (!p1 && !p2) return null;
+                              
+                              const p1Name = p1 || `PLAYER ${selectedMatchIndex + 1}`;
+                              const p2Name = p2 || `PLAYER ${selectedMatchIndex + 1}`;
+                              
+                              // Filter history for this pair, excluding the latest one which is already shown above in the slot row
+                              const historyForPair = matchHistory.filter(m => (
+                                (m.player1 === p1Name && m.player2 === p2Name) || 
+                                (m.player1 === p2Name && m.player2 === p1Name)
+                              )).slice(1); // Skip the first one as it's the "lastMatch" above
+                              
+                              if (historyForPair.length === 0) return null;
+                              
+                              return (
+                                <div className="flex flex-col border-t-2 border-slate-800/50">
+                                  <div className="px-6 py-2 bg-slate-900/50 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Previous Results for this Pair</div>
+                                  {historyForPair.map((m, hidx) => (
+                                    <div 
+                                      key={m.id} 
+                                      className="flex items-center border-b border-slate-800/30 last:border-0 hover:bg-slate-800/50"
+                                    >
+                                      <div className="hidden sm:flex px-[1vw] py-3 text-xs font-black text-slate-700 w-[8%] items-center opacity-50">HIST</div>
+                                      <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                        <span className="truncate">{m.player1}</span>
+                                      </div>
+                                      <div className="flex px-[0.5vw] py-3 text-center text-slate-800 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                                      <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                        <span className="truncate">{m.player2}</span>
+                                      </div>
+                                      <div className="flex px-[1.5vw] py-3 w-[24%] sm:w-[17%] items-center">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 whitespace-nowrap">
+                                            {m.score1}-{m.score2}
+                                          </span>
+                                          <span className="text-[0.625rem] text-slate-600 font-bold uppercase">{new Date(m.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex px-[1vw] py-3 justify-end w-[10%] sm:w-[8%] items-center">
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            viewMatchDetails(m.id);
+                                          }}
+                                          className="p-1 text-slate-500 hover:bg-slate-700 rounded transition-colors"
+                                          title="View Details"
+                                        >
+                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        </button>
+                                      </div>
+                                      <div className="hidden sm:flex px-[1.5vw] py-3 w-[15%] items-center" />
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
                             {/* Totals Row */}
                             <div className="flex items-center bg-slate-900/80 border-t-2 border-slate-800 font-black">
                               <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs uppercase tracking-[0.2em] text-emerald-500 w-[8%] items-center">Total Score</div>
@@ -3259,7 +3641,7 @@ export default function App() {
                                       0 0.4vh 1vh rgba(0,0,0,0.8)
                                     ` 
                                   }}>{teamTotals.t1}</span>
-                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team1Name}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
                                 </div>
                               </div>
                               <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">SUM</div>
@@ -3272,7 +3654,7 @@ export default function App() {
                                       0 0.4vh 1vh rgba(0,0,0,0.8)
                                     ` 
                                   }}>{teamTotals.t2}</span>
-                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team2Name}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
                                 </div>
                               </div>
                               <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center justify-end">
@@ -3460,8 +3842,7 @@ export default function App() {
                     Break Tracker
                   </h3>
                   <div 
-                    onClick={() => setIsBreakTrackingEnabled(!isBreakTrackingEnabled)}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
+                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative" 
                     style={{ borderColor: player1.color }}
                   >
                     {/* Title Box - Top */}
@@ -3474,11 +3855,29 @@ export default function App() {
                       <div className="flex-1">
                         <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
                       </div>
-                      <div className="shrink-0">
+                      <div className="shrink-0 flex items-center gap-4">
+                        {isBreakTrackingEnabled && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBreakBalls([]);
+                              setCurrentBreakPlayerId('none');
+                            }}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reset
+                          </button>
+                        )}
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            setIsBreakTrackingEnabled(!isBreakTrackingEnabled);
+                            const nextValue = !isBreakTrackingEnabled;
+                            setIsBreakTrackingEnabled(nextValue);
+                            if (!nextValue) {
+                              setBreakBalls([]);
+                              setCurrentBreakPlayerId('none');
+                            }
                           }}
                           className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
                           style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
@@ -3960,8 +4359,28 @@ export default function App() {
                 <h2 className="font-black uppercase tracking-tight text-white line-clamp-1 leading-none text-center" style={{ fontSize: deviceInfo.titleSizes.page }}>Match Details</h2>
               </div>
 
-              {(matchHistory.find(m => m.id === viewingMatchDetailsId) || (viewingMatchDetailsId === 'live')) ? (() => {
-                const match = viewingMatchDetailsId === 'live' ? {
+               {(matchHistory.find(m => m.id === viewingMatchDetailsId) || viewingMatchDetailsId === 'live' || viewingMatchDetailsId === 'session') ? (() => {
+                const isSession = viewingMatchDetailsId === 'session';
+                const match = isSession ? {
+                  id: 'session',
+                  date: new Date().toISOString(),
+                  player1: team1Name || 'Team 1',
+                  player2: team2Name || 'Team 2',
+                  team1: team1Name,
+                  team2: team2Name,
+                  score1: teamTotals.t1,
+                  score2: teamTotals.t2,
+                  winner: teamTotals.t1 > teamTotals.t2 ? team1Name : team2Name,
+                  frameDetails: [
+                    ...matchHistory
+                      .filter(m => (m.team1 === team1Name && m.team2 === team2Name))
+                      .reverse() // Oldest matches first for logic
+                      .flatMap(m => m.frameDetails),
+                    ...currentMatchFrameDetails
+                  ].map((f, idx) => ({ ...f, frameNumber: idx + 1 })),
+                  isLive: true,
+                  isSession: true
+                } : viewingMatchDetailsId === 'live' ? {
                   id: 'live',
                   date: new Date().toISOString(),
                   startTime: matchStartTime || undefined,
@@ -3982,21 +4401,23 @@ export default function App() {
                     {/* Header Info */}
                     <div className="grid grid-cols-2 gap-3 sm:gap-6">
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg flex flex-col items-center text-center">
-                          <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">{match.isLive ? 'Live Match Tracker' : 'Detailed Frame Analysis'}</p>
+                          <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">
+                            {match.isLive ? (isSession ? 'Session Progress' : 'Live Match Tracker') : 'Detailed Frame Analysis'}
+                          </p>
                           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
                             <span className="text-[1vh] sm:text-[1.2vh] text-slate-600 font-black px-1">VS</span>
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
                           </div>
-                          {match.team1 && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
+                          {match.team1 && !isSession && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
                        </div>
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 text-right shadow-lg">
                           <div className="flex items-center justify-end gap-2 mb-1">
                             {match.isLive && <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />}
-                            <p className="text-[1.1vh] sm:text-[1.3vh] uppercase font-black text-slate-500 lg:tracking-widest">{match.isLive ? 'Live Score' : 'Outcome / Date'}</p>
+                            <p className="text-[1.1vh] sm:text-[1.3vh] uppercase font-black text-slate-500 lg:tracking-widest">{match.isLive ? (isSession ? 'Total Score' : 'Live Score') : 'Outcome / Date'}</p>
                           </div>
                           <p className={`text-base sm:text-2xl font-black tabular-nums ${match.isLive ? 'text-blue-400' : 'text-emerald-400'}`}>{match.score1} - {match.score2}</p>
-                          <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.isLive ? 'Currently Playing' : new Date(match.date).toLocaleString('en-GB')}</p>
+                          <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.isLive ? (isSession ? 'Tournament Active' : 'Currently Playing') : new Date(match.date).toLocaleString('en-GB')}</p>
                        </div>
                     </div>
 

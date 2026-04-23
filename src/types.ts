@@ -27,6 +27,7 @@ export interface MatchupSettings {
   };
   score1?: number;
   score2?: number;
+  isDoubles?: boolean;
   currentBreakPlayerId?: '1' | '2' | 'none';
   breakBalls?: number[];
 }
@@ -56,6 +57,7 @@ export interface MatchHistoryEntry {
   score1: number;
   score2: number;
   winner: string;
+  isDoubles?: boolean;
   shotClockSetting?: number;
   matchClockRemaining?: number;
   frameDetails?: FrameDetail[];

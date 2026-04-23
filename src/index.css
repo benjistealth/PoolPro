@@ -88,3 +88,12 @@
   animation: spin-reverse 3s linear infinite;
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-150%) skewX(-25deg); }
+  100% { transform: translateX(150%) skewX(-25deg); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
