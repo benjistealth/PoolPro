@@ -38,9 +38,6 @@ import {
   SPEED_CLOTH_COLORS 
 } from './constants';
 import { ColorPicker } from './components/ColorPicker';
-import { AuthTile } from './components/AuthTile';
-import { useGoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 import portraitBackdrop from './assets/portrait_mode_backdrop.png';
 
 const SHOT_CLOCK_DEFAULT = 30;
@@ -95,8 +92,6 @@ export default function App() {
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [breakBalls, setBreakBalls] = useState<number[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [user, setUser] = useState<{name: string, email: string, photo?: string} | null>(null);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
@@ -474,10 +469,6 @@ export default function App() {
       if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
       if (state.apiConfig) setApiConfig(state.apiConfig);
 
-      // Load User
-      const savedUser = localStorage.getItem('pool_user');
-      if (savedUser) setUser(JSON.parse(savedUser));
-
       // Prepare Player Objects
       let p1 = { ...player1 };
       let p2 = { ...player2 };
@@ -549,62 +540,6 @@ export default function App() {
       setIsLoaded(true);
     }
   }, []);
-
-  // --- Authentication ---
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setIsLoggingIn(true);
-      try {
-        // For 'implicit' flow (default), we get an access_token.
-        // If we want profile info, we usually fetch it from Google's userInfo endpoint
-        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        const data = await res.json();
-        
-        if (data) {
-          const newUser = {
-            name: data.name || data.given_name || 'User',
-            email: data.email,
-            photo: data.picture
-          };
-          setUser(newUser);
-          localStorage.setItem('pool_user', JSON.stringify(newUser));
-        }
-      } catch (err) {
-        console.error('Google Login Error:', err);
-      } finally {
-        setIsLoggingIn(false);
-      }
-    },
-    onError: () => {
-      setIsLoggingIn(false);
-      console.error('Login Failed');
-    },
-  });
-
-  const handleLogin = (provider: string) => {
-    if (provider === 'google') {
-      googleLogin();
-      return;
-    }
-    
-    setIsLoggingIn(true);
-    // Simulate OAuth delay for other providers
-    setTimeout(() => {
-      setUser({
-        name: 'Demo Admin',
-        email: `admin@pool-pro.uk`,
-        photo: '' 
-      });
-      setIsLoggingIn(false);
-    }, 1500);
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('pool_user');
-  };
 
   // --- Persistence (Single JSON Source) ---
   const getSelectionName = (value: string, style: string, type: 'bg' | 'screen') => {
@@ -3800,16 +3735,6 @@ export default function App() {
                     </div>
                   </div>
                 </section>
-
-                {/* 7. Authentication */}
-                <AuthTile 
-                  user={user}
-                  onLogin={handleLogin}
-                  onLogout={handleLogout}
-                  isLoggingIn={isLoggingIn}
-                  themeColor={player1.color}
-                  deviceInfo={deviceInfo}
-                />
 
                 {/* 8. API Configuration */}
                 <section className="space-y-6">
