@@ -34,10 +34,10 @@ import {
   BACKGROUND_COLORS, 
   POOL_BALLS, 
   CLOTH_COLORS, 
-  SPEED_CLOTH_COLORS, 
-  DIAL_COLORS 
+  SPEED_CLOTH_COLORS 
 } from './constants';
 import { ColorPicker } from './components/ColorPicker';
+import portraitBackdrop from './assets/portrait_mode_backdrop.png';
 
 const SHOT_CLOCK_DEFAULT = 30;
 
@@ -46,7 +46,7 @@ export default function App() {
   const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFF33', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
   const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FF001C', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
   const [matchupSettings, setMatchupSettings] = useState<Record<number, MatchupSettings>>({});
-  const [playerPreferences, setPlayerPreferences] = useState<Record<string, { color: string, bgColor: string, screenColor: string }>>({});
+  const [playerPreferences, setPlayerPreferences] = useState<Record<string, { color: string, bgColor: string, screenColor: string, bgStyle: string, screenStyle: string }>>({});
   const [team1Name, setTeam1Name] = useState<string>('');
   const [team2Name, setTeam2Name] = useState<string>('');
   const [team1Players, setTeam1Players] = useState<string[]>([]);
@@ -59,6 +59,7 @@ export default function App() {
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const prevNamesRef = useRef({ p1: player1.name, p2: player2.name });
   const [windowSize, setWindowSize] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
     height: typeof window !== 'undefined' ? window.innerHeight : 768 
@@ -108,12 +109,27 @@ export default function App() {
     const handleResize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
+    handleResize();
     window.addEventListener('resize', handleResize);
     
     // Update current time every second
     const timeInterval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
+
+    // Preload Pool Ball Assets
+    POOL_BALLS.forEach(ball => {
+      // Preload high-res
+      if (ball.image) {
+        const img = new Image();
+        img.src = ball.image;
+      }
+      // Preload thumbnails
+      if (ball.thumbnail) {
+        const thumbImg = new Image();
+        thumbImg.src = ball.thumbnail;
+      }
+    });
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -132,9 +148,8 @@ export default function App() {
     const isDesktop = !isPhone && !isTablet;
     const isLandscape = windowSize.width > windowSize.height;
     const isPortrait = windowSize.width <= windowSize.height;
-    const aspectRatioHW = windowSize.height / windowSize.width;
-    const isCloserTo1_1Than1_2 = aspectRatioHW > 0.75;
-    const shouldHideDeviceTime = isPortrait || isCloserTo1_1Than1_2 || !showDeviceTime;
+    const isSquarish = (windowSize.width / windowSize.height) < 1.5;
+    const shouldHideDeviceTime = isPortrait || isSquarish || !showDeviceTime;
 
     const isShort = windowSize.height < 500;
 
@@ -150,27 +165,33 @@ export default function App() {
     return { isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, shouldHideDeviceTime, titleSizes };
   }, [windowSize.width, windowSize.height, showDeviceTime]); 
 
-  // Calculate shared font size for team names to occupy 95% of vertical space
+  // Calculate shared font size for team names to occupy up to 95% of the gap below the top bar
   const sharedTeamNameFontSize = useMemo(() => {
     const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
     const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : topBarHeightVal;
-    const availableHeight = windowSize.height - topBarHeight;
-    const targetHeight = availableHeight * 0.9;
     
-    const getFontSize = (name: string) => {
+    // The "gap" height is everything below the top bar
+    const availableGapHeight = windowSize.height - topBarHeight;
+    const targetHeight = availableGapHeight * 0.95;
+    
+    const getFontSizePerName = (name: string) => {
       const len = Math.max(1, name.length);
-      const scale = 0.95; // Safely fit within target height
-      return (targetHeight * scale) / len;
+      return targetHeight / len;
     };
 
-    const fs1 = getFontSize(team1Name);
-    const fs2 = getFontSize(team2Name);
-    const shared = Math.min(fs1, fs2);
+    const fs1 = getFontSizePerName(team1Name || 'TEAM A');
+    const fs2 = getFontSizePerName(team2Name || 'TEAM B');
+    const sharedLimit = Math.min(fs1, fs2);
 
-    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width < 1024 ? (windowSize.width * 0.08) : (windowSize.width * 0.08));
-    const maxFs = sidebarWidth * (deviceInfo.isPhone ? 1.2 : 1.05);
+    // Sidebar width is ~12vw on mobile, ~10vw on desktop
+    const sidebarWidth = deviceInfo.isPhone ? (windowSize.width * 0.12) : (windowSize.width * 0.104);
+    // Increase maximum size significantly to allow bolder side labels
+    const maxFs = sidebarWidth * (deviceInfo.isPhone ? 1.6 : 1.4); 
 
-    return `${(Math.min(shared, maxFs) / windowSize.width) * 100}vw`;
+    const finalFsPx = Math.min(sharedLimit, maxFs);
+    
+    // Return in vh for precise vertical autoscaling
+    return `${(finalFsPx / windowSize.height) * 100}vh`;
   }, [windowSize.height, windowSize.width, team1Name, team2Name, deviceInfo, isNavVisible]);
 
   const sharedPlayerNameFontSize = useMemo(() => {
@@ -439,18 +460,25 @@ export default function App() {
       if (state.gameData?.matchStartTime !== undefined) setMatchStartTime(state.gameData.matchStartTime);
       if (state.gameData?.currentMatchFrameDetails !== undefined) setCurrentMatchFrameDetails(state.gameData.currentMatchFrameDetails);
 
+      // Load Other Data (Load preferences early so they can be applied to player objects)
+      const loadedPrefs = state.playerPreferences || {};
+      if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
+      if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
+      if (state.apiConfig) setApiConfig(state.apiConfig);
+
       // Prepare Player Objects
       let p1 = { ...player1 };
       let p2 = { ...player2 };
 
-      // Load Preferences first
+      // Load Preferences onto Player Objects
       if (state.userPreferences) {
+        // ... (existing code for clocks etc)
         if (state.userPreferences.shotClockDuration !== undefined) setShotClockDuration(state.userPreferences.shotClockDuration);
         if (state.userPreferences.isShotClockEnabled !== undefined) setIsShotClockEnabled(state.userPreferences.isShotClockEnabled);
         if (state.userPreferences.matchClockDuration !== undefined) setMatchClockDuration(state.userPreferences.matchClockDuration);
         if (state.userPreferences.isMatchClockEnabled !== undefined) setIsMatchClockEnabled(state.userPreferences.isMatchClockEnabled);
         
-        // Force break tracking to enabled for this version if it hasn't been explicitly migrated/toggled in this update session
+        // Break tracking migration
         const forceEnabled = !state.userPreferences.breakTrackingV2Applied;
         if (forceEnabled) {
           setIsBreakTrackingEnabled(true);
@@ -459,7 +487,6 @@ export default function App() {
         }
         
         if (state.userPreferences.currentBreakPlayerId !== undefined) {
-          // Only load saved breaker if there is an active score, otherwise default to "none" (Ready state)
           const hasActiveScore = (state.gameData?.player1Score || 0) > 0 || (state.gameData?.player2Score || 0) > 0;
           setCurrentBreakPlayerId(hasActiveScore ? state.userPreferences.currentBreakPlayerId : 'none');
         }
@@ -478,12 +505,14 @@ export default function App() {
             color: state.userPreferences.player2.borderColor || state.userPreferences.player2.color || p2.color
           };
         }
-      } else {
-        // Legacy Player Settings
-        const p1Legacy = JSON.parse(localStorage.getItem('pool_player1_settings') || 'null');
-        const p2Legacy = JSON.parse(localStorage.getItem('pool_player2_settings') || 'null');
-        if (p1Legacy) p1 = { ...p1, ...p1Legacy };
-        if (p2Legacy) p2 = { ...p2, ...p2Legacy };
+      }
+
+      // NOW: Overlay name-based preferences if they exist (This ensures cloth choice etc is restored)
+      if (p1.name && loadedPrefs[p1.name]) {
+        p1 = { ...p1, ...loadedPrefs[p1.name] };
+      }
+      if (p2.name && loadedPrefs[p2.name]) {
+        p2 = { ...p2, ...loadedPrefs[p2.name] };
       }
 
       // Add scores from gameData
@@ -493,11 +522,6 @@ export default function App() {
       // Update state once
       setPlayer1(p1);
       setPlayer2(p2);
-
-      // Load Other Data
-      if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
-      if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
-      if (state.apiConfig) setApiConfig(state.apiConfig);
       
       if (state.userPreferences?.view !== undefined) setView(state.userPreferences.view);
       if (state.userPreferences?.isNavVisible !== undefined) setIsNavVisible(state.userPreferences.isNavVisible);
@@ -506,8 +530,8 @@ export default function App() {
       if (state.userPreferences?.matchClockPosition !== undefined) setMatchClockPosition(state.userPreferences.matchClockPosition);
       if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
 
-      // Finalize loading after state updates are scheduled
-      setTimeout(() => setIsLoaded(true), 10);
+      // Finalize loading after state updates
+      setIsLoaded(true);
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
       setIsLoaded(true);
@@ -515,6 +539,14 @@ export default function App() {
   }, []);
 
   // --- Persistence (Single JSON Source) ---
+  const getSelectionName = (value: string, style: string, type: 'bg' | 'screen') => {
+    if (!value) return '';
+    const list = type === 'bg' 
+      ? (style === 'balls' ? POOL_BALLS : BACKGROUND_COLORS)
+      : (style === 'cloth' ? CLOTH_COLORS : (style === 'speed' ? SPEED_CLOTH_COLORS : BACKGROUND_COLORS));
+    return list.find(c => c.value.toLowerCase() === value.toLowerCase())?.name || value;
+  };
+
   const saveState = useCallback(() => {
     if (!isLoaded) return;
 
@@ -533,15 +565,25 @@ export default function App() {
       userPreferences: {
         player1: { 
           name: player1.name, 
-          borderColor: player1.color,
+          color: player1.color,
+          colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player1.color.toLowerCase())?.name || player1.color,
           bgColor: player1.bgColor,
-          screenColor: player1.screenColor
+          bgName: getSelectionName(player1.bgColor, player1.bgStyle || 'default', 'bg'),
+          screenColor: player1.screenColor,
+          screenName: getSelectionName(player1.screenColor, player1.screenStyle || 'default', 'screen'),
+          bgStyle: player1.bgStyle,
+          screenStyle: player1.screenStyle
         },
         player2: { 
           name: player2.name, 
-          borderColor: player2.color,
+          color: player2.color,
+          colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player2.color.toLowerCase())?.name || player2.color,
           bgColor: player2.bgColor,
-          screenColor: player2.screenColor
+          bgName: getSelectionName(player2.bgColor, player2.bgStyle || 'default', 'bg'),
+          screenColor: player2.screenColor,
+          screenName: getSelectionName(player2.screenColor, player2.screenStyle || 'default', 'screen'),
+          bgStyle: player2.bgStyle,
+          screenStyle: player2.screenStyle
         },
         shotClockDuration,
         isShotClockEnabled,
@@ -593,61 +635,197 @@ export default function App() {
 
   // Sync current player preferences when they change
   useEffect(() => {
-    if (selectedMatchIndex !== null) {
-      setMatchupSettings(prev => ({
-        ...prev,
-        [selectedMatchIndex]: {
-          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor },
-          score1: player1.score,
-          score2: player2.score
-        }
-      }));
-    }
+    if (!isLoaded || selectedMatchIndex === null) return;
+    
+    const currentSetting = matchupSettings[selectedMatchIndex];
+      const newP1 = { name: player1.name, color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle };
+      const newP2 = { name: player2.name, color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle };
+      
+      const hasChanged = !currentSetting || 
+        JSON.stringify(currentSetting.player1) !== JSON.stringify(newP1) ||
+        JSON.stringify(currentSetting.player2) !== JSON.stringify(newP2) ||
+        currentSetting.score1 !== player1.score ||
+        currentSetting.score2 !== player2.score;
+
+      if (hasChanged) {
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            player1: newP1,
+            player2: newP2,
+            score1: player1.score,
+            score2: player2.score
+          }
+        }));
+      }
 
     // Always sync player colors to playerPreferences if they have names
-    if (player1.name) {
-      setPlayerPreferences(prev => ({
-        ...prev,
-        [player1.name]: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor }
-      }));
+    // BUT: Skip if the name just changed in this render, to let the "Sync FROM" hook load the right prefs first
+    const name1Changed = prevNamesRef.current.p1 !== player1.name;
+    const name2Changed = prevNamesRef.current.p2 !== player2.name;
+    
+    if (player1.name && !name1Changed) {
+      const newPref = { 
+        color: player1.color, 
+        colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player1.color.toLowerCase())?.name || player1.color,
+        bgColor: player1.bgColor, 
+        bgName: getSelectionName(player1.bgColor, player1.bgStyle || 'default', 'bg'),
+        screenColor: player1.screenColor,
+        screenName: getSelectionName(player1.screenColor, player1.screenStyle || 'default', 'screen'),
+        bgStyle: player1.bgStyle || 'default' as any,
+        screenStyle: player1.screenStyle || 'default' as any
+      };
+      if (JSON.stringify(playerPreferences[player1.name]) !== JSON.stringify(newPref)) {
+        setPlayerPreferences(prev => ({
+          ...prev,
+          [player1.name]: newPref
+        }));
+      }
     }
-    if (player2.name) {
-      setPlayerPreferences(prev => ({
-        ...prev,
-        [player2.name]: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor }
-      }));
+    if (player2.name && !name2Changed) {
+      const newPref = { 
+        color: player2.color, 
+        colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player2.color.toLowerCase())?.name || player2.color,
+        bgColor: player2.bgColor, 
+        bgName: getSelectionName(player2.bgColor, player2.bgStyle || 'default', 'bg'),
+        screenColor: player2.screenColor,
+        screenName: getSelectionName(player2.screenColor, player2.screenStyle || 'default', 'screen'),
+        bgStyle: player2.bgStyle || 'default' as any,
+        screenStyle: player2.screenStyle || 'default' as any
+      };
+      if (JSON.stringify(playerPreferences[player2.name]) !== JSON.stringify(newPref)) {
+        setPlayerPreferences(prev => ({
+          ...prev,
+          [player2.name]: newPref
+        }));
+      }
     }
+
+    // Update refs for next render
+    prevNamesRef.current = { p1: player1.name, p2: player2.name };
   }, [
     selectedMatchIndex, 
-    player1.name, player1.score, player1.color, player1.bgColor, player1.screenColor,
-    player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor
+    player1.name, player1.score, player1.color, player1.bgColor, player1.screenColor, player1.bgStyle, player1.screenStyle,
+    player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
+    matchupSettings, playerPreferences
   ]);
+
+  // Load matchup settings when match index changes
+  useEffect(() => {
+    if (!isLoaded || selectedMatchIndex === null || !matchupSettings[selectedMatchIndex]) return;
+    
+    const settings = matchupSettings[selectedMatchIndex];
+    if (settings.player1) {
+      setPlayer1(prev => ({
+        ...prev,
+        color: settings.player1.color || prev.color,
+        bgColor: settings.player1.bgColor || prev.bgColor,
+        screenColor: settings.player1.screenColor || prev.screenColor,
+        bgStyle: settings.player1.bgStyle || 'default',
+        screenStyle: settings.player1.screenStyle || 'default'
+      }));
+    }
+    if (settings.player2) {
+      setPlayer2(prev => ({
+        ...prev,
+        color: settings.player2.color || prev.color,
+        bgColor: settings.player2.bgColor || prev.bgColor,
+        screenColor: settings.player2.screenColor || prev.screenColor,
+        bgStyle: settings.player2.bgStyle || 'default',
+        screenStyle: settings.player2.screenStyle || 'default'
+      }));
+    }
+  }, [selectedMatchIndex, isLoaded]); // Only run when match index changes
 
   // Load player preferences when names change (e.g. typed in scoreboard)
   useEffect(() => {
-    if (player1.name && playerPreferences[player1.name]) {
-      const pref = playerPreferences[player1.name];
-      setPlayer1(prev => ({
-        ...prev,
-        color: pref.color,
-        bgColor: pref.bgColor,
-        screenColor: pref.screenColor
-      }));
+    if (!isLoaded || !player1.name) return;
+    
+    const pref = playerPreferences[player1.name];
+    if (pref) {
+      const hasChanges = 
+        player1.color !== pref.color ||
+        player1.bgColor !== pref.bgColor ||
+        player1.screenColor !== pref.screenColor ||
+        (pref.bgStyle && player1.bgStyle !== pref.bgStyle) ||
+        (pref.screenStyle && player1.screenStyle !== pref.screenStyle);
+
+      if (hasChanges) {
+        // Use a functional update to ensure we don't accidentally revert name or score
+        setPlayer1(prev => {
+          // Double check the name in the hook context hasn't changed again before this update
+          if (prev.name !== player1.name) return prev;
+          
+          return {
+            ...prev,
+            color: pref.color,
+            bgColor: pref.bgColor,
+            screenColor: pref.screenColor,
+            bgStyle: (pref.bgStyle as any) || 'default',
+            screenStyle: (pref.screenStyle as any) || 'default'
+          };
+        });
+      }
+    } else {
+      const defaultColor = '#FFFF33';
+      if (player1.bgStyle !== 'default' || player1.screenStyle !== 'default') {
+        setPlayer1(prev => {
+          if (prev.name !== player1.name) return prev;
+          return {
+            ...prev,
+            color: defaultColor,
+            bgColor: '#000000',
+            screenColor: '#000000',
+            bgStyle: 'default',
+            screenStyle: 'default'
+          };
+        });
+      }
     }
-  }, [player1.name]);
+  }, [player1.name, playerPreferences, isLoaded]); // Removed player1.id/others from deps to be focused
 
   useEffect(() => {
-    if (player2.name && playerPreferences[player2.name]) {
-      const pref = playerPreferences[player2.name];
-      setPlayer2(prev => ({
-        ...prev,
-        color: pref.color,
-        bgColor: pref.bgColor,
-        screenColor: pref.screenColor
-      }));
+    if (!isLoaded || !player2.name) return;
+    
+    const pref = playerPreferences[player2.name];
+    if (pref) {
+      const hasChanges = 
+        player2.color !== pref.color ||
+        player2.bgColor !== pref.bgColor ||
+        player2.screenColor !== pref.screenColor ||
+        (pref.bgStyle && player2.bgStyle !== pref.bgStyle) ||
+        (pref.screenStyle && player2.screenStyle !== pref.screenStyle);
+
+      if (hasChanges) {
+        setPlayer2(prev => {
+          if (prev.name !== player2.name) return prev;
+          return {
+            ...prev,
+            color: pref.color,
+            bgColor: pref.bgColor,
+            screenColor: pref.screenColor,
+            bgStyle: (pref.bgStyle as any) || 'default',
+            screenStyle: (pref.screenStyle as any) || 'default'
+          };
+        });
+      }
+    } else {
+      const defaultColor = '#FF001C';
+      if (player2.bgStyle !== 'default' || player2.screenStyle !== 'default') {
+        setPlayer2(prev => {
+          if (prev.name !== player2.name) return prev;
+          return {
+            ...prev,
+            color: defaultColor,
+            bgColor: '#000000',
+            screenColor: '#000000',
+            bgStyle: 'default',
+            screenStyle: 'default'
+          };
+        });
+      }
     }
-  }, [player2.name]);
+  }, [player2.name, playerPreferences, isLoaded]);
 
   // Ensure player names are fresh whenever entering gameplay view
   useEffect(() => {
@@ -655,10 +833,32 @@ export default function App() {
       const p1 = team1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       const p2 = team2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       
-      setPlayer1(prev => ({ ...prev, name: p1 }));
-      setPlayer2(prev => ({ ...prev, name: p2 }));
+      setPlayer1(prev => {
+        const pref = playerPreferences[p1];
+        return {
+          ...prev,
+          name: p1,
+          color: pref?.color || '#FFFF33',
+          bgColor: pref?.bgColor || '#000000',
+          screenColor: pref?.screenColor || '#000000',
+          bgStyle: (pref?.bgStyle as any) || 'default',
+          screenStyle: (pref?.screenStyle as any) || 'default'
+        };
+      });
+      setPlayer2(prev => {
+        const pref = playerPreferences[p2];
+        return {
+          ...prev,
+          name: p2,
+          color: pref?.color || '#FF001C',
+          bgColor: pref?.bgColor || '#000000',
+          screenColor: pref?.screenColor || '#000000',
+          bgStyle: (pref?.bgStyle as any) || 'default',
+          screenStyle: (pref?.screenStyle as any) || 'default'
+        };
+      });
     }
-  }, [view, selectedMatchIndex, team1Players, team2Players]);
+  }, [view, selectedMatchIndex, team1Players, team2Players, playerPreferences]);
 
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
@@ -840,6 +1040,8 @@ export default function App() {
       if (selectedMatchIndex === index) {
         setPlayer1(prev => ({ ...prev, score: 0 }));
         setPlayer2(prev => ({ ...prev, score: 0 }));
+        setCurrentMatchFrameDetails([]);
+        setMatchStartTime(null);
       }
     }
   };
@@ -876,7 +1078,9 @@ export default function App() {
       score: p1Score,
       color: p1Pref?.color || (settings?.player1.color) || '#FFFF33',
       bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#000000',
-      screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000'
+      screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000',
+      bgStyle: p1Pref?.bgStyle || (settings?.player1.bgStyle) || 'default',
+      screenStyle: p1Pref?.screenStyle || (settings?.player1.screenStyle) || 'default'
     }));
     
     setPlayer2(prev => ({ 
@@ -885,7 +1089,9 @@ export default function App() {
       score: p2Score,
       color: p2Pref?.color || (settings?.player2.color) || '#FF001C',
       bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
-      screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000'
+      screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000',
+      bgStyle: p2Pref?.bgStyle || (settings?.player2.bgStyle) || 'default',
+      screenStyle: p2Pref?.screenStyle || (settings?.player2.screenStyle) || 'default'
     }));
     
     setSelectedMatchIndex(index);
@@ -937,14 +1143,89 @@ export default function App() {
     setTeam2Players([]);
     
     // Clear Game Data
-    setPlayer1(prev => ({ ...prev, score: 0 }));
-    setPlayer2(prev => ({ ...prev, score: 0 }));
+    setPlayer1(prev => ({ 
+      ...prev, 
+      name: '', 
+      score: 0, 
+      isTurn: true,
+      color: '#FFFF33',
+      bgColor: '#000000',
+      screenColor: '#000000',
+      bgStyle: 'default',
+      screenStyle: 'default'
+    }));
+    setPlayer2(prev => ({ 
+      ...prev, 
+      name: '', 
+      score: 0, 
+      isTurn: false,
+      color: '#FF001C',
+      bgColor: '#000000',
+      screenColor: '#000000',
+      bgStyle: 'default',
+      screenStyle: 'default'
+    }));
     setMatchHistory([]);
     setMatchupSettings({});
     setSelectedMatchIndex(null);
     setCurrentBreakPlayerId('none');
     setShotClock(shotClockDuration);
     setMatchClock(matchClockDuration);
+    setCurrentMatchFrameDetails([]);
+    setMatchStartTime(null);
+    setIsEditingNames(false);
+
+    // Clear legacy keys too
+    localStorage.removeItem('pool_team1_name');
+    localStorage.removeItem('pool_team2_name');
+    localStorage.removeItem('pool_team1_players');
+    localStorage.removeItem('pool_team2_players');
+    localStorage.removeItem('pool_match_history');
+    localStorage.removeItem('pool_app_state'); 
+    localStorage.removeItem('pool_player_prefs');
+    
+    // Reset player objects to initial defaults beyond just name
+    setPlayer1({ 
+      id: '1', 
+      name: '', 
+      score: 0, 
+      isTurn: true, 
+      color: '#FFFF33', 
+      bgColor: '#000000', 
+      screenColor: '#000000', 
+      bgStyle: 'default', 
+      screenStyle: 'default' 
+    });
+    setPlayer2({ 
+      id: '2', 
+      name: '', 
+      score: 0, 
+      isTurn: false, 
+      color: '#FF001C', 
+      bgColor: '#000000', 
+      screenColor: '#000000', 
+      bgStyle: 'default', 
+      screenStyle: 'default' 
+    });
+    
+    setMatchHistory([]);
+    setMatchupSettings({});
+    setSelectedMatchIndex(null);
+    setCurrentBreakPlayerId('none');
+    setShotClock(shotClockDuration);
+    setMatchClock(matchClockDuration);
+    setCurrentMatchFrameDetails([]);
+    setMatchStartTime(null);
+    setIsEditingNames(false);
+
+    // Completely purge storage to prevent any lingering state restoration
+    localStorage.removeItem('pool_app_state'); 
+    localStorage.removeItem('pool_player_prefs');
+    localStorage.removeItem('pool_team1_name');
+    localStorage.removeItem('pool_team2_name');
+    localStorage.removeItem('pool_team1_players');
+    localStorage.removeItem('pool_team2_players');
+    localStorage.removeItem('pool_match_history');
     
     setShowClearTeamsConfirm(false);
   };
@@ -964,8 +1245,30 @@ export default function App() {
     if (selectedMatchIndex !== null) {
       const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
-      setPlayer1(prev => ({ ...prev, name: p1 }));
-      setPlayer2(prev => ({ ...prev, name: p2 }));
+      setPlayer1(prev => {
+        const pref = playerPreferences[p1];
+        return {
+          ...prev,
+          name: p1,
+          color: pref?.color || '#FFFF33',
+          bgColor: pref?.bgColor || '#000000',
+          screenColor: pref?.screenColor || '#000000',
+          bgStyle: (pref?.bgStyle as any) || 'default',
+          screenStyle: (pref?.screenStyle as any) || 'default'
+        };
+      });
+      setPlayer2(prev => {
+        const pref = playerPreferences[p2];
+        return {
+          ...prev,
+          name: p2,
+          color: pref?.color || '#FF001C',
+          bgColor: pref?.bgColor || '#000000',
+          screenColor: pref?.screenColor || '#000000',
+          bgStyle: (pref?.bgStyle as any) || 'default',
+          screenStyle: (pref?.screenStyle as any) || 'default'
+        };
+      });
     }
   };
 
@@ -1032,15 +1335,15 @@ export default function App() {
 
   const generateCSV = () => {
     let csvContent = "SECTION: TEAM SETUP\n";
-    csvContent += "Team,Player Name,Highlight Color\n";
+    csvContent += "Team,Player Name,Highlight Color,BG Color,Screen Color,BG Style,Screen Style\n";
     
     team1Players.forEach(p => {
       const pref = playerPreferences[p];
-      csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFF33'}"\n`;
+      csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFF33'}","${pref?.bgColor || '#000000'}","${pref?.screenColor || '#000000'}","${pref?.bgStyle || 'default'}","${pref?.screenStyle || 'default'}"\n`;
     });
     team2Players.forEach(p => {
       const pref = playerPreferences[p];
-      csvContent += `"${team2Name}","${p}","${pref?.color || '#FF001C'}"\n`;
+      csvContent += `"${team2Name}","${p}","${pref?.color || '#FF001C'}","${pref?.bgColor || '#000000'}","${pref?.screenColor || '#000000'}","${pref?.bgStyle || 'default'}","${pref?.screenStyle || 'default'}"\n`;
     });
 
     csvContent += "\nSECTION: MATCH HISTORY\n";
@@ -1075,7 +1378,15 @@ export default function App() {
     csvContent += `Match Clock Enabled,"${isMatchClockEnabled}"\n`;
     csvContent += `Match Clock Duration,"${formatTime(matchClockDuration)}"\n`;
     csvContent += `Player 1 Highlight Color,"${player1.color}"\n`;
+    csvContent += `Player 1 BG Color,"${player1.bgColor}"\n`;
+    csvContent += `Player 1 Screen Color,"${player1.screenColor}"\n`;
+    csvContent += `Player 1 BG Style,"${player1.bgStyle}"\n`;
+    csvContent += `Player 1 Screen Style,"${player1.screenStyle}"\n`;
     csvContent += `Player 2 Highlight Color,"${player2.color}"\n`;
+    csvContent += `Player 2 BG Color,"${player2.bgColor}"\n`;
+    csvContent += `Player 2 Screen Color,"${player2.screenColor}"\n`;
+    csvContent += `Player 2 BG Style,"${player2.bgStyle}"\n`;
+    csvContent += `Player 2 Screen Style,"${player2.screenStyle}"\n`;
     csvContent += `Selected Match Index,"${selectedMatchIndex}"\n`;
     csvContent += `Show Device Time,"${showDeviceTime}"\n`;
     if (deviceTimePosition) {
@@ -1092,13 +1403,13 @@ export default function App() {
     }
 
     csvContent += "\nSECTION: PLAYER PREFERENCES\n";
-    csvContent += "Player Name,Highlight Color\n";
+    csvContent += "Player Name,Highlight Color,BG Color,Screen Color,BG Style,Screen Style\n";
     // Include current active player names if they have colors
-    csvContent += `"Player 1","${player1.color}"\n`;
-    csvContent += `"Player 2","${player2.color}"\n`;
+    csvContent += `"Player 1","${player1.color}","${player1.bgColor}","${player1.screenColor}","${player1.bgStyle}","${player1.screenStyle}"\n`;
+    csvContent += `"Player 2","${player2.color}","${player2.bgColor}","${player2.screenColor}","${player2.bgStyle}","${player2.screenStyle}"\n`;
     
     Object.entries(playerPreferences).forEach(([name, pref]: [string, any]) => {
-      csvContent += `"${name}","${pref.color}"\n`;
+      csvContent += `"${name}","${pref.color}","${pref.bgColor || '#000000'}","${pref.screenColor || '#000000'}","${pref.bgStyle || 'default'}","${pref.screenStyle || 'default'}"\n`;
     });
 
     return csvContent;
@@ -1112,14 +1423,22 @@ export default function App() {
           name: player1.name,
           score: player1.score,
           isTurn: player1.isTurn,
-          highlightColor: player1.color
+          highlightColor: player1.color,
+          bgColor: player1.bgColor,
+          screenColor: player1.screenColor,
+          bgStyle: player1.bgStyle,
+          screenStyle: player1.screenStyle
         },
         player2: {
           id: player2.id,
           name: player2.name,
           score: player2.score,
           isTurn: player2.isTurn,
-          highlightColor: player2.color
+          highlightColor: player2.color,
+          bgColor: player2.bgColor,
+          screenColor: player2.screenColor,
+          bgStyle: player2.bgStyle,
+          screenStyle: player2.screenStyle
         },
         shotClockDuration,
         isShotClockEnabled,
@@ -1135,9 +1454,9 @@ export default function App() {
         totals: teamTotals
       },
       playerPreferences: Object.entries(playerPreferences).reduce((acc, [name, pref]: [string, any]) => {
-        acc[name] = pref.color;
+        acc[name] = pref;
         return acc;
-      }, {} as Record<string, string>),
+      }, {} as Record<string, any>),
       history: matchHistory.map(entry => ({
         ...entry,
         date: formatDateUK(new Date(entry.date), true)
@@ -1287,7 +1606,11 @@ export default function App() {
                   name: state.settings.player1.name || prev.name,
                   score: state.settings.player1.score ?? prev.score,
                   isTurn: state.settings.player1.isTurn ?? prev.isTurn,
-                  color: state.settings.player1.highlightColor || prev.color 
+                  color: state.settings.player1.highlightColor || prev.color,
+                  bgColor: state.settings.player1.bgColor || prev.bgColor,
+                  screenColor: state.settings.player1.screenColor || prev.screenColor,
+                  bgStyle: state.settings.player1.bgStyle || prev.bgStyle,
+                  screenStyle: state.settings.player1.screenStyle || prev.screenStyle
                 }));
               }
               if (state.settings.player2) {
@@ -1296,7 +1619,11 @@ export default function App() {
                   name: state.settings.player2.name || prev.name,
                   score: state.settings.player2.score ?? prev.score,
                   isTurn: state.settings.player2.isTurn ?? prev.isTurn,
-                  color: state.settings.player2.highlightColor || prev.color 
+                  color: state.settings.player2.highlightColor || prev.color,
+                  bgColor: state.settings.player2.bgColor || prev.bgColor,
+                  screenColor: state.settings.player2.screenColor || prev.screenColor,
+                  bgStyle: state.settings.player2.bgStyle || prev.bgStyle,
+                  screenStyle: state.settings.player2.screenStyle || prev.screenStyle
                 }));
               }
             }
@@ -1321,15 +1648,26 @@ export default function App() {
             }
 
             if (state.playerPreferences) {
-              const mappedPrefs: Record<string, { color: string, bgColor: string, screenColor: string }> = {};
+              const mappedPrefs: Record<string, { color: string, bgColor: string, screenColor: string, bgStyle: string, screenStyle: string }> = {};
               Object.entries(state.playerPreferences).forEach(([name, pref]: [string, any]) => {
-                // Handle both new (string) and old ({borderColor}) formats
-                const color = typeof pref === 'string' ? pref : (pref.borderColor || '#FFFF33');
-                mappedPrefs[name] = {
-                  color: color,
-                  bgColor: '#000000',
-                  screenColor: '#000000'
-                };
+                // Handle both new (object) and old (string) formats
+                if (typeof pref === 'string') {
+                  mappedPrefs[name] = {
+                    color: pref,
+                    bgColor: '#000000',
+                    screenColor: '#000000',
+                    bgStyle: 'default',
+                    screenStyle: 'default'
+                  };
+                } else {
+                  mappedPrefs[name] = {
+                    color: pref.color || '#FFFF33',
+                    bgColor: pref.bgColor || '#000000',
+                    screenColor: pref.screenColor || '#000000',
+                    bgStyle: pref.bgStyle || 'default',
+                    screenStyle: pref.screenStyle || 'default'
+                  };
+                }
               });
               setPlayerPreferences(mappedPrefs);
             }
@@ -1363,14 +1701,22 @@ export default function App() {
                 setPlayer1(prev => ({ 
                   ...prev, 
                   name: state.userPreferences.player1.name || prev.name,
-                  color: state.userPreferences.player1.borderColor || prev.color 
+                  color: state.userPreferences.player1.borderColor || state.userPreferences.player1.color || prev.color,
+                  bgColor: state.userPreferences.player1.bgColor || prev.bgColor,
+                  screenColor: state.userPreferences.player1.screenColor || prev.screenColor,
+                  bgStyle: state.userPreferences.player1.bgStyle || prev.bgStyle,
+                  screenStyle: state.userPreferences.player1.screenStyle || prev.screenStyle
                 }));
               }
               if (state.userPreferences.player2) {
                 setPlayer2(prev => ({ 
                   ...prev, 
                   name: state.userPreferences.player2.name || prev.name,
-                  color: state.userPreferences.player2.borderColor || prev.color 
+                  color: state.userPreferences.player2.borderColor || state.userPreferences.player2.color || prev.color,
+                  bgColor: state.userPreferences.player2.bgColor || prev.bgColor,
+                  screenColor: state.userPreferences.player2.screenColor || prev.screenColor,
+                  bgStyle: state.userPreferences.player2.bgStyle || prev.bgStyle,
+                  screenStyle: state.userPreferences.player2.screenStyle || prev.screenStyle
                 }));
               }
             }
@@ -1633,6 +1979,32 @@ export default function App() {
     const centerY = (windowSize.height + topBarOffset) / 2;
     const centerX = windowSize.width / 2;
 
+  if (deviceInfo.isPortrait) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="relative w-full h-full flex items-center justify-center bg-black"
+        >
+          <img 
+            src={portraitBackdrop} 
+            alt="Rotate to Landscape" 
+            className="w-full h-full object-cover sm:object-contain"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/20 backdrop-blur-[2px]">
+             <div className="bg-black/60 p-8 rounded-[4vh] border border-white/10 backdrop-blur-xl flex flex-col items-center shadow-2xl">
+               <RotateCcw className="w-[8vh] h-[8vh] text-emerald-400 animate-spin-reverse mb-[3vh]" />
+               <h2 className="text-[4vh] font-black text-white uppercase tracking-[0.2em] mb-[1vh]">Landscape Only</h2>
+               <p className="text-[2vh] text-slate-300 font-medium uppercase tracking-[0.1em]">Please rotate your device</p>
+             </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className={`relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden ${deviceInfo.isPhone ? 'is-phone' : (deviceInfo.isTablet ? 'is-tablet' : 'is-desktop')}`}>
       {/* SVG Gradient Definitions */}
@@ -1648,8 +2020,8 @@ export default function App() {
       {/* Background Layer */}
       <div className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none">
         {/* Split Screen (Scoreboard only) */}
-        <div className={`absolute inset-0 flex transition-opacity duration-700 ${view === 'scoreboard' ? 'opacity-100' : 'opacity-0'}`}>
-          {[player1, player2].map((p) => (
+        <div className={`absolute inset-0 flex transition-opacity duration-700 ${isLoaded && view === 'scoreboard' ? 'opacity-100' : 'opacity-0'}`}>
+          {[player1, player2].map((p, idx) => (
             <div 
               key={p.id} 
               className="flex-1 h-full relative overflow-hidden transition-colors duration-700" 
@@ -1658,7 +2030,7 @@ export default function App() {
               {(p.screenStyle === 'cloth' || p.screenStyle === 'speed') && (CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase()) || SPEED_CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase())) && (
                 <div className="absolute inset-0 z-0 scale-[1.05]">
                   <div 
-                    className="w-full h-full border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_10vh_rgba(0,0,0,0.5)]" 
+                    className={`w-full h-full border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_10vh_rgba(0,0,0,0.5)] ${idx === 0 ? 'border-r-0' : 'border-l-0'}`} 
                     style={{ backgroundColor: p.screenColor }}
                   >
                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: p.screenStyle === 'speed' ? 'radial-gradient(#000 0.03rem, transparent 0.03rem)' : 'radial-gradient(#000 0.06rem, transparent 0.06rem)', backgroundSize: p.screenStyle === 'speed' ? '0.8vw 0.8vw' : '1.5vw 1.5vw' }} />
@@ -1667,9 +2039,13 @@ export default function App() {
                     <div className={`absolute top-0 right-0 w-[8vw] h-[8vw] bg-black rounded-bl-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
                     <div className={`absolute bottom-0 left-0 w-[8vw] h-[8vw] bg-black rounded-tr-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
                     <div className={`absolute bottom-0 right-0 w-[8vw] h-[8vw] bg-black rounded-tl-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
-                    {/* Side Pockets */}
-                    <div className={`absolute top-1/2 left-0 -translate-y-1/2 w-[5vw] h-[8vw] bg-black rounded-r-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
-                    <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[5vw] h-[8vw] bg-black rounded-l-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
+                    {/* Side Pockets - Only on outside edges */}
+                    {idx === 1 && (
+                      <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[5vw] h-[8vw] bg-black rounded-l-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
+                    )}
+                    {idx === 0 && (
+                      <div className={`absolute top-1/2 left-0 -translate-y-1/2 w-[5vw] h-[8vw] bg-black rounded-r-2xl shadow-inner ${p.screenStyle === 'speed' ? 'border-2 border-white/10' : ''}`} />
+                    )}
                   </div>
                 </div>
               )}
@@ -1678,7 +2054,7 @@ export default function App() {
                   className="absolute inset-0 opacity-40 z-0" 
                   style={{ 
                     backgroundImage: 'linear-gradient(45deg, #111 25.5%, transparent 25.5%), linear-gradient(-45deg, #111 25.5%, transparent 25.5%), linear-gradient(45deg, transparent 74.5%, #111 74.5%), linear-gradient(-45deg, transparent 74.5%, #111 74.5%)',
-                    backgroundSize: '0.5rem 0.5rem',
+                    backgroundSize: '1vh 1vh',
                     backgroundColor: '#1a1a1a'
                   }}
                 />
@@ -1695,24 +2071,25 @@ export default function App() {
       </div>
 
       {/* Navigation Bar */}
-      <motion.nav 
-        initial={false}
-        animate={{ 
-          y: (!deviceInfo.isDesktop && (
-            (!isNavVisible && deviceInfo.isPhone) || 
-            (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
-          )) ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
-          opacity: 1
-        }}
-        transition={{ duration: 0.4, ease: "easeInOut" }}
-        className={`fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between px-[2.5vw]`}
-        style={{ 
-          borderBottom: '0.125rem solid',
-          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`,
-          height: deviceInfo.isPhone ? '16vh' : '10vh'
-        }}
-      >
-        <div className="flex items-center gap-[1vw] shrink-0 transform-none">
+        <motion.nav 
+          initial={false}
+          animate={{ 
+            y: (!deviceInfo.isDesktop && (
+              (!isNavVisible && deviceInfo.isPhone) || 
+              (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
+            )) ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
+            opacity: 1
+          }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          className="fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw]"
+          style={{ 
+            borderBottom: '0.125rem solid',
+            borderImage: isLoaded ? `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` : 'none',
+            height: deviceInfo.isPhone ? '16vh' : '10vh',
+            borderColor: isLoaded ? 'transparent' : '#111'
+          }}
+        >
+          <div className="flex items-center gap-[1vw] shrink-0">
           <Trophy 
             className="transition-all duration-500" 
             style={{ 
@@ -1735,8 +2112,8 @@ export default function App() {
             >
               <defs>
                 <linearGradient id="logo-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor={player1.color} />
-                  <stop offset="100%" stopColor={player2.color} />
+                  <stop offset="0%" stopColor={isLoaded ? player1.color : '#334155'} />
+                  <stop offset="100%" stopColor={isLoaded ? player2.color : '#475569'} />
                 </linearGradient>
               </defs>
                 <text 
@@ -1778,10 +2155,10 @@ export default function App() {
           )}
         </div>
         
-        <div className="flex items-center gap-[1vw] shrink-0 justify-end">
+        <div className="flex items-center gap-[1vw] shrink-0 ml-auto">
           <button 
             onClick={toggleFullscreen}
-            className="flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50"
+            className="flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 active:scale-95"
             style={{
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
               height: deviceInfo.isPhone ? '12.5vh' : '8vh',
@@ -1808,7 +2185,7 @@ export default function App() {
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
             style={{
               backgroundColor: view === 'scoreboard' ? `${player1.color}33` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
@@ -1829,7 +2206,7 @@ export default function App() {
               setView('teams');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
             style={{
               backgroundColor: view === 'teams' ? `${player1.color}33` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
@@ -1850,7 +2227,7 @@ export default function App() {
               setView('settings');
               if (deviceInfo.isPhone) setIsNavVisible(false);
             }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50`}
+            className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
             style={{
               backgroundColor: view === 'settings' ? `${player2.color}33` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
@@ -1871,7 +2248,7 @@ export default function App() {
 
       {/* Vertical Team Names - Moved to root for stability */}
       <AnimatePresence>
-        {view === 'scoreboard' && (
+        {isLoaded && view === 'scoreboard' && (
           <>
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
@@ -1883,8 +2260,8 @@ export default function App() {
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: deviceInfo.isPhone ? '16vh' : '10vh' }} />
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
                   style={{ 
@@ -1906,8 +2283,8 @@ export default function App() {
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: deviceInfo.isPhone ? '16vh' : '10vh' }} />
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
                   style={{ 
@@ -1925,7 +2302,7 @@ export default function App() {
 
       {/* Floating Match Clock Widget */}
       <AnimatePresence>
-        {isMatchClockEnabled && view === 'scoreboard' && (
+        {isLoaded && isMatchClockEnabled && view === 'scoreboard' && (
           <motion.div
             ref={matchClockRef}
             drag
@@ -1982,7 +2359,7 @@ export default function App() {
 
       {/* Floating Shot Clock Widget */}
       <AnimatePresence>
-        {isShotClockEnabled && view === 'scoreboard' && (
+        {isLoaded && isShotClockEnabled && view === 'scoreboard' && (
           <motion.div
             ref={shotClockRef}
             drag
@@ -2076,7 +2453,7 @@ export default function App() {
         }}
       >
         <AnimatePresence mode="wait">
-          {view === 'scoreboard' && (
+          {isLoaded && view === 'scoreboard' && (
             <motion.div
               key="scoreboard-view"
               initial={{ opacity: 0 }}
@@ -2130,48 +2507,41 @@ export default function App() {
                               resetTimer();
                             }
                           }}
-                          className={`relative transition-all duration-500 cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card ${
-                            p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
+                          className={`relative cursor-pointer overflow-hidden shadow-2xl flex flex-col justify-center gameplay-card transition-[background-color,border-color,color,box-shadow,opacity,transform] duration-300 ${
+                            p.bgStyle === 'balls'
                             ? 'rounded-full aspect-square border-0' 
                             : 'rounded-3xl border-2'
                           }`}
                           style={{ 
-                            padding: '1vh 2vh',
+                            padding: p.bgStyle === 'balls' ? '2vh' : '0',
                             borderColor: p.color,
-                            backgroundColor: p.bgColor,
+                            backgroundColor: p.bgStyle === 'balls' ? 'transparent' : p.bgColor,
                             backgroundImage: p.bgStyle === 'dial' ? 'linear-gradient(45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.2) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.2) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.2) 75%)' : undefined,
-                    backgroundSize: '0.25rem 0.25rem',
-                            boxShadow: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase())
-                              ? 'inset -1.25rem -1.25rem 3.75rem rgba(0,0,0,0.8), inset 1.25rem 1.25rem 3.75rem rgba(255,255,255,0.4), 0 1.25rem 2.5rem rgba(0,0,0,0.3)'
-                              : `0 0 2.5rem -0.9375rem ${p.color}66`,
-                            width: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '35vw',
+                            backgroundSize: '0.5vh 0.5vh',
+                            boxShadow: p.bgStyle === 'balls'
+                              ? '0 1.5vh 3vh rgba(0,0,0,0.4)'
+                              : `0 0 4vh -1.5vh ${p.color}66`,
+                            width: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '35vw',
                             margin: '0 auto',
-                            height: p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) ? 'min(35vw, 65vh)' : '65vh',
+                            height: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '65vh',
                             maxHeight: '65vh',
                             maxWidth: '35vw'
                           }}
                         >
-                          {/* Pool Ball Visual Elements (Stripes & Reflections) - Only if Ball mode */}
-                          {p.bgStyle === 'balls' && POOL_BALLS.some(b => b.value.toLowerCase() === p.bgColor.toLowerCase()) && (
-                             <>
-                               {(() => {
-                                 const ball = POOL_BALLS.find(b => b.value.toLowerCase() === p.bgColor.toLowerCase());
-                                 return (
-                                   <>
-                                     {ball?.isStripe && (
-                                       <div className="absolute inset-x-0 top-[22%] bottom-[22%] bg-white z-0" />
-                                     )}
-                                     {/* Rotated Numeral Circle */}
-                                     <div className={`absolute z-10 top-[15%] ${idx === 0 ? 'right-[15%]' : 'left-[15%]'} w-[25%] aspect-square bg-white rounded-full flex items-center justify-center shadow-lg`}>
-                                        <span className="text-black font-black text-[min(1.25rem,2vh)] leading-none">{ball?.number}</span>
-                                     </div>
-                                     {/* 3D Highlight shadow wrap */}
-                                     <div className="absolute inset-0 z-0 pointer-events-none rounded-full shadow-[inset_-2.5rem_-2.5rem_5rem_rgba(0,0,0,0.6)]" />
-                                   </>
-                                 );
-                               })()}
-                             </>
-                          )}
+                          {/* Pool Ball Visual Elements - Only if Ball mode */}
+                          {p.bgStyle === 'balls' && (() => {
+                            const ball = POOL_BALLS.find(b => b.value.toLowerCase() === p.bgColor.toLowerCase());
+                            if (!ball || !ball.image) return null;
+                            
+                            return (
+                              <img 
+                                src={ball.image} 
+                                alt={ball.name} 
+                                className="absolute inset-0 w-full h-full object-contain rounded-full"
+                                referrerPolicy="no-referrer"
+                              />
+                            );
+                          })()}
 
                              {/* Global Unified Score Buttons - Circular and Anchored to Corners */}
                              
@@ -2180,14 +2550,23 @@ export default function App() {
                                  e.stopPropagation();
                                  incrementScore(p.id);
                                }}
-                               className="absolute bottom-[1vh] right-[1vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:scale-95 shadow-lg z-20"
+                               className="absolute bottom-[2vh] rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 active:shadow-inner hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
                                style={{ 
-                                 width: '15vh',
-                                 height: '15vh',
-                                 backgroundColor: p.color
+                                 width: p.bgStyle === 'balls' ? '12vh' : '15vh',
+                                 height: p.bgStyle === 'balls' ? '12vh' : '15vh',
+                                 background: `radial-gradient(circle at 35% 35%, ${p.color}, ${p.color}dd 40%, ${p.color}aa 100%)`,
+                                 right: p.bgStyle === 'balls' ? '18vh' : '1.5vh',
+                                 boxShadow: `0 1vh 0 0 ${p.color}88, 0 1.5vh 3vh rgba(0,0,0,0.5)`,
+                                 border: `0.4vh solid ${p.color}ff`
                                }}
                              >
-                               <Plus className="w-[1.25rem] h-[1.25rem] font-bold" />
+                               {/* 3D Reflection Gloss */}
+                               <div className="absolute top-[5%] left-[15%] w-[40%] h-[20%] bg-white/40 rounded-[100%] blur-[1px] rotate-[-25deg] pointer-events-none" />
+                               <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                               <Plus 
+                                 className="w-[5.5vh] h-[5.5vh] font-bold drop-shadow-sm transition-transform group-active:scale-90" 
+                                 strokeWidth={3}
+                               />
                              </button>
 
                              <button
@@ -2195,33 +2574,62 @@ export default function App() {
                                  e.stopPropagation();
                                  decrementScore(p.id);
                                }}
-                               className="absolute bottom-[2vh] left-[2vh] rounded-full bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center transition-all active:scale-95 z-20 border border-slate-700"
+                               className="absolute bottom-[2.5vh] rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
                                style={{ 
-                                 width: '12vh',
-                                 height: '12vh'
+                                 width: p.bgStyle === 'balls' ? '8vh' : '10vh',
+                                 height: p.bgStyle === 'balls' ? '8vh' : '10vh',
+                                 left: p.bgStyle === 'balls' ? '16vh' : '2vh',
+                                 borderColor: `${p.color}44`,
+                                 boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`
                                }}
                              >
-                               <Minus className="w-[1rem] h-[1rem]" />
+                               {/* Mini Reflection */}
+                               <div className="absolute top-[10%] left-[20%] w-[30%] h-[15%] bg-white/10 rounded-[100%] blur-[1px] rotate-[-25deg] pointer-events-none" />
+                               <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-black/50 pointer-events-none" />
+                               <Minus 
+                                 className="w-[3.5vh] h-[3.5vh] transition-transform group-active:scale-90" 
+                                 style={{ color: p.color }}
+                                 strokeWidth={3}
+                               />
                              </button>
                               
 
-                           <div className="flex-1 flex flex-col items-center justify-evenly w-full m-0 p-0">
+                           <div className="flex-1 flex flex-col items-center justify-center w-full m-0 p-0 z-10 relative">
                           {isEditingNames ? (
-                            <input
+                            <div className={`absolute left-0 right-0 px-[2vw] z-20 ${p.bgStyle === 'balls' ? 'top-[-0.5vh]' : 'top-[2.5vh]'}`}>
+                              <input
                               type="text"
                               value={p.name}
                               placeholder={`PLAYER ${idx + 1} NAME`}
                               onChange={(e) => {
                                 const newName = e.target.value.toUpperCase();
                                 if (idx === 0) {
-                                  setPlayer1({...p, name: newName});
+                                  const pref = playerPreferences[newName];
+                                  const update = {
+                                    name: newName,
+                                    color: pref?.color || (idx === 0 ? '#FFFF33' : '#FF001C'),
+                                    bgColor: pref?.bgColor || '#000000',
+                                    screenColor: pref?.screenColor || '#000000',
+                                    bgStyle: (pref?.bgStyle as any) || 'default',
+                                    screenStyle: (pref?.screenStyle as any) || 'default'
+                                  };
+                                  setPlayer1(prev => ({ ...prev, ...update }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team1Players];
                                     newPlayers[selectedMatchIndex] = newName;
                                     setTeam1Players(newPlayers);
                                   }
                                 } else {
-                                  setPlayer2({...p, name: newName});
+                                  const pref = playerPreferences[newName];
+                                  const update = {
+                                    name: newName,
+                                    color: pref?.color || (idx === 0 ? '#FFFF33' : '#FF001C'),
+                                    bgColor: pref?.bgColor || '#000000',
+                                    screenColor: pref?.screenColor || '#000000',
+                                    bgStyle: (pref?.bgStyle as any) || 'default',
+                                    screenStyle: (pref?.screenStyle as any) || 'default'
+                                  };
+                                  setPlayer2(prev => ({ ...prev, ...update }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team2Players];
                                     newPlayers[selectedMatchIndex] = newName;
@@ -2235,29 +2643,55 @@ export default function App() {
                                 fontSize: sharedPlayerNameFontSize
                               }}
                             />
+                            </div>
                           ) : (
-                            p.name && (
-                              <h2 
-                                className="font-bold uppercase w-full text-center whitespace-nowrap leading-none m-0 p-0" 
-                                style={{ 
-                                  color: p.color,
-                                  fontSize: sharedPlayerNameFontSize
-                                }}
-                              >
-                                {p.name}
-                              </h2>
-                            )
+                             p.name && (
+                               <div className={`absolute left-0 right-0 flex justify-center pointer-events-none z-10 ${p.bgStyle === 'balls' ? 'inset-x-0 bottom-0 top-[-0.5vh] pt-0' : 'top-[2.5vh]'}`}>
+                                 {p.bgStyle === 'balls' ? (
+                                   <div id={`ball-name-container-${p.id}`} className="w-full aspect-square relative overflow-visible">
+                                    <svg id={`ball-name-svg-${p.id}`} viewBox="0 0 200 200" className="w-full h-full overflow-visible">
+                                      <defs>
+                                        <path id={`curve-${p.id}`} d="M 20,100 A 80,80 0 0 1 180,100" />
+                                      </defs>
+                                      <text 
+                                        className="font-bold fill-current uppercase tracking-wider" 
+                                        style={{ color: p.color }}
+                                        fontSize="18"
+                                      >
+                                        <textPath href={`#curve-${p.id}`} startOffset="50%" textAnchor="middle">
+                                          {p.name}
+                                        </textPath>
+                                      </text>
+                                    </svg>
+                                  </div>
+                                ) : (
+                                <h2 
+                                  className="font-bold uppercase w-full text-center whitespace-nowrap leading-none m-0 p-0" 
+                                  style={{ 
+                                    color: p.color,
+                                    fontSize: sharedPlayerNameFontSize
+                                  }}
+                                >
+                                  {p.name}
+                                </h2>
+                              )}
+                            </div>
+                          )
                           )}
 
-                          <span 
-                            className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 pb-15" 
-                            style={{ 
-                              color: p.color,
-                              fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh')
-                            }}
-                          >
-                            {p.score}
-                          </span>
+                          <div className={`flex items-center justify-center w-full min-h-0 ${p.bgStyle === 'balls' ? 'absolute inset-0' : ''}`}>
+                            <span 
+                              id={`${p.bgStyle === 'balls' ? 'ball' : 'card'}-score-digit-${p.id}`}
+                              className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 p-0" 
+                              style={{ 
+                                color: p.color,
+                                fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh'),
+                                textShadow: p.bgStyle === 'balls' ? '0 0.5vh 1vh rgba(0,0,0,0.3)' : 'none'
+                              }}
+                            >
+                              {p.score}
+                            </span>
+                          </div>
                         </div>
                       </motion.div>
                       {/* White Ball Break Indicator - Outside clipped container to maintain visibility in ball mode */}
@@ -2302,7 +2736,7 @@ export default function App() {
           </motion.div>
         )}
 
-          {view === 'teams' && (
+          {isLoaded && view === 'teams' && (
             <motion.div
               key="teams"
               initial={{ opacity: 0, y: 20 }}
@@ -2409,7 +2843,7 @@ export default function App() {
                                 const newPlayers = team1Players.filter((_, i) => i !== idx);
                                 updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                               }}
-                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
+                              className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all active:scale-90"
                             >
                               <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
                             </button>
@@ -2418,7 +2852,7 @@ export default function App() {
                       ))}
                       <button 
                         onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
+                        className="w-full py-4 sm:py-6 border-2 border-dashed rounded-xl sm:rounded-2xl text-slate-500 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[0.875rem] sm:text-lg font-black uppercase tracking-widest"
                         style={{ 
                           borderColor: player1.color + '33', 
                           color: player1.color,
@@ -2546,188 +2980,180 @@ export default function App() {
                   <div 
                     className="bg-black border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl"
                   >
-                    <div className="overflow-x-auto scrollbar-hide">
-                      <table 
-                        className="w-full text-left border-collapse table-fixed"
-                      >
-                        <thead>
-                          <tr className="bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] sm:text-xs lg:text-[0.9375rem] uppercase tracking-[0.2em] text-slate-400 w-[8%]">No.</th>
-                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
-                              <div className="truncate">{team1Name || 'TEAM A'}</div>
-                            </th>
-                            <th className="px-0.5 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-600 text-center w-[12%] sm:w-[8%]">VS</th>
-                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%]">
-                              <div className="truncate">{team2Name || 'TEAM B'}</div>
-                            </th>
-                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%]">Result</th>
-                            <th className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-[0.875rem] lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 text-right w-[10%] sm:w-[8%]">Clear</th>
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] sm:text-xs lg:text-[0.9375rem] uppercase tracking-widest text-slate-400 w-[15%]">TIMERS</th>
-                          </tr>
-                        </thead>
-                    <tbody>
-                      {Math.max(team1Players.length, team2Players.length) === 0 ? (
-                        <tr>
-                          <td colSpan={windowSize.width < 640 ? 5 : 7} className="px-6 py-12 text-center text-slate-500 italic">Add players to generate matchups.</td>
-                        </tr>
-                      ) : (
-                        <>
-                          {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
-                            const p1 = team1Players[idx];
-                            const p2 = team2Players[idx];
-                            
-                            // Skip if both are empty (don't show "empty vs empty" rows)
-                            if (!p1 && !p2) return null;
+                    <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[300px]">
+                      {/* Header Row */}
+                      <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
+                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
+                          {team1Name || 'TEAM A'}
+                        </div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
+                          {team2Name || 'TEAM B'}
+                        </div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
+                        <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
+                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[15%] items-center">TIMERS</div>
+                      </div>
 
-                            const p1Name = p1 || `PLAYER ${idx + 1}`;
-                            const p2Name = p2 || `PLAYER ${idx + 1}`;
-                            const matchup = matchupSettings[idx];
-                            const lastMatch = getMatchResult(p1Name, p2Name);
-                            
-                            // Determine which score to display
-                            let displayScore: { score1: number, score2: number, isLive: boolean } | null = null;
-                            
-                            if (selectedMatchIndex === idx) {
-                              // Priority 1: Current active game
-                              displayScore = { 
-                                score1: player1.score, 
-                                score2: player2.score, 
-                                isLive: true 
-                              };
-                            } else if (matchup?.score1 !== undefined || matchup?.score2 !== undefined) {
-                              // Priority 2: Other ongoing games in matchupSettings
-                              displayScore = { 
-                                score1: matchup.score1 || 0, 
-                                score2: matchup.score2 || 0, 
-                                isLive: true 
-                              };
-                            } else if (lastMatch) {
-                              // Priority 3: Completed historical games
-                              displayScore = { 
-                                score1: lastMatch.score1,
-                                score2: lastMatch.score2,
-                                isLive: false 
-                              };
-                            }
-                            
-                            return (
-                              <tr 
-                                key={idx} 
-                                onClick={() => selectTeamMatch(idx)}
-                                className={`group cursor-pointer transition-colors hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
-                              >
-                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-xs font-black text-slate-600">#{idx + 1}</td>
-                                <td className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
-                                  {p1 || <span className="text-slate-700 italic">EMPTY</span>}
-                                </td>
-                                <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[0.5rem]">VS</td>
-                                <td className="px-1 sm:px-6 py-4 text-[0.625rem] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate">
-                                  {p2 || <span className="text-slate-700 italic">EMPTY</span>}
-                                </td>
-                                <td className="px-1 sm:px-6 py-4">
-                                  {displayScore ? (
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2">
-                                      <span className={`text-[0.5rem] sm:text-xs font-bold px-1 py-0.5 rounded w-fit ${
-                                        displayScore.isLive 
-                                          ? 'bg-blue-500/20 text-blue-400' 
-                                          : (displayScore as any).winner === p1Name 
-                                            ? 'bg-emerald-500/20 text-emerald-400' 
-                                            : (displayScore as any).winner === p2Name
-                                              ? 'bg-rose-500/20 text-rose-400'
-                                              : 'bg-slate-800 text-slate-400'
-                                      }`}>
-                                        {displayScore.score1}-{displayScore.score2}
-                                      </span>
-                                      <span className="text-[0.375rem] sm:text-[1.125vh] text-slate-600 font-bold uppercase whitespace-nowrap">{displayScore.isLive ? 'LIVE' : new Date((displayScore as any).date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[0.5rem] text-slate-700 font-bold uppercase">NONE</span>
-                                  )}
-                                </td>
-                                <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
-                                  <div className="flex items-center justify-end gap-1">
-                                    {lastMatch && (
-                                      <button 
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          viewMatchDetails(lastMatch.id);
-                                        }}
-                                        className="p-1 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                        title="View Details"
-                                      >
-                                        <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-                                      </button>
-                                    )}
-                                    {(lastMatch || matchup) && (
-                                      <button 
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          clearMatchResult(p1Name, p2Name, idx);
-                                        }}
-                                        className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                        title="Clear Score"
-                                      >
-                                        <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                                      </button>
+                      {/* Body */}
+                      <div className="flex flex-col">
+                        {Math.max(team1Players.length, team2Players.length) === 0 ? (
+                          <div className="px-6 py-12 text-center text-slate-500 italic uppercase tracking-widest font-bold text-[2vw] sm:text-sm">Add players to generate matchups.</div>
+                        ) : (
+                          <>
+                            {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
+                              const p1 = team1Players[idx];
+                              const p2 = team2Players[idx];
+                              
+                              if (!p1 && !p2) return null;
+
+                              const p1Name = p1 || `PLAYER ${idx + 1}`;
+                              const p2Name = p2 || `PLAYER ${idx + 1}`;
+                              const matchup = matchupSettings[idx];
+                              const lastMatch = getMatchResult(p1Name, p2Name);
+                              
+                              let displayScore: { score1: number, score2: number, isLive: boolean, date?: string, winner?: string } | null = null;
+                              
+                              if (selectedMatchIndex === idx) {
+                                displayScore = { 
+                                  score1: player1.score, 
+                                  score2: player2.score, 
+                                  isLive: true 
+                                };
+                              } else if (matchup?.score1 !== undefined || matchup?.score2 !== undefined) {
+                                displayScore = { 
+                                  score1: matchup.score1 || 0, 
+                                  score2: matchup.score2 || 0, 
+                                  isLive: true 
+                                };
+                              } else if (lastMatch) {
+                                displayScore = { 
+                                  score1: lastMatch.score1,
+                                  score2: lastMatch.score2,
+                                  isLive: false,
+                                  date: lastMatch.date,
+                                  winner: lastMatch.winner
+                                };
+                              }
+                              
+                              return (
+                                <div 
+                                  key={idx} 
+                                  onClick={() => selectTeamMatch(idx)}
+                                  className={`group flex items-center cursor-pointer transition-colors border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
+                                >
+                                  <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate w-[27%] sm:w-[22%] items-center">
+                                    {p1 || <span className="text-slate-700 italic">EMPTY</span>}
+                                  </div>
+                                  <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors truncate w-[27%] sm:w-[22%] items-center">
+                                    {p2 || <span className="text-slate-700 italic">EMPTY</span>}
+                                  </div>
+                                  <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
+                                    {displayScore ? (
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
+                                        <span className={`text-[1.8vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap ${
+                                          displayScore.isLive 
+                                            ? 'bg-blue-500/20 text-blue-400' 
+                                            : displayScore.winner === p1Name 
+                                              ? 'bg-emerald-500/20 text-emerald-400' 
+                                              : displayScore.winner === p2Name
+                                                ? 'bg-rose-500/20 text-rose-400'
+                                                : 'bg-slate-800 text-slate-400'
+                                        }`}>
+                                          {displayScore.score1}-{displayScore.score2}
+                                        </span>
+                                        <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'LIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[1.8vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase">NONE</span>
                                     )}
                                   </div>
-                                </td>
-                                <td className="hidden sm:table-cell px-3 sm:px-6 py-4">
-                                  {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
-                                    <div className="flex flex-col gap-0.5">
-                                      {lastMatch.shotClockSetting && <span className="text-[0.5625rem] font-bold text-slate-500">SHOT: {lastMatch.shotClockSetting}S</span>}
-                                      {lastMatch.matchClockRemaining !== undefined && <span className="text-[0.5625rem] font-bold text-slate-500">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                  <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
+                                    <div className="flex items-center justify-end gap-1 sm:gap-2">
+                                      {(lastMatch || (selectedMatchIndex === idx && currentMatchFrameDetails.length > 0)) && (
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            viewMatchDetails(lastMatch ? lastMatch.id : 'live');
+                                          }}
+                                          className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                          title="View Details"
+                                        >
+                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        </button>
+                                      )}
+                                      {(lastMatch || matchup) && (
+                                        <button 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearMatchResult(p1Name, p2Name, idx);
+                                          }}
+                                          className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                          title="Clear Score"
+                                        >
+                                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                        </button>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <span className="text-[0.625rem] text-slate-600 font-bold uppercase">-</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {/* Totals Row */}
-                          <tr className="bg-slate-900/80 border-t-2 border-slate-800 font-black">
-                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4 text-[0.625rem] uppercase tracking-[0.2em] text-emerald-500">Total Score</td>
-                            <td className="px-1 sm:px-6 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t1}</span>
-                                <span className="text-[0.375rem] text-slate-500 uppercase tracking-tighter truncate max-w-[3.75rem] sm:max-w-none">{team1Name}</span>
+                                  </div>
+                                  <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[15%] items-center overflow-hidden">
+                                    {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
+                                      <div className="flex flex-col gap-0.5">
+                                        {lastMatch.shotClockSetting && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">SHOT: {lastMatch.shotClockSetting}S</span>}
+                                        {lastMatch.matchClockRemaining !== undefined && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[0.625rem] text-slate-600 font-bold uppercase">-</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {/* Totals Row */}
+                            <div className="flex items-center bg-slate-900/80 border-t-2 border-slate-800 font-black">
+                              <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs uppercase tracking-[0.2em] text-emerald-500 w-[8%] items-center">Total Score</div>
+                              <div className="flex px-[1.5vw] py-[2vh] w-[27%] sm:w-[22%] items-center">
+                                <div className="flex flex-col">
+                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none">{teamTotals.t1}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team1Name}</span>
+                                </div>
                               </div>
-                            </td>
-                            <td className="px-0.5 sm:px-6 py-4 text-center text-slate-700 font-black text-[0.5rem] w-4 sm:w-8">SUM</td>
-                            <td className="px-1 sm:px-6 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-base sm:text-2xl text-emerald-400 tabular-nums">{teamTotals.t2}</span>
-                                <span className="text-[0.375rem] text-slate-500 uppercase tracking-tighter truncate max-w-[3.75rem] sm:max-w-none">{team2Name}</span>
+                              <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">SUM</div>
+                              <div className="flex px-[1.5vw] py-[2vh] w-[27%] sm:w-[22%] items-center">
+                                <div className="flex flex-col">
+                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none">{teamTotals.t2}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team2Name}</span>
+                                </div>
                               </div>
-                            </td>
-                            <td colSpan={windowSize.width < 640 ? 1 : 2} className="px-1 sm:px-6 py-4">
-                              <div className="flex flex-col items-end">
-                                <span className="text-[0.625rem] sm:text-[0.875rem] text-slate-600 uppercase font-bold">Overall Lead</span>
-                                <span className="text-[0.5625rem] sm:text-sm font-black text-slate-100 truncate max-w-full block">
-                                  {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
-                                   teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
-                                   `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
-                                </span>
+                              <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center justify-end">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-[1.6vw] sm:text-[0.75rem] text-slate-600 uppercase font-bold whitespace-nowrap">Overall Lead</span>
+                                  <span className="text-[1.8vw] sm:text-sm font-black text-slate-100 truncate max-w-full block text-right">
+                                    {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
+                                     teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
+                                     `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
+                                  </span>
+                                </div>
                               </div>
-                            </td>
-                            <td className="px-1 sm:px-6 py-4 text-right w-10 sm:w-auto">
-                              <button 
-                                onClick={() => setShowTeamTotals(true)}
-                                className="inline-flex w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0 active:scale-95 transition-all hover:bg-emerald-500/20"
-                              >
-                                <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-400" style={{ transform: 'scale(1.4)' }} />
-                              </button>
-                            </td>
-                            <td className="hidden sm:table-cell px-3 sm:px-6 py-4" />
-                          </tr>
-                        </>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                              <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[8%] items-center" />
+                              <div className="flex px-[1.5vw] py-[2vh] justify-end w-[10%] sm:w-[15%] items-center">
+                                <button 
+                                  onClick={() => setShowTeamTotals(true)}
+                                  className="inline-flex w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-emerald-500/10 items-center justify-center border border-emerald-500/20 shrink-0 active:scale-95 transition-all hover:bg-emerald-500/20"
+                                >
+                                  <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-emerald-400" style={{ transform: 'scale(1.4)' }} />
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
               </div>
-            </div>
 
             <div className="flex justify-center pt-8">
               <button 
@@ -2737,7 +3163,7 @@ export default function App() {
                   borderColor: player2.color + '44',
                   color: player2.color,
                   backgroundColor: 'rgba(0,0,0,0.5)',
-                  backdropBlur: '0.625rem'
+                  backdropFilter: 'blur(1vh)'
                 }}
               >
                 <Trash2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -2747,7 +3173,7 @@ export default function App() {
           </motion.div>
           )}
 
-          {view === 'settings' && (
+          {isLoaded && view === 'settings' && (
             <motion.div
               key="settings"
               initial={{ opacity: 0, x: -20 }}
@@ -2786,9 +3212,9 @@ export default function App() {
                         style={{ 
                           backgroundColor: p.bgColor,
                           borderColor: p.color,
-                          boxShadow: `0 1rem 2.5rem -1rem ${p.color}33`,
+                          boxShadow: `0 1.5vh 3vh -1.5vh ${p.color}33`,
                           '--player-color': p.color,
-                          '--card-padding': deviceInfo.isPhone ? '1rem' : '2rem'
+                          '--card-padding': deviceInfo.isPhone ? '4vw' : '2vw'
                         } as React.CSSProperties}
                       >
                       <div className="flex items-center justify-between">
@@ -2813,31 +3239,31 @@ export default function App() {
                           }}
                         />
                         <div className="space-y-6">
-                          <ColorPicker
-                            label="Text & Border"
-                            value={p.color}
-                            onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, color})) : setPlayer2(prev => ({...prev, color}))}
-                            colors={p.bgStyle === 'dial' ? DIAL_COLORS : THEME_COLORS}
-                            icon={<Palette className="w-4 h-4" />}
-                            isOpen={activePicker === `p${idx + 1}-theme`}
-                            onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-theme` : null)}
-                            themeColor={p.color}
-                            pickerStyle={p.bgStyle === 'dial' ? 'dial' : 'default'}
-                            allowedStyles={['default', 'dial']}
-                            onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, bgStyle: style})) : setPlayer2(prev => ({...prev, bgStyle: style}))}
-                          />
+                            <ColorPicker
+                             label="Text & Border"
+                             value={p.color}
+                             onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, color})) : setPlayer2(prev => ({...prev, color}))}
+                             colors={THEME_COLORS}
+                             icon={<Palette className="w-4 h-4" />}
+                             isOpen={activePicker === `p${idx + 1}-theme`}
+                             onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-theme` : null)}
+                             themeColor={p.color}
+                             pickerStyle="default"
+                             allowedStyles={['default']}
+                             onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, bgStyle: style})) : setPlayer2(prev => ({...prev, bgStyle: style}))}
+                           />
 
                           <ColorPicker
                             label="Card Background"
                             value={p.bgColor}
                             onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, bgColor: color})) : setPlayer2(prev => ({...prev, bgColor: color}))}
-                            colors={p.bgStyle === 'balls' ? POOL_BALLS : p.bgStyle === 'dial' ? DIAL_COLORS : BACKGROUND_COLORS}
+                            colors={p.bgStyle === 'balls' ? POOL_BALLS : BACKGROUND_COLORS}
                             icon={<Layout className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-bg`}
                             onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-bg` : null)}
                             themeColor={p.color}
                             pickerStyle={p.bgStyle || 'default'}
-                            allowedStyles={['default', 'balls', 'dial']}
+                            allowedStyles={['default', 'balls']}
                             onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, bgStyle: style})) : setPlayer2(prev => ({...prev, bgStyle: style}))}
                           />
 
@@ -2846,24 +3272,24 @@ export default function App() {
                               label="Screen Background"
                               value={p.screenColor}
                               onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, screenColor: color})) : setPlayer2(prev => ({...prev, screenColor: color}))}
-                              colors={p.screenStyle === 'cloth' ? CLOTH_COLORS : p.screenStyle === 'speed' ? SPEED_CLOTH_COLORS : p.screenStyle === 'dial' ? DIAL_COLORS : BACKGROUND_COLORS}
+                              colors={p.screenStyle === 'cloth' ? CLOTH_COLORS : p.screenStyle === 'speed' ? SPEED_CLOTH_COLORS : BACKGROUND_COLORS}
                               icon={<Maximize className="w-4 h-4" />}
                               isOpen={activePicker === `p${idx + 1}-screen`}
                               onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-screen` : null)}
                               themeColor={p.color}
                               pickerStyle={p.screenStyle || 'default'}
-                              allowedStyles={['default', 'cloth', 'speed', 'dial']}
+                              allowedStyles={['default', 'cloth', 'speed']}
                               onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, screenStyle: style})) : setPlayer2(prev => ({...prev, screenStyle: style}))}
                             />
                             {/* Screen Color Indicator Circle - 3rem (w-12 h-12) - Attached to Card Edge */}
                             <div 
-                              className={`absolute w-12 h-12 rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-2 ${idx === 0 ? 'left-0' : 'right-0'}`}
+                              className={`absolute w-[6vh] h-[6vh] rounded-full shadow-2xl transition-all duration-500 z-20 top-1/2 border-2 ${idx === 0 ? 'left-0' : 'right-0'}`}
                               style={{ 
                                 backgroundColor: p.screenColor,
                                 borderColor: p.color,
-                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * (var(--card-padding) + 1.5rem)))' : 'translateX(calc(var(--card-padding) + 1.5rem))'}`,
+                                transform: `translateY(-50%) ${idx === 0 ? 'translateX(calc(-1 * (var(--card-padding) + 3vh)))' : 'translateX(calc(var(--card-padding) + 3vh))'}`,
                                 opacity: 1,
-                                filter: `drop-shadow(0 0 1rem ${p.color}44)`
+                                filter: `drop-shadow(0 0 1.5vh ${p.color}44)`
                               } as any}
                               title="Screen Background Color"
                             />
@@ -2950,7 +3376,7 @@ export default function App() {
                             e.stopPropagation();
                             setShowDeviceTime(!showDeviceTime);
                           }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
                           style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
                         >
                           <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
@@ -2997,7 +3423,7 @@ export default function App() {
                             setIsShotClockEnabled(!isShotClockEnabled);
                             if (isShotClockEnabled) pauseTimer();
                           }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
                           style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
                         >
                           <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
@@ -3076,7 +3502,7 @@ export default function App() {
                             setIsMatchClockEnabled(!isMatchClockEnabled);
                             if (isMatchClockEnabled) pauseTimer();
                           }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
                           style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
                         >
                           <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
@@ -3111,7 +3537,7 @@ export default function App() {
                         </div>
                         <button 
                           onClick={resetMatchClock}
-                          className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
+                          className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border border-slate-700"
                         >
                           <RotateCcw className="w-4 h-4" />
                           Reset Match Clock
@@ -3267,7 +3693,7 @@ export default function App() {
                               }
                             }}
                             disabled={isApiSending}
-                            className="w-full h-10 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-xl text-[0.625rem] font-black uppercase tracking-widest text-slate-300 transition-all border border-slate-700 flex items-center justify-center gap-2"
+                            className="w-full h-10 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-xl text-[0.625rem] font-black uppercase tracking-widest text-slate-300 transition-all active:scale-95 border border-slate-700 flex items-center justify-center gap-2"
                           >
                             {isApiSending ? (
                               <>
@@ -3330,7 +3756,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {view === 'match-details' && (
+          {isLoaded && view === 'match-details' && (
             <motion.div
               key="match-details"
               initial={{ opacity: 0, x: -20 }}
@@ -3339,7 +3765,7 @@ export default function App() {
               className="space-y-8 pb-20 w-full max-w-[95vw] mx-auto"
             >
               <div 
-                className="relative flex items-center justify-center pb-8 border-b-2 min-h-[5rem] sm:min-h-[7rem] w-full"
+                className="relative flex items-center justify-center pb-[4vh] border-b-[0.2vh] min-h-[10vh] sm:min-h-[14vh] w-full"
                 style={{ 
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
@@ -3386,93 +3812,106 @@ export default function App() {
                 <h2 className="font-black uppercase tracking-tight text-white line-clamp-1 leading-none text-center" style={{ fontSize: deviceInfo.titleSizes.page }}>Match Details</h2>
               </div>
 
-              {matchHistory.find(m => m.id === viewingMatchDetailsId) ? (() => {
-                const match = matchHistory.find(m => m.id === viewingMatchDetailsId)!;
+              {(matchHistory.find(m => m.id === viewingMatchDetailsId) || (viewingMatchDetailsId === 'live')) ? (() => {
+                const match = viewingMatchDetailsId === 'live' ? {
+                  id: 'live',
+                  date: new Date().toISOString(),
+                  startTime: matchStartTime || undefined,
+                  player1: player1.name || 'Player 1',
+                  player2: player2.name || 'Player 2',
+                  team1: team1Name || undefined,
+                  team2: team2Name || undefined,
+                  score1: player1.score,
+                  score2: player2.score,
+                  winner: player1.score > player2.score ? player1.name : player2.name,
+                  shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
+                  matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
+                  frameDetails: currentMatchFrameDetails,
+                  isLive: true
+                } : { ...matchHistory.find(m => m.id === viewingMatchDetailsId)!, isLive: false };
                 return (
                   <div className="space-y-6">
                     {/* Header Info */}
                     <div className="grid grid-cols-2 gap-3 sm:gap-6">
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 shadow-lg flex flex-col items-center text-center">
-                          <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">Detailed Frame Analysis</p>
+                          <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">{match.isLive ? 'Live Match Tracker' : 'Detailed Frame Analysis'}</p>
                           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
-                            <span className="text-[0.5rem] sm:text-xs text-slate-600 font-black px-1">VS</span>
+                            <span className="text-[1vh] sm:text-[1.2vh] text-slate-600 font-black px-1">VS</span>
                             <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
                           </div>
-                          {match.team1 && <p className="text-[0.5rem] sm:text-[0.625rem] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
+                          {match.team1 && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
                        </div>
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 text-right shadow-lg">
-                          <p className="text-[0.5rem] sm:text-[0.625rem] uppercase font-black text-slate-500 mb-1 lg:tracking-widest">Outcome / Date</p>
-                          <p className="text-base sm:text-2xl font-black text-emerald-400 tabular-nums">{match.score1} - {match.score2}</p>
-                          <p className="text-[0.5rem] sm:text-[0.625rem] text-slate-500 font-bold uppercase mt-1.5">{new Date(match.date).toLocaleString('en-GB')}</p>
+                          <div className="flex items-center justify-end gap-2 mb-1">
+                            {match.isLive && <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />}
+                            <p className="text-[1.1vh] sm:text-[1.3vh] uppercase font-black text-slate-500 lg:tracking-widest">{match.isLive ? 'Live Score' : 'Outcome / Date'}</p>
+                          </div>
+                          <p className={`text-base sm:text-2xl font-black tabular-nums ${match.isLive ? 'text-blue-400' : 'text-emerald-400'}`}>{match.score1} - {match.score2}</p>
+                          <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.isLive ? 'Currently Playing' : new Date(match.date).toLocaleString('en-GB')}</p>
                        </div>
                     </div>
 
                     {/* Frame Table */}
                     <div className="overflow-hidden rounded-3xl border border-slate-800/50 shadow-2xl bg-black/40 backdrop-blur-3xl">
-                      <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse table-fixed">
-                          <thead>
-                            <tr className="bg-slate-900/80 border-b-2 border-slate-800/50">
-                              <th className="pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.6vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[2%] whitespace-nowrap">#</th>
-                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%]">Breaker</th>
-                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] text-left">Winner</th>
-                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] text-center">Score</th>
-                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] text-center">Start</th>
-                              <th className="px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] text-center whitespace-nowrap">Finish</th>
-                              <th className="px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 text-right w-[14%] pr-[2vw]">Duration</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800/30">
-                            {match.frameDetails && match.frameDetails.length > 0 ? match.frameDetails.map((frame, fidx) => (
-                              <tr key={fidx} className="hover:bg-emerald-500/5 transition-colors group">
-                                <td className="pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap">#{frame.frameNumber}</td>
-                                <td className="px-[1vw] sm:px-5 py-[2vh]">
-                                  <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase letter-spacing-tight truncate block">{frame.breakerName}</span>
-                                </td>
-                                <td className="px-[1vw] sm:px-5 py-[2vh]">
-                                  <div className="flex items-center gap-[0.5vw] sm:gap-2">
-                                    <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
-                                  </div>
-                                </td>
-                                <td className="px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap text-center">
-                                  {frame.score1}<span className="text-slate-700 mx-[0.2vw] sm:mx-1">-</span>{frame.score2}
-                                </td>
-                                <td className="px-[0.5vw] sm:px-5 py-[2vh] text-center">
-                                  <span className="text-[1.8vw] sm:text-xs font-black text-slate-500 tabular-nums whitespace-nowrap">
-                                    {frame.startTime ? new Date(frame.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (frame.duration ? new Date(new Date(frame.timestamp).getTime() - (frame.duration * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-')}
-                                  </span>
-                                </td>
-                                <td className="px-[0.5vw] sm:px-5 py-[2vh] text-center">
-                                  <span className="text-[1.8vw] sm:text-xs font-black text-slate-400 tabular-nums whitespace-nowrap">
-                                    {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                  </span>
-                                </td>
-                                <td className="px-[1vw] sm:px-5 py-[2vh] text-right pr-[2vw]">
-                                  {frame.duration !== undefined && (
-                                    <div className="flex items-center justify-end gap-[0.5vw] sm:gap-1 mt-0.5">
-                                      <Clock className="w-[2vw] sm:w-2.5 h-[2vw] sm:h-2.5 text-slate-700 font-bold" />
-                                      <span className="text-[2vw] sm:text-xs font-black text-slate-500 uppercase tabular-nums whitespace-nowrap">
-                                        {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
-                                      </span>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            )) : (
-                              <tr>
-                                <td colSpan={7} className="px-[2vw] py-[8vh] text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[1.8vw]">No detailed frame data available.</td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                      <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[400px]">
+                        {/* Header Row */}
+                        <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800/50">
+                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.6vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
+                        </div>
 
-                      {/* Totals Section - Dedicated Element */}
-                      {match.frameDetails && match.frameDetails.length > 0 && (
-                        <div className="bg-slate-900/60 border-t-2 border-slate-800/50 px-[2vw] py-[2vh] sm:py-[3vh]">
-                          <div className="flex items-center justify-between">
+                        {/* Body */}
+                        <div className="flex flex-col divide-y divide-slate-800/30">
+                          {match.frameDetails && match.frameDetails.length > 0 ? match.frameDetails.map((frame, fidx) => (
+                            <div key={fidx} className="flex items-center hover:bg-emerald-500/5 transition-colors group">
+                              <div className="flex pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap w-[8%] items-center">#{frame.frameNumber}</div>
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
+                                <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
+                              </div>
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
+                                <div className="flex items-center gap-[0.5vw] sm:gap-2 truncate">
+                                  <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                  <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
+                                </div>
+                              </div>
+                              <div className="flex px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap justify-center w-[12%] items-center">
+                                {frame.score1}<span className="text-slate-700 mx-[0.2vw] sm:mx-1">-</span>{frame.score2}
+                              </div>
+                              <div className="flex px-[0.5vw] sm:px-5 py-[2vh] justify-center w-[14%] items-center">
+                                <span className="text-[1.8vw] sm:text-xs font-black text-slate-500 tabular-nums whitespace-nowrap">
+                                  {frame.startTime ? new Date(frame.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (frame.duration ? new Date(new Date(frame.timestamp).getTime() - (frame.duration * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-')}
+                                </span>
+                              </div>
+                              <div className="flex px-[0.5vw] sm:px-5 py-[2vh] justify-center w-[14%] items-center">
+                                <span className="text-[1.8vw] sm:text-xs font-black text-slate-400 tabular-nums whitespace-nowrap">
+                                  {new Date(frame.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                              </div>
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] justify-end w-[8%] pr-[2vw] items-center">
+                                {frame.duration !== undefined && (
+                                  <div className="flex items-center justify-end gap-[0.5vw] sm:gap-1 mt-0.5">
+                                    <Clock className="w-[2vw] sm:w-2.5 h-[2vw] sm:h-2.5 text-slate-700 font-bold" />
+                                    <span className="text-[2vw] sm:text-xs font-black text-slate-500 uppercase tabular-nums whitespace-nowrap">
+                                      {Math.floor(frame.duration / 60)}m {frame.duration % 60}s
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )) : (
+                            <div className="px-[2vw] py-[8vh] text-center text-slate-600 italic font-medium uppercase tracking-[0.2em] text-[1.8vw]">No detailed frame data available.</div>
+                          )}
+                        </div>
+
+                        {/* Totals Section */}
+                        {match.frameDetails && match.frameDetails.length > 0 && (
+                          <div className="bg-slate-900/60 border-t-2 border-slate-800/50 px-[2vw] py-[2vh] sm:py-[3vh] min-h-[8vh] flex items-center relative">
                             <div className="flex items-center gap-[2vw]">
                               <span className="text-[2.2vw] sm:text-sm font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">Totals</span>
                             </div>
@@ -3483,7 +3922,7 @@ export default function App() {
                               <span style={{ color: player2.color }}>{match.score2}</span>
                             </div>
 
-                            <div className="flex flex-col items-end">
+                            <div className="flex flex-col items-end ml-auto">
                               <span className="text-[1.8vw] sm:text-xs font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Total Duration</span>
                               <span className="text-[2.5vw] sm:text-lg font-black text-white tabular-nums">
                                 {(() => {
@@ -3493,19 +3932,19 @@ export default function App() {
                               </span>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex justify-between items-center px-4">
                        <div className="flex items-center gap-2">
                           <div className="w-1 h-1 rounded-full bg-slate-800" />
-                          <p className="text-[0.5rem] font-black text-slate-700 uppercase tracking-widest">End of Record</p>
+                          <p className="text-[1.2vh] font-black text-slate-700 uppercase tracking-widest">End of Record</p>
                        </div>
                        {match.shotClockSetting && (
                          <div className="flex items-center gap-2">
                             <Zap className="w-3 h-3 text-slate-700" />
-                            <p className="text-[0.5rem] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
+                            <p className="text-[1.2vh] font-black text-slate-700 uppercase tracking-widest">Shot Clock: {match.shotClockSetting}S Enabled</p>
                          </div>
                        )}
                     </div>
@@ -3547,7 +3986,7 @@ export default function App() {
                                >
                                  Back
                                </span>
-                               <span className="text-[0.5rem] sm:text-[0.625rem] font-bold text-slate-600 uppercase tracking-widest mt-1">Team Setup</span>
+                               <span className="text-[1.2vh] sm:text-[1.5vh] font-bold text-slate-600 uppercase tracking-widest mt-1">Team Setup</span>
                             </div>
                          </div>
                        </button>
@@ -3586,13 +4025,13 @@ export default function App() {
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowClearTeamsConfirm(false)}
-                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={clearTeams}
-                    className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Clear Team Data
                   </button>
@@ -3667,7 +4106,7 @@ export default function App() {
                             shareData(exportFormat);
                           }
                         }}
-                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${exportMethod === method.id ? 'bg-emerald-500/10 border-emerald-500' : 'bg-slate-900/30 border-slate-800 hover:border-slate-700'}`}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${exportMethod === method.id ? 'bg-emerald-500/10 border-emerald-500' : 'bg-slate-900/30 border-slate-800 hover:border-slate-700'}`}
                       >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${exportMethod === method.id ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
                           <method.icon className="w-6 h-6" />
@@ -3724,7 +4163,7 @@ export default function App() {
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowRestoreDefaultsConfirm(false)}
-                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Cancel
                   </button>
@@ -3735,13 +4174,17 @@ export default function App() {
                         ...prev, 
                         color: '#FFFF33', 
                         bgColor: '#000000', 
-                        screenColor: '#000000' 
+                        screenColor: '#000000',
+                        bgStyle: 'default',
+                        screenStyle: 'default'
                       }));
                       setPlayer2(prev => ({ 
                         ...prev, 
                         color: '#FF001C', 
                         bgColor: '#000000', 
-                        screenColor: '#000000' 
+                        screenColor: '#000000',
+                        bgStyle: 'default',
+                        screenStyle: 'default'
                       }));
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
                       setIsShotClockEnabled(false);
@@ -3756,7 +4199,7 @@ export default function App() {
                       setCurrentBreakPlayerId('none');
                       setShowRestoreDefaultsConfirm(false);
                     }}
-                    className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Restore
                   </button>
@@ -3781,7 +4224,7 @@ export default function App() {
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowClearHistoryConfirm(false)}
-                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Cancel
                   </button>
@@ -3790,7 +4233,7 @@ export default function App() {
                       clearHistory();
                       setShowClearHistoryConfirm(false);
                     }}
-                    className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all"
+                    className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
                   >
                     Clear All
                   </button>
@@ -3869,21 +4312,21 @@ export default function App() {
           >
             <button 
               onClick={navigateToScoreboard}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${view === 'scoreboard' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'scoreboard' ? { backgroundColor: player1.color } : {}}
             >
               Score
             </button>
             <button 
               onClick={() => setView('teams')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'teams' ? { backgroundColor: player1.color } : {}}
             >
               Teams
             </button>
             <button 
               onClick={() => setView('settings')}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'settings' ? { backgroundColor: player2.color } : {}}
             >
               Settings

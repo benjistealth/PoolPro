@@ -55,21 +55,23 @@ export const BACKGROUND_COLORS = [
 ];
 
 export const POOL_BALLS = [
-  { number: 1, name: 'Yellow', value: '#FFD700', textColor: '#000000' },
-  { number: 2, name: 'Blue', value: '#0000FF', textColor: '#FFFFFF' },
-  { number: 3, name: 'Red', value: '#FF0000', textColor: '#FFFFFF' },
-  { number: 4, name: 'Purple', value: '#800080', textColor: '#FFFFFF' },
-  { number: 5, name: 'Orange', value: '#FFA500', textColor: '#FFFFFF' },
-  { number: 6, name: 'Green', value: '#008000', textColor: '#FFFFFF' },
-  { number: 7, name: 'Maroon', value: '#800000', textColor: '#FFFFFF' },
-  { number: 8, name: 'Black', value: '#000000', textColor: '#FFFFFF' },
-  { number: 9, name: 'Yellow Stripe', value: '#FFD700', textColor: '#000000', isStripe: true },
-  { number: 10, name: 'Blue Stripe', value: '#0000FF', textColor: '#000000', isStripe: true },
-  { number: 11, name: 'Red Stripe', value: '#FF0000', textColor: '#000000', isStripe: true },
-  { number: 12, name: 'Purple Stripe', value: '#800080', textColor: '#000000', isStripe: true },
-  { number: 13, name: 'Orange Stripe', value: '#FFA500', textColor: '#000000', isStripe: true },
-  { number: 14, name: 'Green Stripe', value: '#008000', textColor: '#000000', isStripe: true },
-  { number: 15, name: 'Maroon Stripe', value: '#800000', textColor: '#000000', isStripe: true },
+  { number: 1, name: 'Yellow', value: '#FFD700', image: '/src/assets/Pool_Balls/yellow_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/yellow_poolball _thumb.png' },
+  { number: 2, name: 'Blue', value: '#0000FF', image: '/src/assets/Pool_Balls/dark_blue_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/dark_blue_poolball  _thumb.png' },
+  { number: 3, name: 'Red', value: '#FF0000', image: '/src/assets/Pool_Balls/red_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/red_poolball _thumb.png' },
+  { number: 4, name: 'Purple', value: '#800080', image: '/src/assets/Pool_Balls/dark_purple_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/dark_purple_poolball _thumb.png' },
+  { number: 5, name: 'Orange', value: '#FFA500', image: '/src/assets/Pool_Balls/orange_light_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/orange_light_poolball _thumb.png' },
+  { number: 6, name: 'Green', value: '#008000', image: '/src/assets/Pool_Balls/green_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/green_poolball _thumb.png' },
+  { number: 7, name: 'Dark Red', value: '#7F1D1D', image: '/src/assets/Pool_Balls/red_dark_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/red_dark_poolball _thumb.png' },
+  { number: 9, name: 'Pink', value: '#F472B6', image: '/src/assets/Pool_Balls/pink_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/pink_poolball _thumb.png' },
+  { number: 10, name: 'Lilac', value: '#D8B4FE', image: '/src/assets/Pool_Balls/lilac_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/lilac_poolball _thumb.png' },
+  { number: 11, name: 'Redish', value: '#F87171', image: '/src/assets/Pool_Balls/redish_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/redish_poolball _thumb.png' },
+  { number: 12, name: 'White', value: '#FFFFFF', image: '/src/assets/Pool_Balls/white_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/white_poolball _thumb.png' },
+  { number: 13, name: 'Dark Orange', value: '#7C2D12', image: '/src/assets/Pool_Balls/orange_dark_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/orange_dark_poolball _thumb.png' },
+  { number: 14, name: 'Black', value: '#111111', image: '/src/assets/Pool_Balls/black-Poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/black-Poolball _thumb.png' },
+  { number: 15, name: 'Bright Yellow', value: '#FFFF00', image: '/src/assets/Pool_Balls/yellow_bright_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/yellow_poolball _thumb.png' },
+  { number: 16, name: 'Bright Orange', value: '#FF8C00', image: '/src/assets/Pool_Balls/orange_bright_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/orange_light_poolball _thumb.png' },
+  { number: 17, name: 'Bright Pink', value: '#FF69B4', image: '/src/assets/Pool_Balls/pink_bright_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/pink_poolball _thumb.png' },
+  { number: 18, name: 'Bright Green', value: '#00FF00', image: '/src/assets/Pool_Balls/green_bright_poolball.png', thumbnail: '/src/assets/Pool_Balls/mini_balls/green_poolball _thumb.png' },
 ];
 
 export const CLOTH_COLORS = [
@@ -90,13 +92,4 @@ export const SPEED_CLOTH_COLORS = [
   { name: 'Shark Grey', value: '#696969' },
   { name: 'Burgundy', value: '#800020' },
   { name: 'Camel', value: '#C19A6B' },
-];
-
-export const DIAL_COLORS = [
-  { name: 'Carbon Black', value: '#1A1A1A' },
-  { name: 'Forged Grey', value: '#333333' },
-  { name: 'Silver Streak', value: '#C0C0C0' },
-  { name: 'Stealth Blue', value: '#1B263B' },
-  { name: 'Racing Red', value: '#A01A1A' },
-  { name: 'Neon Green', value: '#39FF14' },
 ];

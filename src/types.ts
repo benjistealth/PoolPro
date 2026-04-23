@@ -6,8 +6,8 @@ export interface Player {
   color: string;
   bgColor: string;
   screenColor: string;
-  bgStyle?: 'default' | 'balls' | 'cloth';
-  screenStyle?: 'default' | 'balls' | 'cloth';
+  bgStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
+  screenStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
 }
 
 export interface MatchupSettings {
@@ -15,11 +15,15 @@ export interface MatchupSettings {
     color: string;
     bgColor: string;
     screenColor: string;
+    bgStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
+    screenStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
   };
   player2: {
     color: string;
     bgColor: string;
     screenColor: string;
+    bgStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
+    screenStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
   };
   score1?: number;
   score2?: number;
