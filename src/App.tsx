@@ -93,6 +93,7 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [isApiSending, setIsApiSending] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+  const [breakBalls, setBreakBalls] = useState<number[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [user, setUser] = useState<{name: string, email: string, photo?: string} | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -465,6 +466,7 @@ export default function App() {
       if (state.gameData?.matchClock !== undefined) setMatchClock(state.gameData.matchClock);
       if (state.gameData?.matchStartTime !== undefined) setMatchStartTime(state.gameData.matchStartTime);
       if (state.gameData?.currentMatchFrameDetails !== undefined) setCurrentMatchFrameDetails(state.gameData.currentMatchFrameDetails);
+      if (state.gameData?.breakBalls !== undefined) setBreakBalls(state.gameData.breakBalls);
 
       // Load Other Data (Load preferences early so they can be applied to player objects)
       const loadedPrefs = state.playerPreferences || {};
@@ -626,7 +628,8 @@ export default function App() {
         shotClock, 
         matchClock,
         matchStartTime,
-        currentMatchFrameDetails
+        currentMatchFrameDetails,
+        breakBalls
       },
       userPreferences: {
         player1: { 
@@ -712,7 +715,8 @@ export default function App() {
         JSON.stringify(currentSetting.player2) !== JSON.stringify(newP2) ||
         currentSetting.score1 !== player1.score ||
         currentSetting.score2 !== player2.score ||
-        currentSetting.currentBreakPlayerId !== currentBreakPlayerId;
+        currentSetting.currentBreakPlayerId !== currentBreakPlayerId ||
+        JSON.stringify(currentSetting.breakBalls) !== JSON.stringify(breakBalls);
 
       if (hasChanged) {
         setMatchupSettings(prev => ({
@@ -722,7 +726,8 @@ export default function App() {
             player2: newP2,
             score1: player1.score,
             score2: player2.score,
-            currentBreakPlayerId: currentBreakPlayerId
+            currentBreakPlayerId: currentBreakPlayerId,
+            breakBalls: breakBalls
           }
         }));
       }
@@ -803,6 +808,10 @@ export default function App() {
         screenStyle: settings.player2.screenStyle || 'default'
       }));
     }
+
+    if (settings.breakBalls) {
+      setBreakBalls(settings.breakBalls);
+    }
   }, [selectedMatchIndex, isLoaded]); // Only run when match index changes
 
   // Load player preferences when names change (e.g. typed in scoreboard)
@@ -836,7 +845,12 @@ export default function App() {
       }
     } else {
       const defaultColor = '#FFFF33';
-      if (player1.bgStyle !== 'default' || player1.screenStyle !== 'default') {
+      const nameChanged = prevNamesRef.current.p1 !== player1.name;
+      const justLoaded = prevNamesRef.current.p1 === '';
+      
+      // Only reset to defaults if the name REALLY changed to something unknown
+      // and it wasn't just the initial app load (where names were populated by initialization)
+      if (nameChanged && !justLoaded && (player1.bgStyle !== 'default' || player1.screenStyle !== 'default')) {
         setPlayer1(prev => {
           if (prev.name !== player1.name) return prev;
           return {
@@ -879,7 +893,10 @@ export default function App() {
       }
     } else {
       const defaultColor = '#FF001C';
-      if (player2.bgStyle !== 'default' || player2.screenStyle !== 'default') {
+      const nameChanged = prevNamesRef.current.p2 !== player2.name;
+      const justLoaded = prevNamesRef.current.p2 === '';
+
+      if (nameChanged && !justLoaded && (player2.bgStyle !== 'default' || player2.screenStyle !== 'default')) {
         setPlayer2(prev => {
           if (prev.name !== player2.name) return prev;
           return {
@@ -988,10 +1005,12 @@ export default function App() {
       breakerName: breakerName || (breakerId === '1' ? 'PLAYER 1' : 'PLAYER 2'),
       winnerId: playerId,
       winnerName: playerId === '1' ? player1.name : player2.name,
-      duration
+      duration,
+      breakBalls: [...breakBalls]
     };
     
     setCurrentMatchFrameDetails(prev => [...prev, frameDetail]);
+    setBreakBalls([]); // Reset for next frame
     frameStartTimeRef.current = now;
 
     if (playerId === '1') {
@@ -1066,7 +1085,8 @@ export default function App() {
           ...prev[selectedMatchIndex],
           score1: 0,
           score2: 0,
-          currentBreakPlayerId: 'none'
+          currentBreakPlayerId: 'none',
+          breakBalls: []
         }
       }));
     }
@@ -1178,6 +1198,7 @@ export default function App() {
     
     setSelectedMatchIndex(index);
     setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
+    setBreakBalls(settings?.breakBalls || []);
     setView('scoreboard');
     resetTimer();
     resetMatchClock();
@@ -1879,7 +1900,15 @@ export default function App() {
                     if (!t2Players.includes(player)) t2Players.push(player);
                   }
                   if (color) {
-                    importedPlayerPreferences[player] = { color, bgColor: '#000000', screenColor: '#000000' };
+                    // Keep existing pref properties if they exist
+                    const existing = (importedPlayerPreferences[player] as any) || {};
+                    importedPlayerPreferences[player] = { 
+                      color, 
+                      bgColor: existing.bgColor || '#000000', 
+                      screenColor: existing.screenColor || '#000000',
+                      bgStyle: existing.bgStyle || 'default',
+                      screenStyle: existing.screenStyle || 'default'
+                    };
                   }
                 }
               } else if (currentSection === 'MATCH HISTORY') {
@@ -1920,8 +1949,18 @@ export default function App() {
                 if (values[0] === 'Player Name') return;
                 const name = values[0];
                 const color = values[1];
+                const bgColor = values[2];
+                const screenColor = values[3];
+                const bgStyle = values[4] as any;
+                const screenStyle = values[5] as any;
                 if (name && color) {
-                  importedPlayerPreferences[name] = { color, bgColor: '#000000', screenColor: '#000000' };
+                  importedPlayerPreferences[name] = { 
+                    color, 
+                    bgColor: bgColor || '#000000', 
+                    screenColor: screenColor || '#000000',
+                    bgStyle: bgStyle || 'default',
+                    screenStyle: screenStyle || 'default'
+                  };
                 }
               }
             });
@@ -3734,7 +3773,7 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-1 gap-6">
                     <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
+npm                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
                       style={{ borderColor: player1.color }}
                     >
                       {/* Title Box - Top */}

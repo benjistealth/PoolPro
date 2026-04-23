@@ -23,7 +23,7 @@ export const AuthTile: React.FC<AuthTileProps> = ({
           fontSize: deviceInfo.titleSizes.section
         }}
       >
-        Account & Cloud
+        Login
       </h3>
       <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl px-6 py-6 shadow-xl relative overflow-hidden group">
         {/* Glow Effect */}
@@ -69,6 +69,7 @@ export const AuthTile: React.FC<AuthTileProps> = ({
           <div className="space-y-6">
             <div className="text-center sm:text-left space-y-2">
               <h4 className="text-xl font-black text-white uppercase tracking-tight">Login</h4>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-loose">Authenticate to access admin controls, advanced tournament settings, and secure cloud synchronization.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

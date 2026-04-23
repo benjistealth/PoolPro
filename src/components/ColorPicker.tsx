@@ -212,20 +212,24 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                       }}
                       className={`relative w-full aspect-square rounded-full transition-all duration-300 group active:scale-90 ${isActive ? 'scale-110 ring-2 ring-white ring-offset-4 ring-offset-slate-900 z-10' : 'hover:scale-105'}`}
                       style={{ 
-                        backgroundColor: 'transparent',
-                        boxShadow: 'none'
+                        backgroundColor: ball.value,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
                       }}
                       title={ball.name}
                     >
-                      { (ball.thumbnail || ball.image) && (
+                      { (ball.thumbnail || ball.image) ? (
                         <img 
                           src={ball.thumbnail || ball.image} 
                           alt={ball.name} 
-                          className="absolute inset-0 w-full h-full object-contain rounded-full shadow-lg"
+                          className="absolute inset-0 w-full h-full object-contain rounded-full"
                           referrerPolicy="no-referrer"
                           fetchPriority="high"
                           loading="eager"
                         />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center font-bold text-[2.5vh] text-white">
+                          {ball.number}
+                        </div>
                       )}
                     </button>
                   );

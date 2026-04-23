@@ -28,6 +28,7 @@ export interface MatchupSettings {
   score1?: number;
   score2?: number;
   currentBreakPlayerId?: '1' | '2' | 'none';
+  breakBalls?: number[];
 }
 
 export interface FrameDetail {
@@ -41,6 +42,7 @@ export interface FrameDetail {
   winnerId?: string;
   winnerName?: string;
   duration?: number; // in seconds
+  breakBalls?: number[];
 }
 
 export interface MatchHistoryEntry {
