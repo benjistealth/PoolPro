@@ -27,6 +27,7 @@ export interface MatchupSettings {
   };
   score1?: number;
   score2?: number;
+  currentBreakPlayerId?: '1' | '2' | 'none';
 }
 
 export interface FrameDetail {

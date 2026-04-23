@@ -25,7 +25,8 @@ import {
   Zap,
   Clock,
   FileText,
-  ChevronLeft
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, MatchHistoryEntry, MatchupSettings, FrameDetail } from './types';
@@ -645,7 +646,8 @@ export default function App() {
         JSON.stringify(currentSetting.player1) !== JSON.stringify(newP1) ||
         JSON.stringify(currentSetting.player2) !== JSON.stringify(newP2) ||
         currentSetting.score1 !== player1.score ||
-        currentSetting.score2 !== player2.score;
+        currentSetting.score2 !== player2.score ||
+        currentSetting.currentBreakPlayerId !== currentBreakPlayerId;
 
       if (hasChanged) {
         setMatchupSettings(prev => ({
@@ -654,7 +656,8 @@ export default function App() {
             player1: newP1,
             player2: newP2,
             score1: player1.score,
-            score2: player2.score
+            score2: player2.score,
+            currentBreakPlayerId: currentBreakPlayerId
           }
         }));
       }
@@ -707,7 +710,7 @@ export default function App() {
     selectedMatchIndex, 
     player1.name, player1.score, player1.color, player1.bgColor, player1.screenColor, player1.bgStyle, player1.screenStyle,
     player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
-    matchupSettings, playerPreferences
+    matchupSettings, playerPreferences, currentBreakPlayerId
   ]);
 
   // Load matchup settings when match index changes
@@ -990,6 +993,19 @@ export default function App() {
     frameStartTimeRef.current = Date.now();
     setCurrentBreakPlayerId('none');
     
+    // Also reset live matchup settings for this specific slot so it's fresh if revisited
+    if (selectedMatchIndex !== null) {
+      setMatchupSettings(prev => ({
+        ...prev,
+        [selectedMatchIndex]: {
+          ...prev[selectedMatchIndex],
+          score1: 0,
+          score2: 0,
+          currentBreakPlayerId: 'none'
+        }
+      }));
+    }
+    
     // Move to next matchup if available
     if (selectedMatchIndex !== null) {
       const nextIndex = selectedMatchIndex + 1;
@@ -1030,7 +1046,8 @@ export default function App() {
           next[index] = {
             ...next[index],
             score1: 0,
-            score2: 0
+            score2: 0,
+            currentBreakPlayerId: 'none'
           };
         }
         return next;
@@ -1095,10 +1112,24 @@ export default function App() {
     }));
     
     setSelectedMatchIndex(index);
-    setCurrentBreakPlayerId('none');
+    setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
     setView('scoreboard');
     resetTimer();
     resetMatchClock();
+  };
+
+  const goNextMatch = () => {
+    const max = Math.max(team1Players.length, team2Players.length);
+    if (max <= 0) return;
+    const nextIndex = (selectedMatchIndex === null || selectedMatchIndex >= max - 1) ? 0 : selectedMatchIndex + 1;
+    selectTeamMatch(nextIndex);
+  };
+
+  const goPrevMatch = () => {
+    const max = Math.max(team1Players.length, team2Players.length);
+    if (max <= 0) return;
+    const prevIndex = (selectedMatchIndex === null || selectedMatchIndex <= 0) ? max - 1 : selectedMatchIndex - 1;
+    selectTeamMatch(prevIndex);
   };
 
   const viewMatchDetails = (matchId: string) => {
@@ -2460,8 +2491,54 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="flex flex-col flex-1 sm:flex-none w-full justify-center"
+              className="flex flex-col flex-1 sm:flex-none w-full relative min-h-0"
             >
+              {/* Fixed Match Navigation Buttons - 1vh below top bar, 1vh from edge */}
+              <div 
+                className="fixed inset-x-0 flex justify-between px-[1vh] pointer-events-none z-50 transition-all duration-500"
+                style={{ 
+                  top: deviceInfo.isPhone 
+                    ? (isNavVisible ? '17vh' : '1vh') 
+                    : (deviceInfo.isTablet ? '9vh' : '11vh'),
+                }}
+              >
+                <button
+                  onClick={goPrevMatch}
+                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
+                  style={{ 
+                    width: '10vh',
+                    height: '10vh',
+                    borderColor: `${player1.color}44`,
+                    boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`,
+                    position: 'relative'
+                  }}
+                  title="Previous Match"
+                >
+                  {/* Mini Reflection */}
+                  <div className="absolute top-[10%] left-[20%] w-[30%] h-[15%] bg-white/10 rounded-[100%] blur-[1px] rotate-[-25deg] pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-black/50 pointer-events-none" />
+                  <ChevronLeft className="w-[4vh] h-[4vh] transition-transform group-active:scale-90" style={{ color: player1.color }} strokeWidth={3} />
+                </button>
+
+                <button
+                  onClick={goNextMatch}
+                  className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 active:shadow-inner hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
+                  style={{ 
+                    width: '10vh',
+                    height: '10vh',
+                    borderColor: `${player2.color}44`,
+                    boxShadow: `0 0.5vh 0 0 #000, 0 1vh 2vh rgba(0,0,0,0.6)`,
+                    position: 'relative'
+                  }}
+                  title="Next Match"
+                >
+                  {/* Mini Reflection */}
+                  <div className="absolute top-[10%] left-[20%] w-[30%] h-[15%] bg-white/10 rounded-[100%] blur-[1px] rotate-[-25deg] pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-black/50 pointer-events-none" />
+                  <ChevronRight className="w-[4vh] h-[4vh] transition-transform group-active:scale-90" style={{ color: player2.color }} strokeWidth={3} />
+                </button>
+              </div>
+
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2472,21 +2549,26 @@ export default function App() {
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
                   <button
                     onClick={finishMatch}
-                    className="pointer-events-auto hover:bg-black/40 backdrop-blur-md flex items-center justify-center font-black transition-all shadow-2xl active:scale-95 floating-widget widget-finish-match whitespace-nowrap"
+                    className="pointer-events-auto flex items-center justify-center font-black transition-all active:translate-y-1 active:shadow-inner hover:scale-105 hover:brightness-110 floating-widget widget-finish-match whitespace-nowrap overflow-hidden group cursor-pointer"
                     style={{ 
                       width: 'auto',
-                      padding: '2vh 1vw',
+                      padding: '2.4vh 1.5vw',
                       height: 'auto',
                       fontSize: !deviceInfo.isDesktop ? '4.5vh' : '4vh',
-                      borderRadius: '1.5vh',
-                      border: '0.2vh solid transparent',
-                      backgroundImage: `linear-gradient(rgba(0,0,0,0.95), rgba(0,0,0,0.95)), linear-gradient(${!deviceInfo.isDesktop ? 'to bottom' : 'to right'}, ${player2.color}, ${player1.color})`,
+                      borderRadius: '2.5vh',
+                      border: '0.4vh solid rgba(255,255,255,0.2)',
+                      backgroundImage: `linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), linear-gradient(to right, ${player1.color}, ${player2.color})`,
                       backgroundOrigin: 'border-box',
                       backgroundClip: 'padding-box, border-box',
-                      color: '#fff'
+                      boxShadow: `0 1vh 0 0 rgba(0,0,0,0.7), 0 1.5vh 3vh rgba(0,0,0,0.5)`,
+                      color: '#fff',
+                      position: 'relative'
                     }}
                   >
-                    <span className="leading-none uppercase tracking-wider">Finish Match</span>
+                    {/* 3D Reflection Gloss */}
+                    <div className="absolute top-[5%] left-[5%] w-[90%] h-[25%] bg-white/10 rounded-full blur-[2px] pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                    <span className="leading-none uppercase tracking-widest relative z-10 drop-shadow-md">Finish Match</span>
                   </button>
                 </div>
 
@@ -2655,7 +2737,10 @@ export default function App() {
                                       </defs>
                                       <text 
                                         className="font-bold fill-current uppercase tracking-wider" 
-                                        style={{ color: p.color }}
+                                        style={{ 
+                                          color: p.color,
+                                          filter: 'drop-shadow(0 0.8vh 1.2vh rgba(0,0,0,0.8))'
+                                        }}
                                         fontSize="18"
                                       >
                                         <textPath href={`#curve-${p.id}`} startOffset="50%" textAnchor="middle">
@@ -2686,7 +2771,6 @@ export default function App() {
                               style={{ 
                                 color: p.color,
                                 fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh'),
-                                textShadow: p.bgStyle === 'balls' ? '0 0.5vh 1vh rgba(0,0,0,0.3)' : 'none'
                               }}
                             >
                               {p.score}
@@ -2709,22 +2793,39 @@ export default function App() {
                                 setCurrentBreakPlayerId(p.id as '1' | '2');
                               }
                             }}
-                            className={`absolute rounded-full transition-all duration-500 z-50 flex items-center justify-center 
+                            className={`absolute rounded-full transition-all duration-500 z-50 flex items-center justify-center group pointer-events-auto
                               ${currentBreakPlayerId === p.id 
-                                ? 'bg-white border-white shadow-[0_0_1.5rem_rgba(255,255,255,1)] scale-125 z-50' 
+                                ? 'scale-110 z-50' 
                                 : (currentBreakPlayerId === 'none' 
-                                    ? 'bg-white/30 border-white/20 scale-100 opacity-40 grayscale-[0.5]' 
-                                    : 'bg-white/10 border-white/5 scale-90 opacity-10 grayscale')}`}
+                                    ? 'scale-100 opacity-60' 
+                                    : 'scale-90 opacity-20')}`}
                             style={{
-                              width: '6vh',
-                              height: '6vh',
-                              borderWidth: '0.4vh',
-                              borderStyle: 'solid',
-                              top: deviceInfo.isPhone ? '1.8vh' : '0.8vh',
-                              [idx === 0 ? 'left' : 'right']: deviceInfo.isPhone ? '1.8vh' : '0.8vh'
+                              width: '15vh',
+                              height: '15vh',
+                              top: deviceInfo.isPhone ? '-2.7vh' : '-3.7vh',
+                              [idx === 0 ? 'left' : 'right']: deviceInfo.isPhone ? '-2.7vh' : '-3.7vh',
+                              background: 'transparent',
+                              cursor: 'pointer'
                             } as any}
                             title={currentBreakPlayerId === 'none' ? "Select Starting Breaker" : "Break Indicator"}
-                          />
+                          >
+                             <div 
+                               className={`rounded-full border-solid transition-all duration-500 flex items-center justify-center
+                                 ${currentBreakPlayerId === p.id 
+                                   ? 'bg-white border-white shadow-[0_0_1.5rem_rgba(255,255,255,1)]' 
+                                   : 'bg-white/40 border-white/20'}`}
+                               style={{
+                                 width: '6vh',
+                                 height: '6vh',
+                                 borderWidth: '0.4vh',
+                               }}
+                             >
+                               {/* Hint for first selection */}
+                               {currentBreakPlayerId === 'none' && (
+                                 <PlusCircle className="w-[3vh] h-[3vh] text-white/50" />
+                               )}
+                             </div>
+                          </button>
                       )}
                     </div>
                   ))}
@@ -3117,14 +3218,26 @@ export default function App() {
                               <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs uppercase tracking-[0.2em] text-emerald-500 w-[8%] items-center">Total Score</div>
                               <div className="flex px-[1.5vw] py-[2vh] w-[27%] sm:w-[22%] items-center">
                                 <div className="flex flex-col">
-                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none">{teamTotals.t1}</span>
+                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none" style={{ 
+                                    textShadow: `
+                                      0 0.1vh 0 rgba(16,185,129,0.8),
+                                      0 0.2vh 0 rgba(0,0,0,0.9),
+                                      0 0.4vh 1vh rgba(0,0,0,0.8)
+                                    ` 
+                                  }}>{teamTotals.t1}</span>
                                   <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team1Name}</span>
                                 </div>
                               </div>
                               <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">SUM</div>
                               <div className="flex px-[1.5vw] py-[2vh] w-[27%] sm:w-[22%] items-center">
                                 <div className="flex flex-col">
-                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none">{teamTotals.t2}</span>
+                                  <span className="text-xl sm:text-3xl text-emerald-400 tabular-nums leading-none" style={{ 
+                                    textShadow: `
+                                      0 0.1vh 0 rgba(16,185,129,0.8),
+                                      0 0.2vh 0 rgba(0,0,0,0.9),
+                                      0 0.4vh 1vh rgba(0,0,0,0.8)
+                                    ` 
+                                  }}>{teamTotals.t2}</span>
                                   <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{team2Name}</span>
                                 </div>
                               </div>
