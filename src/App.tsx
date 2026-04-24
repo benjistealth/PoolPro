@@ -49,18 +49,18 @@ const SHOT_CLOCK_DEFAULT = 30;
 type SetupTab = 'singles' | 'group' | 'match';
 
 const SLOT1_DEFAULTS = {
-  color: '#FFFF33',
-  bgColor: '#000000',
+  color: '#FF001C',
+  bgColor: '#7F1D1D',
   screenColor: '#000000',
-  bgStyle: 'default',
+  bgStyle: 'balls',
   screenStyle: 'default'
 };
 
 const SLOT2_DEFAULTS = {
-  color: '#FF001C',
-  bgColor: '#000000',
+  color: '#FFFF33',
+  bgColor: '#FFD700',
   screenColor: '#000000',
-  bgStyle: 'default',
+  bgStyle: 'balls',
   screenStyle: 'default'
 };
 
@@ -165,7 +165,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
-  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('black');
+  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('kernow');
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
@@ -241,7 +241,7 @@ export default function App() {
 
   // Calculate shared font size for team names to occupy up to 95% of the gap below the top bar
   const sharedTeamNameFontSize = useMemo(() => {
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
+    const topBarHeightVal = windowSize.height * (deviceInfo.isTablet ? 0.08 : 0.1);
     const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : topBarHeightVal;
     
     // The "gap" height is everything below the top bar
@@ -2969,11 +2969,9 @@ export default function App() {
       {/* Background Layer */}
       <motion.div 
         animate={{ 
-          top: (view === 'scoreboard' && isNavVisible) 
-            ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
-            : 0,
-          left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
-          right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+          top: (view === 'scoreboard' && isNavVisible) ? (deviceInfo.isTablet ? '8vh' : '10vh') : 0,
+          left: 0,
+          right: 0,
           bottom: 0
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -2983,10 +2981,10 @@ export default function App() {
         {(() => {
           const activeBackItem = FULL_SCREEN_BACKDROPS.find(b => b.value === fullScreenBackdrop);
           return activeBackItem && activeBackItem.image && fullScreenBackdrop !== 'none' ? (
-            <div className="absolute inset-0 z-[-10] flex items-center justify-center">
+            <div className="absolute inset-0 z-0 flex items-center justify-center">
               <img 
                 src={activeBackItem.image} 
-                className="w-full h-full object-contain" 
+                className="w-full h-full object-fill" 
                 alt="" 
                 referrerPolicy="no-referrer"
               />
@@ -2998,14 +2996,14 @@ export default function App() {
         <motion.div 
           animate={{ 
             top: (view === 'scoreboard' && isNavVisible) 
-              ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh'))
+              ? (deviceInfo.isTablet ? '8vh' : '10vh')
               : 0,
             left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
             right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
             bottom: 0
           }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
-          className={`absolute flex transition-opacity duration-700 ${isLoaded && view === 'scoreboard' && (fullScreenBackdrop === 'none' || !fullScreenBackdrop) ? 'opacity-100' : 'opacity-0'}`}
+          className={`absolute flex transition-opacity duration-700 z-10 ${isLoaded && view === 'scoreboard' && (fullScreenBackdrop === 'none' || !fullScreenBackdrop) ? 'opacity-100' : 'opacity-0'}`}
         >
           {[player1, player2].map((p, idx) => (
             <div 
@@ -3057,23 +3055,23 @@ export default function App() {
         </motion.div>
         
         {/* Plain Background (Teams & Settings) */}
-        <div className={`absolute inset-0 bg-black transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
+        <div className={`absolute inset-0 bg-black transition-opacity duration-700 z-20 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
         
         {/* Subtle Gradient Overlay for Plain Background */}
-        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
+        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 z-[21] ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
       </motion.div>
 
       {/* Navigation Bar */}
         <motion.nav 
           initial={false}
           animate={{ 
-            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) ? (deviceInfo.isPhone ? '-16vh' : (deviceInfo.isTablet ? '-8vh' : '-10vh')) : 0,
+            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0,
             opacity: 1
           }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
           className="fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-2xl z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw] shadow-[0_4px_30px_rgba(0,0,0,0.5)] border-b border-white/5"
           style={{ 
-            height: deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')
+            height: deviceInfo.isTablet ? '8vh' : '10vh'
           }}
         >
           <div className="flex items-center gap-[1vw] shrink-0">
@@ -3081,14 +3079,14 @@ export default function App() {
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: deviceInfo.isPhone ? '12vh' : '8vh',
-              height: deviceInfo.isPhone ? '12vh' : '8vh'
+              width: '8vh',
+              height: '8vh'
             }}
           />
           <h1 
             className={`transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''} flex items-center`}
             style={{ 
-              height: deviceInfo.isPhone ? '11vh' : '9vh',
+              height: '9vh',
             }}
           >
             <svg 
@@ -3147,8 +3145,8 @@ export default function App() {
             onClick={toggleFullscreen}
             className="group flex items-center justify-center transition-all duration-300 border border-white/10 bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative"
             style={{
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              width: '8vh',
+              height: '8vh',
               borderRadius: '1.5vh'
             }}
           >
@@ -3158,16 +3156,16 @@ export default function App() {
                 className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9vh' : '6vh',
-                  height: deviceInfo.isPhone ? '9vh' : '6vh'
+                  width: '6vh',
+                  height: '6vh'
                 }} 
               /> : 
               <Maximize 
                 className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9vh' : '6vh',
-                  height: deviceInfo.isPhone ? '9vh' : '6vh'
+                  width: '6vh',
+                  height: '6vh'
                 }} 
               />
             }
@@ -3177,8 +3175,8 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'scoreboard' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'scoreboard' ? `${player1.color}22` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              width: '8vh',
+              height: '8vh',
               borderRadius: '1.5vh'
             }}
           >
@@ -3187,8 +3185,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9vh' : '6vh',
-                height: deviceInfo.isPhone ? '9vh' : '6vh'
+                width: '6vh',
+                height: '6vh'
               }} 
             />
           </button>
@@ -3197,8 +3195,8 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'teams' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'teams' ? `${player1.color}22` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              width: '8vh',
+              height: '8vh',
               borderRadius: '1.5vh'
             }}
           >
@@ -3207,8 +3205,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9vh' : '6vh',
-                height: deviceInfo.isPhone ? '9vh' : '6vh'
+                width: '6vh',
+                height: '6vh'
               }} 
             />
           </button>
@@ -3217,8 +3215,8 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'settings' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'settings' ? `${player2.color}22` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
+              width: '8vh',
+              height: '8vh',
               borderRadius: '1.5vh'
             }}
           >
@@ -3227,8 +3225,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9vh' : '6vh',
-                height: deviceInfo.isPhone ? '9vh' : '6vh'
+                width: '6vh',
+                height: '6vh'
               }} 
             />
           </button>
@@ -3244,12 +3242,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0
               }}
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isTablet ? '8vh' : '10vh') }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -3267,12 +3265,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0
               }}
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isTablet ? '8vh' : '10vh') }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 

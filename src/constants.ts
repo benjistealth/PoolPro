@@ -103,12 +103,12 @@ export const SPEED_CLOTH_COLORS = [
 
 export const FULL_SCREEN_BACKDROPS = [
   { name: 'Disabled', value: 'none', image: null, thumbnail: null },
-  { name: 'Black Pool Table', value: 'black', image: new URL('./assets/tables/black_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/black_pool_table.png', import.meta.url).href },
-  { name: 'Blue Light', value: 'blue_light', image: new URL('./assets/tables/blue_light_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/blue_light_pool_table.png', import.meta.url).href },
-  { name: 'Blue', value: 'blue', image: new URL('./assets/tables/blue_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/blue_pool_table.png', import.meta.url).href },
-  { name: 'Chequer', value: 'chequer', image: new URL('./assets/tables/chequer_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/chequer_pool_table.png', import.meta.url).href },
-  { name: 'England', value: 'england', image: new URL('./assets/tables/england_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/england_pool_table.png', import.meta.url).href },
-  { name: 'France', value: 'france', image: new URL('./assets/tables/frnce_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/frnce_pool_table.png', import.meta.url).href },
+  { name: 'Black Pool Table', value: 'black', image: new URL('./assets/tables/black_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/black_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Blue Light', value: 'blue_light', image: new URL('./assets/tables/blue_light_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/blue_light_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Blue', value: 'blue', image: new URL('./assets/tables/blue_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/blue_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Chequer', value: 'chequer', image: new URL('./assets/tables/chequer_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/chequer_pool_table_thumb.png', import.meta.url).href },
+  { name: 'England', value: 'england', image: new URL('./assets/tables/england_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/england_pool_table_thumb.png', import.meta.url).href },
+  { name: 'France', value: 'france', image: new URL('./assets/tables/frnce_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/frnce_pool_table_thumb.png', import.meta.url).href },
   { name: 'German', value: 'german', image: new URL('./assets/tables/german_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/german_pool_table_thumb.png', import.meta.url).href },
   { name: 'Green', value: 'green', image: new URL('./assets/tables/green_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/green_pool_table_thumb.png', import.meta.url).href },
   { name: 'Grey Light', value: 'grey_light', image: new URL('./assets/tables/grey_light_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/grey_light_pool_table_thumb.png', import.meta.url).href },
