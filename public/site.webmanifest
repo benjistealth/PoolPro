@@ -9,10 +9,10 @@
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
-      "sizes": "192x192",
+      "src": "/icon.svg",
+      "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ],
   "theme_color": "#000000",

@@ -4305,10 +4305,10 @@ export default function App() {
                                       </div>
                                     )}
                                     <div className="flex flex-col">
-                                      {matchup?.isDoubles && p1 && p1.includes('/') ? (
+                                      {p1 && p1.includes('/') ? (
                                         <>
-                                          <span className="truncate leading-none">{p1.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1">{p1.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs">{p1.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs mt-1 opacity-80">{p1.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
                                         <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
@@ -4318,10 +4318,10 @@ export default function App() {
                                   <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                                   <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
                                     <div className="flex flex-col">
-                                      {matchup?.isDoubles && p2 && p2.includes('/') ? (
+                                      {p2 && p2.includes('/') ? (
                                         <>
-                                          <span className="truncate leading-none">{p2.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1">{p2.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs">{p2.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs mt-1 opacity-80">{p2.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
                                         <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
@@ -4450,11 +4450,29 @@ export default function App() {
                                     >
                                       <div className="hidden sm:flex px-[1vw] py-3 text-xs font-black text-slate-700 w-[8%] items-center opacity-50">HIST</div>
                                       <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                        <span className="truncate">{m.player1}</span>
+                                        <div className="flex flex-col">
+                                          {m.player1 && m.player1.includes('/') ? (
+                                            <>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs">{m.player1.split('/')[0].trim()}</span>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs mt-1 opacity-70">{m.player1.split('/')[1].trim()}</span>
+                                            </>
+                                          ) : (
+                                            <span className="truncate">{m.player1}</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="flex px-[0.5vw] py-3 text-center text-slate-800 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                                       <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                        <span className="truncate">{m.player2}</span>
+                                        <div className="flex flex-col">
+                                          {m.player2 && m.player2.includes('/') ? (
+                                            <>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs">{m.player2.split('/')[0].trim()}</span>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs mt-1 opacity-70">{m.player2.split('/')[1].trim()}</span>
+                                            </>
+                                          ) : (
+                                            <span className="truncate">{m.player2}</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="flex px-[1.5vw] py-3 w-[24%] sm:w-[17%] items-center">
                                         <div className="flex items-center gap-2">
@@ -5171,10 +5189,10 @@ export default function App() {
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
-                <div className="absolute left-0 bottom-[1vh]">
+                <div className="absolute left-0 bottom-[1vh] sm:bottom-[1vh]">
                   <button 
                     onClick={navigateBack}
-                    className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all"
+                    className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all mt-[1vh] sm:mt-0"
                     style={{ 
                         filter: `drop-shadow(0 0 1rem ${player1.color}22)`,
                         width: deviceInfo.isPhone ? '27vw' : '13vw'
@@ -5266,10 +5284,24 @@ export default function App() {
                           <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">
                             {match.isLive ? (isSession ? 'Session Progress' : 'Live Match Tracker') : 'Detailed Frame Analysis'}
                           </p>
-                          <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
-                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
+                          <div className="flex flex-col items-center gap-0.5">
+                            {match.player1 && match.player1.includes('/') ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm sm:text-xl font-black text-white uppercase leading-none">{match.player1.split('/')[0].trim()}</span>
+                                <span className="text-[0.625rem] sm:text-xs font-black text-white/60 uppercase leading-none mt-1">{match.player1.split('/')[1].trim()}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
+                            )}
                             <span className="text-[1vh] sm:text-[1.2vh] text-slate-600 font-black px-1">VS</span>
-                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
+                            {match.player2 && match.player2.includes('/') ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm sm:text-xl font-black text-white uppercase leading-none">{match.player2.split('/')[0].trim()}</span>
+                                <span className="text-[0.625rem] sm:text-xs font-black text-white/60 uppercase leading-none mt-1">{match.player2.split('/')[1].trim()}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
+                            )}
                           </div>
                           {match.team1 && !isSession && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
                        </div>
@@ -5303,12 +5335,26 @@ export default function App() {
                             <div key={fidx} className="flex items-center hover:bg-emerald-500/5 transition-colors group">
                               <div className="flex pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap w-[8%] items-center">#{frame.frameNumber}</div>
                               <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
-                                <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
+                                {frame.breakerName && frame.breakerName.includes('/') ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-[2vw] sm:text-xs font-bold text-slate-300 uppercase tracking-tight truncate block leading-none">{frame.breakerName.split('/')[0].trim()}</span>
+                                    <span className="text-[2vw] sm:text-xs font-bold text-slate-500 uppercase tracking-tight truncate block leading-none mt-1">{frame.breakerName.split('/')[1].trim()}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
+                                )}
                               </div>
                               <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
                                 <div className="flex items-center gap-[0.5vw] sm:gap-2 truncate">
                                   <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                                  <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
+                                  {frame.winnerName && frame.winnerName.includes('/') ? (
+                                    <div className="flex flex-col">
+                                      <span className="text-[2vw] sm:text-xs font-black text-emerald-400 uppercase tracking-tight truncate leading-none">{frame.winnerName.split('/')[0].trim()}</span>
+                                      <span className="text-[2vw] sm:text-xs font-black text-emerald-600 uppercase tracking-tight truncate leading-none mt-1">{frame.winnerName.split('/')[1].trim()}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap justify-center w-[12%] items-center">
@@ -5600,32 +5646,26 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      // Restore User Preferences Only (Colors and Clocks)
-                      setPlayer1({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
-                      setPlayer2({ id: '2', name: '', score: 0, isTurn: false, ...SLOT2_DEFAULTS });
-                      setSinglesSetup(prev => ({ ...prev, p1Name: '', p2Name: '' }));
-                      setMatchSetup(prev => ({ ...prev, t1Name: '', t2Name: '', t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
-                      setGroupSetup(prev => ({ ...prev, t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
-                      setTeam1Name('');
-                      setTeam2Name('');
-                      setTeam1Players([]);
-                      setTeam2Players([]);
+                      // Restore Selected players colour prefs
+                      setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS }));
+                      setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS }));
+                      
+                      // Restore Shot clock settings
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
+                      setShotClock(SHOT_CLOCK_DEFAULT);
                       setIsShotClockEnabled(false);
+                      
+                      // Restore Match clock settings
                       setMatchClockDuration(600);
+                      setMatchClock(600);
                       setIsMatchClockEnabled(false);
-                      setPlayerPreferences({});
-                      setMatchupSettings({});
-                      setPairTrackerSettings({});
-                      setSelectedMatchIndex(null);
-                      setCurrentMatchFrameDetails([]);
-                      setMatchStartTime(null);
+                      
+                      // Restore Device Time and Clock positions
                       setShowDeviceTime(true);
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
-                      setCurrentBreakPlayerId('none');
-                      setBreakBalls([]);
+                      
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
