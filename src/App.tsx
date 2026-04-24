@@ -27,7 +27,9 @@ import {
   Clock,
   FileText,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Player, MatchHistoryEntry, MatchupSettings, FrameDetail } from './types';
@@ -45,14 +47,30 @@ const SHOT_CLOCK_DEFAULT = 30;
 
 type SetupTab = 'singles' | 'group' | 'match';
 
+const SLOT1_DEFAULTS = {
+  color: '#FFFF33',
+  bgColor: '#000000',
+  screenColor: '#000000',
+  bgStyle: 'default',
+  screenStyle: 'default'
+};
+
+const SLOT2_DEFAULTS = {
+  color: '#FF001C',
+  bgColor: '#000000',
+  screenColor: '#000000',
+  bgStyle: 'default',
+  screenStyle: 'default'
+};
+
 export default function App() {
   // --- State ---
   const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('match');
   const [matchModeBreakSide, setMatchModeBreakSide] = useState<'1' | '2' | 'none'>('none');
   const [showDoublesPicker, setShowDoublesPicker] = useState<{ team: 1 | 2, isOpen: boolean }>({ team: 1, isOpen: false });
   const [doublesSelection, setDoublesSelection] = useState<string[]>([]);
-  const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, color: '#FFFF33', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
-  const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, color: '#FF001C', bgColor: '#000000', screenColor: '#000000', bgStyle: 'default', screenStyle: 'default' });
+  const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
+  const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, ...SLOT2_DEFAULTS });
   const [matchupSettings, setMatchupSettings] = useState<Record<number, MatchupSettings>>({});
   const [playerPreferences, setPlayerPreferences] = useState<Record<string, { color: string, bgColor: string, screenColor: string, bgStyle: string, screenStyle: string }>>({});
   const [team1Name, setTeam1Name] = useState<string>('');
@@ -104,6 +122,7 @@ export default function App() {
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
+  const [navigationHistory, setNavigationHistory] = useState<('scoreboard' | 'history' | 'settings' | 'teams' | 'match-details')[]>(['scoreboard']);
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [isSwitchingTab, setIsSwitchingTab] = useState(false);
@@ -124,8 +143,11 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showClearTeamsConfirm, setShowClearTeamsConfirm] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTeamTotals, setShowTeamTotals] = useState(false);
+  const [showWinnerBanner, setShowWinnerBanner] = useState(false);
+  const [matchWinner, setMatchWinner] = useState<{name: string, team?: string, color: string, score1: number, score2: number} | null>(null);
   const [isBreakTrackingEnabled, setIsBreakTrackingEnabled] = useState(true);
   const [currentBreakPlayerId, setCurrentBreakPlayerId] = useState<'1' | '2' | 'none'>('none');
   const [showRestoreDefaultsConfirm, setShowRestoreDefaultsConfirm] = useState(false);
@@ -437,12 +459,21 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getPlayerPref = (name: string, pSlot: 'p1' | 'p2') => {
+    if (!name) return null;
+    const collisionKey = `${pSlot}:${name}`;
+    return playerPreferences[collisionKey] || playerPreferences[name] || null;
+  };
+
   const getMatchResult = (p1: string, p2: string) => {
     if (!p1 || !p2) return null;
-    return matchHistory.find(m => 
-      (m.player1 === p1 && m.player2 === p2) || 
-      (m.player1 === p2 && m.player2 === p1)
-    );
+    const p1Clean = p1.trim().toLowerCase();
+    const p2Clean = p2.trim().toLowerCase();
+    return matchHistory.find(m => {
+      const mhP1 = m.player1.trim().toLowerCase();
+      const mhP2 = m.player2.trim().toLowerCase();
+      return (mhP1 === p1Clean && mhP2 === p2Clean) || (mhP1 === p2Clean && mhP2 === p1Clean);
+    });
   };
 
   const teamTotals = useMemo(() => {
@@ -484,34 +515,42 @@ export default function App() {
     return { t1, t2 };
   }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score, matchupSettings]);
 
-  // --- Real-time Sync: Keep matchupSettings in sync with live cards for table updates ---
+  // --- Preference Synchronization ---
   useEffect(() => {
-    if (isLoaded && selectedMatchIndex !== null && (activeSetupTab === 'match' || activeSetupTab === 'group')) {
-      setMatchupSettings(prev => {
-        const current = prev[selectedMatchIndex];
-        // Skip if nothing changed to prevent unnecessary re-renders
+    if (!isLoaded) return;
+    
+    const updatePrefs = (player: Player) => {
+      if (!player.name || player.name.includes('PLAYER')) return;
+      
+      setPlayerPreferences(prev => {
+        const current = prev[player.name];
         if (current && 
-            current.score1 === player1.score && 
-            current.score2 === player2.score &&
-            current.player1.name === player1.name &&
-            current.player2.name === player2.name) {
+            current.color === player.color && 
+            current.bgColor === player.bgColor && 
+            current.screenColor === player.screenColor && 
+            current.bgStyle === player.bgStyle && 
+            current.screenStyle === player.screenStyle) {
           return prev;
         }
-
+        
         return {
           ...prev,
-          [selectedMatchIndex]: {
-            ...current,
-            score1: player1.score,
-            score2: player2.score,
-            player1: { ...player1 },
-            player2: { ...player2 },
-            lastUpdated: Date.now()
+          [player.name]: {
+            color: player.color,
+            bgColor: player.bgColor,
+            screenColor: player.screenColor,
+            bgStyle: player.bgStyle,
+            screenStyle: player.screenStyle
           }
         };
       });
-    }
-  }, [player1.score, player2.score, player1.name, player2.name, selectedMatchIndex, isLoaded, activeSetupTab]);
+    };
+
+    updatePrefs(player1);
+    updatePrefs(player2);
+  }, [player1.color, player1.bgColor, player1.screenColor, player1.bgStyle, player1.screenStyle,
+      player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
+      player1.name, player2.name, isLoaded]);
 
   // --- Initialization ---
   useEffect(() => {
@@ -663,12 +702,11 @@ export default function App() {
       }
 
       // NOW: Overlay name-based preferences if they exist (This ensures cloth choice etc is restored)
-      if (p1.name && loadedPrefs[p1.name]) {
-        p1 = { ...p1, ...loadedPrefs[p1.name] };
-      }
-      if (p2.name && loadedPrefs[p2.name]) {
-        p2 = { ...p2, ...loadedPrefs[p2.name] };
-      }
+      const p1Pref = (p1Name === p2Name && p1Name !== 'PLAYER 1') ? loadedPrefs[`p1:${p1Name}`] : loadedPrefs[p1Name];
+      if (p1Pref) p1 = { ...p1, ...p1Pref };
+      
+      const p2Pref = (p1Name === p2Name && p2Name !== 'PLAYER 2') ? loadedPrefs[`p2:${p2Name}`] : loadedPrefs[p2Name];
+      if (p2Pref) p2 = { ...p2, ...p2Pref };
 
       // Add scores from gameData
       if (state.gameData?.player1Score !== undefined) p1.score = state.gameData.player1Score;
@@ -702,92 +740,73 @@ export default function App() {
     return list.find(c => c.value.toLowerCase() === value.toLowerCase())?.name || value;
   };
 
+  // --- Global Persistence (Atomic and Isolated) ---
   const saveState = useCallback(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || isSwitchingTab) return;
 
-      const currentData = {
-        history: matchHistory,
-        frameDetails: currentMatchFrameDetails,
-        matchStartTime: matchStartTime,
-        score1: player1.score,
-        score2: player2.score,
-        settings: matchupSettings,
-        selectedIndex: selectedMatchIndex
-      };
+    // Capture current data for the ACTIVE tab
+    const currentActiveData = {
+      history: matchHistory,
+      frameDetails: currentMatchFrameDetails,
+      matchStartTime: matchStartTime,
+      score1: player1.score,
+      score2: player2.score,
+      currentBreakPlayerId: currentBreakPlayerId,
+      breakBalls: [...breakBalls],
+      settings: { ...matchupSettings },
+      selectedIndex: selectedMatchIndex
+    };
 
-      const stateToSave = {
-        activeSetupTab,
-        teamData: { team1Name, team2Name, team1Players, team2Players },
-        singlesSetup: (activeSetupTab === 'singles' && !isSwitchingTab) ? { ...singlesSetup, ...currentData, p1Name: player1.name, p2Name: player2.name } : singlesSetup,
-        matchSetup: (activeSetupTab === 'match' && !isSwitchingTab) ? { ...matchSetup, ...currentData, t1Name: team1Name, t2Name: team2Name, t1Players: [...team1Players], t2Players: [...team2Players] } : matchSetup,
-        groupSetup: (activeSetupTab === 'group' && !isSwitchingTab) ? { ...groupSetup, ...currentData, t1Players: [...team1Players], t2Players: [...team2Players] } : groupSetup,
-        gameData: { 
-          matchHistory, 
-          player1Score: player1.score, 
-          player2Score: player2.score, 
-          selectedMatchIndex, 
-          shotClock, 
-          matchClock,
-          matchStartTime,
-          currentMatchFrameDetails,
-          breakBalls,
-          matchModeBreakSide
-        },
+    const stateToSave = {
+      activeSetupTab,
+      // Global/Shared variables
+      teamData: { 
+        team1Name, team2Name, team1Players, team2Players 
+      },
+      playerPreferences,
+      pairTrackerSettings,
+      apiConfig,
+      matchModeBreakSide,
+      
+      // Mode-Specific Buffers
+      singlesSetup: (activeSetupTab === 'singles') 
+        ? { ...singlesSetup, ...currentActiveData, p1Name: player1.name, p2Name: player2.name } 
+        : singlesSetup,
+      matchSetup: (activeSetupTab === 'match') 
+        ? { ...matchSetup, ...currentActiveData, t1Name: team1Name, t2Name: team2Name, t1Players: [...team1Players], t2Players: [...team2Players] } 
+        : matchSetup,
+      groupSetup: (activeSetupTab === 'group') 
+        ? { ...groupSetup, ...currentActiveData, t1Players: [...team1Players], t2Players: [...team2Players] } 
+        : groupSetup,
+
+      // UI/Shared Preference States
       userPreferences: {
-        player1: { 
-          name: player1.name, 
-          color: player1.color,
-          colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player1.color.toLowerCase())?.name || player1.color,
-          bgColor: player1.bgColor,
-          bgName: getSelectionName(player1.bgColor, player1.bgStyle || 'default', 'bg'),
-          screenColor: player1.screenColor,
-          screenName: getSelectionName(player1.screenColor, player1.screenStyle || 'default', 'screen'),
-          bgStyle: player1.bgStyle,
-          screenStyle: player1.screenStyle
-        },
-        player2: { 
-          name: player2.name, 
-          color: player2.color,
-          colorName: THEME_COLORS.find(c => c.value.toLowerCase() === player2.color.toLowerCase())?.name || player2.color,
-          bgColor: player2.bgColor,
-          bgName: getSelectionName(player2.bgColor, player2.bgStyle || 'default', 'bg'),
-          screenColor: player2.screenColor,
-          screenName: getSelectionName(player2.screenColor, player2.screenStyle || 'default', 'screen'),
-          bgStyle: player2.bgStyle,
-          screenStyle: player2.screenStyle
-        },
         shotClockDuration,
         isShotClockEnabled,
         matchClockDuration,
         isMatchClockEnabled,
         isBreakTrackingEnabled,
         breakTrackingV2Applied: true,
-        currentBreakPlayerId,
         view,
         isNavVisible,
         showDeviceTime,
         deviceTimePosition,
         matchClockPosition,
         shotClockPosition
-      },
-      matchupSettings,
-      playerPreferences,
-      pairTrackerSettings,
-      apiConfig
+      }
     };
     localStorage.setItem('pool_app_state', JSON.stringify(stateToSave));
   }, [
-    isLoaded,
-    activeSetupTab,
-    isSwitchingTab,
+    isLoaded, isSwitchingTab, activeSetupTab,
     team1Name, team2Name, team1Players, team2Players,
     singlesSetup, matchSetup, groupSetup,
-    matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
+    matchHistory, currentMatchFrameDetails, matchStartTime,
+    player1.score, player2.score, player1.name, player2.name,
+    currentBreakPlayerId, breakBalls, matchupSettings, selectedMatchIndex,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    isBreakTrackingEnabled, currentBreakPlayerId, matchModeBreakSide, matchStartTime, currentMatchFrameDetails,
-    view, isNavVisible,
+    isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
-    matchupSettings, playerPreferences, pairTrackerSettings, apiConfig
+    playerPreferences, pairTrackerSettings, apiConfig
   ]);
 
   useEffect(() => {
@@ -810,9 +829,10 @@ export default function App() {
 
   // Sync current player preferences when they change
   useEffect(() => {
-    if (!isLoaded || selectedMatchIndex === null) return;
+    if (!isLoaded) return;
     
-    const currentSetting = matchupSettings[selectedMatchIndex];
+    if (selectedMatchIndex !== null) {
+      const currentSetting = matchupSettings[selectedMatchIndex];
       const newP1 = { name: player1.name, color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle };
       const newP2 = { name: player2.name, color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle };
       
@@ -822,7 +842,10 @@ export default function App() {
         currentSetting.score1 !== player1.score ||
         currentSetting.score2 !== player2.score ||
         currentSetting.currentBreakPlayerId !== currentBreakPlayerId ||
-        JSON.stringify(currentSetting.breakBalls) !== JSON.stringify(breakBalls);
+        JSON.stringify(currentSetting.breakBalls) !== JSON.stringify(breakBalls) ||
+        currentSetting.isShotClockEnabled !== isShotClockEnabled ||
+        currentSetting.shotClock !== shotClockDuration ||
+        JSON.stringify(currentSetting.frameDetails) !== JSON.stringify(currentMatchFrameDetails);
 
       if (hasChanged) {
         setMatchupSettings(prev => ({
@@ -833,10 +856,14 @@ export default function App() {
             score1: player1.score,
             score2: player2.score,
             currentBreakPlayerId: currentBreakPlayerId,
-            breakBalls: breakBalls
+            breakBalls: breakBalls,
+            isShotClockEnabled: isShotClockEnabled,
+            shotClock: shotClockDuration,
+            frameDetails: currentMatchFrameDetails
           }
         }));
       }
+    }
 
     // Always sync player colors to playerPreferences if they have names
     // BUT: Skip if the name just changed in this render, to let the "Sync FROM" hook load the right prefs first
@@ -854,10 +881,14 @@ export default function App() {
         bgStyle: player1.bgStyle || 'default' as any,
         screenStyle: player1.screenStyle || 'default' as any
       };
-      if (JSON.stringify(playerPreferences[player1.name]) !== JSON.stringify(newPref)) {
+      
+      // Handle Unique Dataset constraint: If names are same, use a more specific key
+      const prefKey = (player1.name === player2.name) ? `p1:${player1.name}` : player1.name;
+      
+      if (JSON.stringify(playerPreferences[prefKey]) !== JSON.stringify(newPref)) {
         setPlayerPreferences(prev => ({
           ...prev,
-          [player1.name]: newPref
+          [prefKey]: newPref
         }));
       }
     }
@@ -872,10 +903,14 @@ export default function App() {
         bgStyle: player2.bgStyle || 'default' as any,
         screenStyle: player2.screenStyle || 'default' as any
       };
-      if (JSON.stringify(playerPreferences[player2.name]) !== JSON.stringify(newPref)) {
+      
+      // Handle Unique Dataset constraint: If names are same, use a more specific key
+      const prefKey = (player1.name === player2.name) ? `p2:${player2.name}` : player2.name;
+
+      if (JSON.stringify(playerPreferences[prefKey]) !== JSON.stringify(newPref)) {
         setPlayerPreferences(prev => ({
           ...prev,
-          [player2.name]: newPref
+          [prefKey]: newPref
         }));
       }
     }
@@ -886,7 +921,9 @@ export default function App() {
     selectedMatchIndex, 
     player1.name, player1.score, player1.color, player1.bgColor, player1.screenColor, player1.bgStyle, player1.screenStyle,
     player2.name, player2.score, player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
-    matchupSettings, playerPreferences, currentBreakPlayerId
+    isShotClockEnabled, shotClockDuration,
+    matchupSettings, playerPreferences, currentBreakPlayerId, breakBalls,
+    currentMatchFrameDetails
   ]);
 
   // --- Ball Tracker Persistence Logic ---
@@ -897,7 +934,7 @@ export default function App() {
 
   // Load from Pair Persistence when players change
   useEffect(() => {
-    if (!isLoaded || !pairKey || activeSetupTab !== 'singles') return;
+    if (!isLoaded || !pairKey || activeSetupTab === 'match') return;
     const saved = pairTrackerSettings[pairKey];
     if (saved) {
       setBreakBalls(saved.breakBalls);
@@ -911,7 +948,7 @@ export default function App() {
 
   // Save to Pair Persistence when state changes
   useEffect(() => {
-    if (!isLoaded || !pairKey || activeSetupTab !== 'singles') return;
+    if (!isLoaded || !pairKey) return;
     
     // Only save if the values are actually different to avoid unnecessary state updates
     const current = pairTrackerSettings[pairKey];
@@ -954,16 +991,26 @@ export default function App() {
     if (settings.breakBalls) {
       setBreakBalls(settings.breakBalls);
     }
-    if (settings.currentBreakPlayerId) {
+    // In Match Mode, we use session-wide deterministic logic if matchModeBreakSide is set,
+    // so we only load from individual match settings if it's NOT Match Mode or no session logic exists.
+    if (settings.currentBreakPlayerId && (activeSetupTab !== 'match' || matchModeBreakSide === 'none')) {
       setCurrentBreakPlayerId(settings.currentBreakPlayerId);
     }
-  }, [selectedMatchIndex, isLoaded]); // Only run when match index changes
+  }, [selectedMatchIndex, isLoaded, activeSetupTab, matchModeBreakSide]); // Only run when match index or session logic changes
+
+  // Synchronize breaker in Match mode when session settings change
+  useEffect(() => {
+    if (activeSetupTab === 'match' && matchModeBreakSide !== 'none' && selectedMatchIndex !== null) {
+      const expectedSide = (selectedMatchIndex % 2 === 0) ? matchModeBreakSide : (matchModeBreakSide === '1' ? '2' : '1');
+      setCurrentBreakPlayerId(expectedSide);
+    }
+  }, [matchModeBreakSide, selectedMatchIndex, activeSetupTab]);
 
   // Load player preferences when names change (e.g. typed in scoreboard)
   useEffect(() => {
     if (!isLoaded || !player1.name) return;
     
-    const pref = playerPreferences[player1.name];
+    const pref = getPlayerPref(player1.name, 'p1');
     if (pref) {
       const hasChanges = 
         player1.color !== pref.color ||
@@ -1014,7 +1061,7 @@ export default function App() {
   useEffect(() => {
     if (!isLoaded || !player2.name) return;
     
-    const pref = playerPreferences[player2.name];
+    const pref = getPlayerPref(player2.name, 'p2');
     if (pref) {
       const hasChanges = 
         player2.color !== pref.color ||
@@ -1064,7 +1111,7 @@ export default function App() {
       const p2 = team2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       
       setPlayer1(prev => {
-        const pref = playerPreferences[p1];
+        const pref = getPlayerPref(p1, 'p1');
         return {
           ...prev,
           name: p1,
@@ -1076,7 +1123,7 @@ export default function App() {
         };
       });
       setPlayer2(prev => {
-        const pref = playerPreferences[p2];
+        const pref = getPlayerPref(p2, 'p2');
         return {
           ...prev,
           name: p2,
@@ -1088,7 +1135,7 @@ export default function App() {
         };
       });
     }
-  }, [view, selectedMatchIndex, team1Players, team2Players, playerPreferences]);
+  }, [view, selectedMatchIndex, team1Players, team2Players]); // Removed playerPreferences to prevent feedback loop
 
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
@@ -1131,6 +1178,14 @@ export default function App() {
 
   // --- Game Actions ---
   const incrementScore = (playerId: string) => {
+    const isMatchMode = activeSetupTab === 'match';
+    
+    // In "Match" mode, limit score to 1 (Best of 1)
+    if (isMatchMode && (player1.score >= 1 || player2.score >= 1)) {
+      finishMatch();
+      return; 
+    }
+
     const now = Date.now();
     const duration = Math.round((now - frameStartTimeRef.current) / 1000);
     
@@ -1158,44 +1213,86 @@ export default function App() {
     frameStartTimeRef.current = now;
 
     if (playerId === '1') {
-      setPlayer1(prev => ({ ...prev, score: prev.score + 1 }));
-      if (selectedMatchIndex !== null) {
-        setMatchupSettings(prev => ({
-          ...prev,
-          [selectedMatchIndex]: {
-            ...prev[selectedMatchIndex],
-            score1: nextScore1,
-            player1: { ...player1, score: nextScore1 }
-          }
-        }));
-      }
+      setPlayer1(prev => ({ ...prev, score: nextScore1 }));
     } else {
-      setPlayer2(prev => ({ ...prev, score: prev.score + 1 }));
-      if (selectedMatchIndex !== null) {
-        setMatchupSettings(prev => ({
-          ...prev,
-          [selectedMatchIndex]: {
-            ...prev[selectedMatchIndex],
-            score2: nextScore2,
-            player2: { ...player2, score: nextScore2 }
-          }
-        }));
-      }
+      setPlayer2(prev => ({ ...prev, score: nextScore2 }));
+    }
+    
+    if (isMatchMode && (nextScore1 >= 1 || nextScore2 >= 1)) {
+      finishMatch({ score1: nextScore1, score2: nextScore2 }, [...currentMatchFrameDetails, frameDetail]);
+      return;
+    }
+    
+    if (selectedMatchIndex !== null) {
+      setMatchupSettings(prev => ({
+        ...prev,
+        [selectedMatchIndex]: {
+          ...prev[selectedMatchIndex],
+          score1: nextScore1,
+          score2: nextScore2,
+          player1: playerId === '1' ? { ...player1, score: nextScore1 } : player1,
+          player2: playerId === '2' ? { ...player2, score: nextScore2 } : player2
+        }
+      }));
     }
     
     if (!matchStartTime) {
       setMatchStartTime(new Date().toISOString());
+      
+      // If we are in Match Mode and haven't selected a breaker for the match yet,
+      // assume the one currently breaking (or the expected one) was the starting breaker for the session
+      if (isMatchMode && matchModeBreakSide === 'none') {
+        const side = currentBreakPlayerId === 'none' ? '1' : currentBreakPlayerId;
+        const idx = selectedMatchIndex ?? 0;
+        const sessionFirstSide = (idx % 2 === 0) ? side : (side === '1' ? '2' : '1');
+        setMatchModeBreakSide(sessionFirstSide);
+      }
     }
 
     if (isBreakTrackingEnabled) {
+      // Global alternating break logic
+      let nextBreaker: '1' | '2' | 'none' = currentBreakPlayerId;
       if (currentBreakPlayerId === 'none') {
-        setCurrentBreakPlayerId(playerId === '1' ? '2' : '1');
+        nextBreaker = playerId === '1' ? '2' : '1';
       } else {
-        setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+        nextBreaker = currentBreakPlayerId === '1' ? '2' : '1';
+      }
+
+      // In Match Mode (Best of 1), do NOT swap breaker on score increment if match is over (score reached 1)
+      const isEndOfMatch = isMatchMode && (nextScore1 >= 1 || nextScore2 >= 1);
+      
+      if (!isEndOfMatch) {
+        setCurrentBreakPlayerId(nextBreaker);
+
+        // Save break tracker state to matchup settings immediately
+        if (selectedMatchIndex !== null) {
+          setMatchupSettings(prev => ({
+            ...prev,
+            [selectedMatchIndex]: {
+              ...prev[selectedMatchIndex],
+              currentBreakPlayerId: nextBreaker
+            }
+          }));
+        }
       }
     }
     
+    // Save shot clock state to matchup settings
+    if (selectedMatchIndex !== null) {
+       setMatchupSettings(prev => ({
+         ...prev,
+         [selectedMatchIndex]: {
+           ...prev[selectedMatchIndex],
+           shotClock: shotClockDuration,
+           isShotClockEnabled: isShotClockEnabled
+         }
+       }));
+    }
+    
     resetTimer();
+
+    // In match mode, if score reaches 1, we show results automatically but don't finish until confirmed
+    // (UI will show "Finish Match" or "Declare Winner" context)
   };
 
   const decrementScore = (playerId: string) => {
@@ -1212,39 +1309,69 @@ export default function App() {
     if (playerId === '1') {
       const nextScore = Math.max(0, player1.score - 1);
       setPlayer1(prev => ({ ...prev, score: nextScore }));
+      
+      // Reset break tracker to 'none' if scores are wiped
+      if (nextScore === 0 && player2.score === 0) {
+        setCurrentBreakPlayerId('none');
+      } else if (isBreakTrackingEnabled && currentBreakPlayerId !== 'none') {
+        setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+      }
+
       if (selectedMatchIndex !== null) {
         setMatchupSettings(prev => ({
           ...prev,
           [selectedMatchIndex]: {
             ...prev[selectedMatchIndex],
             score1: nextScore,
-            player1: { ...player1, score: nextScore }
+            player1: { ...player1, score: nextScore },
+            currentBreakPlayerId: (nextScore === 0 && player2.score === 0) ? 'none' : (prev[selectedMatchIndex].currentBreakPlayerId || 'none')
           }
         }));
       }
     } else {
       const nextScore = Math.max(0, player2.score - 1);
       setPlayer2(prev => ({ ...prev, score: nextScore }));
+
+      // Reset break tracker to 'none' if scores are wiped
+      if (nextScore === 0 && player1.score === 0) {
+        setCurrentBreakPlayerId('none');
+      } else if (isBreakTrackingEnabled && currentBreakPlayerId !== 'none') {
+        setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
+      }
+
       if (selectedMatchIndex !== null) {
         setMatchupSettings(prev => ({
           ...prev,
           [selectedMatchIndex]: {
             ...prev[selectedMatchIndex],
             score2: nextScore,
-            player2: { ...player2, score: nextScore }
+            player2: { ...player2, score: nextScore },
+            currentBreakPlayerId: (nextScore === 0 && player1.score === 0) ? 'none' : (prev[selectedMatchIndex].currentBreakPlayerId || 'none')
           }
         }));
       }
     }
-
-    // Match Mode Alternating Break: Swap back when score is undone
-    if (isBreakTrackingEnabled && currentBreakPlayerId !== 'none') {
-      setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
-    }
   };
 
-  const finishMatch = () => {
-    const winner = player1.score > player2.score ? player1.name : player2.name;
+  const finishMatch = (overrideScores?: { score1: number, score2: number }, overrideFrameDetails?: FrameDetail[]) => {
+    const isMatchMode = activeSetupTab === 'singles' ? false : (activeSetupTab === 'match');
+    const isGroupMode = activeSetupTab === 'group';
+    
+    // Scores to use
+    const s1 = overrideScores ? overrideScores.score1 : player1.score;
+    const s2 = overrideScores ? overrideScores.score2 : player2.score;
+    const frames = overrideFrameDetails || currentMatchFrameDetails;
+
+    // In match mode, enforce score of 1 requirement if someone has scored
+    if (isMatchMode && s1 === 0 && s2 === 0) {
+      // Allow clearing/resetting instead of finishing if no data
+      return;
+    }
+
+    const winner = s1 > s2 ? player1.name : player2.name;
+    const winnerTeam = s1 > s2 ? team1Name : team2Name;
+    const winnerColor = s1 > s2 ? player1.color : player2.color;
+
     const newEntry: MatchHistoryEntry = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
@@ -1253,81 +1380,191 @@ export default function App() {
       player2: player2.name,
       team1: team1Name || undefined,
       team2: team2Name || undefined,
-      score1: player1.score,
-      score2: player2.score,
+      score1: s1,
+      score2: s2,
       winner,
       shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
       matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
-      frameDetails: currentMatchFrameDetails
+      frameDetails: frames
     };
 
     const updatedHistory = [newEntry, ...matchHistory];
     setMatchHistory(updatedHistory);
+    
+    if (isMatchMode) {
+      setMatchWinner({
+        name: winner,
+        team: winnerTeam,
+        color: winnerColor,
+        score1: s1,
+        score2: s2
+      });
+      setShowWinnerBanner(true);
+      return; // Stop here, continue logic is in the banner
+    }
+
+    // Default flow for other modes
+    completeMatchAndAdvance();
+  };
+
+  const clearAllTableData = () => {
+    // 1. Clear history completely for the current session's players
+    setMatchHistory(prev => {
+      const p1Names = team1Players.map((n, i) => (n || `PLAYER ${i + 1}`).trim().toLowerCase());
+      const p2Names = team2Players.map((n, i) => (n || `PLAYER ${i + 1}`).trim().toLowerCase());
+      
+      return prev.filter(m => {
+        const mhP1 = m.player1.trim().toLowerCase();
+        const mhP2 = m.player2.trim().toLowerCase();
+        return !p1Names.some((p1, i) => {
+          const p2 = p2Names[i];
+          return (mhP1 === p1 && mhP2 === p2) || (mhP1 === p2 && mhP2 === p1);
+        });
+      });
+    });
+
+    // 2. Reset session-wide matchup settings and break trackers
+    setMatchupSettings({});
+    setMatchModeBreakSide('none');
+    setSelectedMatchIndex(null);
+
+    // 3. Reset live match state
+    setPlayer1(prev => ({ ...prev, score: 0 }));
+    setPlayer2(prev => ({ ...prev, score: 0 }));
+    setCurrentBreakPlayerId('none');
+    setBreakBalls([]);
+    setCurrentMatchFrameDetails([]);
+    setMatchStartTime(null);
+    resetTimer();
+
+    // 4. Clear mode buffers and pair tracker to prevent stale data restoration
+    const emptyDetails: FrameDetail[] = [];
+    const emptyBalls: number[] = [];
+    
+    setPairTrackerSettings({});
+    
+    setSinglesSetup(prev => ({
+      ...prev,
+      score1: 0,
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: emptyBalls,
+      frameDetails: emptyDetails,
+      matchStartTime: null,
+      history: []
+    }));
+
+    setMatchSetup(prev => ({
+      ...prev,
+      settings: {},
+      selectedIndex: null,
+      score1: 0,
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: emptyBalls,
+      frameDetails: emptyDetails,
+      matchStartTime: null,
+      history: []
+    }));
+
+    setGroupSetup(prev => ({
+      ...prev,
+      settings: {},
+      selectedIndex: null,
+      score1: 0,
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: emptyBalls,
+      frameDetails: emptyDetails,
+      matchStartTime: null,
+      history: []
+    }));
+    
+    // Close confirm
+    setShowDeleteAllConfirm(false);
+  };
+
+  const completeMatchAndAdvance = () => {
+    const isMatchMode = activeSetupTab === 'match';
+    const isGroupMode = activeSetupTab === 'group';
+
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     frameStartTimeRef.current = Date.now();
     
-    // Also reset live matchup settings for this specific slot so it's fresh if revisited
+    // Reset live scores for this specific slot
     if (selectedMatchIndex !== null) {
       setMatchupSettings(prev => ({
         ...prev,
         [selectedMatchIndex]: {
           ...prev[selectedMatchIndex],
           score1: 0,
-          score2: 0
+          score2: 0,
+          currentBreakPlayerId: 'none',
+          frameDetails: []
         }
       }));
     }
     
-    // Move to next matchup if available
-    if (selectedMatchIndex !== null) {
-      const nextIndex = selectedMatchIndex + 1;
-      const maxMatches = Math.max(team1Players.length, team2Players.length);
-      
-      if (nextIndex < maxMatches) {
-        selectTeamMatch(nextIndex);
-      } else {
-        // Show team totals if it was the last match
-        setShowTeamTotals(true);
+    // In Group/Match mode, advance to next pair
+    if (isMatchMode || isGroupMode) {
+      if (selectedMatchIndex !== null) {
+        const maxMatches = Math.max(team1Players.length, team2Players.length);
+        const nextIndex = selectedMatchIndex + 1;
         
-        // Reset game if no more matches
-        setPlayer1(prev => ({ ...prev, score: 0 }));
-        setPlayer2(prev => ({ ...prev, score: 0 }));
-        setCurrentBreakPlayerId('none');
-        setBreakBalls([]);
-        setSelectedMatchIndex(null);
-        resetTimer();
+        if (nextIndex < maxMatches) {
+          selectTeamMatch(nextIndex);
+        } else {
+          setShowTeamTotals(true);
+          setPlayer1(prev => ({ ...prev, score: 0 }));
+          setPlayer2(prev => ({ ...prev, score: 0 }));
+          setCurrentBreakPlayerId('none');
+          setBreakBalls([]);
+          setSelectedMatchIndex(null);
+          resetTimer();
+          // After finishing all matches, go to history table
+          navigateToView('teams');
+        }
+      } else {
+        navigateToView('teams');
       }
     } else {
-      // Reset game for non-team matches
+      // Singles: just reset scores and go to Ready state
       setPlayer1(prev => ({ ...prev, score: 0 }));
       setPlayer2(prev => ({ ...prev, score: 0 }));
       setCurrentBreakPlayerId('none');
       setBreakBalls([]);
       resetTimer();
+      // Go to history table
+      navigateToView('teams');
     }
   };
 
   const clearMatchResult = (p1: string, p2: string, index?: number) => {
-    // 1. Clear from history
-    const updatedHistory = matchHistory.filter(m => 
-      !((m.player1 === p1 && m.player2 === p2) || (m.player1 === p2 && m.player2 === p1))
-    );
-    setMatchHistory(updatedHistory);
+    const p1Clean = p1.trim().toLowerCase();
+    const p2Clean = p2.trim().toLowerCase();
+
+    // 1. Clear from history using functional update for robustness
+    setMatchHistory(prev => prev.filter(m => {
+      const mhP1 = m.player1.trim().toLowerCase();
+      const mhP2 = m.player2.trim().toLowerCase();
+      return !((mhP1 === p1Clean && mhP2 === p2Clean) || (mhP1 === p2Clean && mhP2 === p1Clean));
+    }));
 
     // 2. Reset live matchup settings if index is provided
     if (index !== undefined) {
       setMatchupSettings(prev => {
         const next = { ...prev };
-        if (next[index]) {
-          next[index] = {
-            ...next[index],
-            score1: 0,
-            score2: 0,
-            currentBreakPlayerId: 'none',
-            breakBalls: []
-          };
-        }
+        const existing = next[index];
+        next[index] = {
+          player1: existing?.player1 || { name: p1 },
+          player2: existing?.player2 || { name: p2 },
+          score1: 0,
+          score2: 0,
+          currentBreakPlayerId: 'none',
+          breakBalls: [],
+          frameDetails: []
+        };
         return next;
       });
       
@@ -1335,7 +1572,7 @@ export default function App() {
       if (selectedMatchIndex === index) {
         setPlayer1(prev => ({ ...prev, score: 0 }));
         setPlayer2(prev => ({ ...prev, score: 0 }));
-        setCurrentBreakPlayerId('none'); // Ensure Ready State
+        setCurrentBreakPlayerId('none');
         setBreakBalls([]);
         setCurrentMatchFrameDetails([]);
         setMatchStartTime(null);
@@ -1348,8 +1585,8 @@ export default function App() {
     const p2Name = team2Players[index] || `PLAYER ${index + 1}`;
     
     // Load individual player preferences if they exist
-    const p1Pref = playerPreferences[p1Name];
-    const p2Pref = playerPreferences[p2Name];
+    const p1Pref = getPlayerPref(p1Name, 'p1');
+    const p2Pref = getPlayerPref(p2Name, 'p2');
     
     // Load matchup-specific settings (scores, colors)
     const settings = matchupSettings[index];
@@ -1393,27 +1630,102 @@ export default function App() {
     
     setSelectedMatchIndex(index);
     
-    // Match Mode Alternating Break Logic: Flip team side every time pairs change
+    // Match Mode Deterministic Break Logic: Use the session's starting side and alternate by index
     if (activeSetupTab === 'match') {
-      const nextSide = (matchModeBreakSide === 'none' || matchModeBreakSide === '2') ? '1' : '2';
-      setMatchModeBreakSide(nextSide);
+      const p1p2Key = `${p1Name}|${p2Name}`;
+      const p2p1Key = `${p2Name}|${p1Name}`;
+      const savedHistory = pairTrackerSettings[p1p2Key];
+      const reversedHistory = pairTrackerSettings[p2p1Key];
       
-      // If the match already has a breaker decided (saved in settings), use it.
-      // Otherwise, start in 'none' (Ready state) for fresh matches.
-      const hasData = (p1Score > 0 || p2Score > 0);
-      if (settings?.currentBreakPlayerId && settings.currentBreakPlayerId !== 'none') {
-        setCurrentBreakPlayerId(settings.currentBreakPlayerId);
-      } else if (!hasData) {
-        setCurrentBreakPlayerId('none');
+      // Deep fallback to last finished match in matchHistory if pairTrackerSettings is missing
+      let historyInferredSide: '1' | '2' | 'none' = 'none';
+      if (!savedHistory && !reversedHistory && existingResult && existingResult.frameDetails && existingResult.frameDetails.length > 0) {
+        const lastFrame = existingResult.frameDetails[existingResult.frameDetails.length - 1];
+        if (lastFrame.breakerId === '1' || lastFrame.breakerId === '2') {
+          const lastBreakerId = lastFrame.breakerId as '1' | '2';
+          const isSameOrder = existingResult.player1 === p1Name;
+          // If we finished a frame, the NEXT breaker should be the other one (alternating)
+          if (isSameOrder) {
+            historyInferredSide = lastBreakerId === '1' ? '2' : '1';
+          } else {
+            // If order reversed, '1' was the current P2
+            const actualLastBreaker = lastBreakerId === '1' ? '2' : '1'; 
+            historyInferredSide = actualLastBreaker === '1' ? '2' : '1';
+          }
+        }
+      }
+
+      if (matchModeBreakSide === 'none') {
+        // If session breaker isn't set, respect the individual match's saved breaker
+        if (settings?.currentBreakPlayerId && settings.currentBreakPlayerId !== 'none') {
+          setCurrentBreakPlayerId(settings.currentBreakPlayerId);
+        } else if (savedHistory) {
+          setCurrentBreakPlayerId(savedHistory.currentBreakPlayerId);
+        } else if (reversedHistory) {
+          // If reversed, '1' becomes '2' and vice versa
+          const rev = reversedHistory.currentBreakPlayerId;
+          setCurrentBreakPlayerId(rev === '1' ? '2' : (rev === '2' ? '1' : 'none'));
+        } else if (historyInferredSide !== 'none') {
+          setCurrentBreakPlayerId(historyInferredSide);
+        } else {
+          setCurrentBreakPlayerId('none');
+        }
       } else {
-        // Fallback for matches with data but no clear breaker: use the alternating side
-        setCurrentBreakPlayerId(nextSide);
+        // The expected breaker for this specific match index based on session rotation
+        // This is STATIC and known right from the start of the first match
+        const expectedSide = (index % 2 === 0) ? matchModeBreakSide : (matchModeBreakSide === '1' ? '2' : '1');
+        
+        // Always prioritize the deterministic session side in Match Mode for consistency
+        setCurrentBreakPlayerId(expectedSide);
       }
     } else {
-      setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
+      const p1p2Key = `${p1Name}|${p2Name}`;
+      const p2p1Key = `${p2Name}|${p1Name}`;
+      const savedHistory = pairTrackerSettings[p1p2Key];
+      const reversedHistory = pairTrackerSettings[p2p1Key];
+
+      // Deep fallback to last finished match in matchHistory if pairTrackerSettings is missing
+      let historyInferredSide: '1' | '2' | 'none' = 'none';
+      if (!savedHistory && !reversedHistory && existingResult && existingResult.frameDetails && existingResult.frameDetails.length > 0) {
+        const lastFrame = existingResult.frameDetails[existingResult.frameDetails.length - 1];
+        if (lastFrame.breakerId === '1' || lastFrame.breakerId === '2') {
+          const lastBreakerId = lastFrame.breakerId as '1' | '2';
+          const isSameOrder = existingResult.player1 === p1Name;
+          if (isSameOrder) {
+            historyInferredSide = lastBreakerId === '1' ? '2' : '1';
+          } else {
+            const actualLastBreaker = lastBreakerId === '1' ? '2' : '1'; 
+            historyInferredSide = actualLastBreaker === '1' ? '2' : '1';
+          }
+        }
+      }
+
+      if (settings?.currentBreakPlayerId && settings.currentBreakPlayerId !== 'none') {
+        setCurrentBreakPlayerId(settings.currentBreakPlayerId);
+      } else if (savedHistory) {
+        setCurrentBreakPlayerId(savedHistory.currentBreakPlayerId);
+      } else if (reversedHistory) {
+        const rev = reversedHistory.currentBreakPlayerId;
+        setCurrentBreakPlayerId(rev === '1' ? '2' : (rev === '2' ? '1' : 'none'));
+      } else if (historyInferredSide !== 'none') {
+        setCurrentBreakPlayerId(historyInferredSide);
+      } else {
+        setCurrentBreakPlayerId('none');
+      }
     }
     
     setBreakBalls(settings?.breakBalls || []);
+    setCurrentMatchFrameDetails(settings?.frameDetails || []);
+    
+    // Load shot clock state for this matchup
+    if (settings?.isShotClockEnabled !== undefined) {
+      setIsShotClockEnabled(settings.isShotClockEnabled);
+      if (settings.shotClock !== undefined) {
+        setShotClockDuration(settings.shotClock);
+        setShotClock(settings.shotClock);
+      }
+    }
+
     setView('scoreboard');
     resetTimer();
     resetMatchClock();
@@ -1435,136 +1747,136 @@ export default function App() {
 
   const viewMatchDetails = (matchId: string) => {
     setViewingMatchDetailsId(matchId);
-    setView('match-details');
+    navigateToView('match-details');
   };
 
-  const navigateToScoreboard = () => {
-    const maxMatches = Math.max(team1Players.length, team2Players.length);
-    
-    // If we're already on scoreboard OR we have a match selected, just stay/go to it
-    if (selectedMatchIndex !== null) {
-      setView('scoreboard');
-      return;
-    }
+  const navigateToView = (newView: typeof view) => {
+    setNavigationHistory(prev => [...prev.slice(-10), newView]);
+    setView(newView);
+    if (deviceInfo.isPhone && newView !== 'scoreboard') setIsNavVisible(false);
+  };
 
-    if (maxMatches > 0) {
-      // Find the first match with no data
-      let firstUnplayedIndex = -1;
-      for (let i = 0; i < maxMatches; i++) {
-        const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
-        const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
-        if (!getMatchResult(p1Name, p2Name)) {
-          firstUnplayedIndex = i;
-          break;
-        }
-      }
-      
-      // If all matches have data, just select the first one (top row)
-      const indexToSelect = firstUnplayedIndex !== -1 ? firstUnplayedIndex : 0;
-      selectTeamMatch(indexToSelect);
+  const navigateBack = () => {
+    if (navigationHistory.length > 1) {
+      const history = [...navigationHistory];
+      history.pop(); // Remove current view
+      const prevView = history[history.length - 1];
+      setNavigationHistory(history);
+      setView(prevView);
     } else {
       setView('scoreboard');
     }
   };
 
+  const navigateToScoreboard = () => {
+    navigateToView('scoreboard');
+    if (deviceInfo.isPhone) setIsNavVisible(true);
+  };
+
   const clearTeams = () => {
-    // Clear Team Data
-    setTeam1Name('');
-    setTeam2Name('');
-    setTeam1Players([]);
-    setTeam2Players([]);
+    if (activeSetupTab === 'singles') {
+      // Clear Singles Data
+      setPlayer1({ 
+        id: '1', 
+        name: '', 
+        score: 0, 
+        isTurn: true, 
+        ...SLOT1_DEFAULTS 
+      });
+      setPlayer2({ 
+        id: '2', 
+        name: '', 
+        score: 0, 
+        isTurn: false, 
+        ...SLOT2_DEFAULTS 
+      });
+      
+      setSinglesSetup({ 
+        p1Name: '', 
+        p2Name: '', 
+        history: [], 
+        frameDetails: [], 
+        matchStartTime: null, 
+        score1: 0, 
+        score2: 0, 
+        currentBreakPlayerId: 'none', 
+        breakBalls: [] 
+      });
+      
+      // Clear persistent pair tracker for current match if any
+      const p1p2Key = `${player1.name}|${player2.name}`;
+      if (player1.name && player2.name) {
+        setPairTrackerSettings(prev => {
+          const next = { ...prev };
+          delete next[p1p2Key];
+          return next;
+        });
+      }
+    } else if (activeSetupTab === 'match') {
+      // Clear Match Mode Data
+      setTeam1Name('');
+      setTeam2Name('');
+      setTeam1Players([]);
+      setTeam2Players([]);
+      
+      setMatchSetup({ 
+        t1Name: '', 
+        t2Name: '', 
+        t1Players: [], 
+        t2Players: [], 
+        settings: {}, 
+        selectedIndex: null,
+        history: [], 
+        frameDetails: [], 
+        matchStartTime: null, 
+        score1: 0, 
+        score2: 0,
+        currentBreakPlayerId: 'none',
+        breakBalls: []
+      });
+      
+      setMatchupSettings({});
+      setSelectedMatchIndex(null);
+      setMatchModeBreakSide('none');
+      
+      // Reset scores and names in current view if active
+      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+    } else if (activeSetupTab === 'group') {
+      // Clear Group/Best of Data
+      setGroupSetup({ 
+        t1Players: [], 
+        t2Players: [], 
+        settings: {}, 
+        selectedIndex: null,
+        history: [], 
+        frameDetails: [], 
+        matchStartTime: null, 
+        score1: 0, 
+        score2: 0,
+        currentBreakPlayerId: 'none',
+        breakBalls: []
+      });
+      
+      // Reset scores and names in current view if active
+      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+    }
     
-    // Clear isolated setup buffers
-    setSinglesSetup({ 
-      p1Name: '', 
-      p2Name: '', 
-      history: [], 
-      frameDetails: [], 
-      matchStartTime: null, 
-      score1: 0, 
-      score2: 0, 
-      currentBreakPlayerId: 'none', 
-      breakBalls: [] 
-    });
-    setMatchSetup({ 
-      t1Name: '', 
-      t2Name: '', 
-      t1Players: [], 
-      t2Players: [], 
-      settings: {}, 
-      selectedIndex: null,
-      history: [], 
-      frameDetails: [], 
-      matchStartTime: null, 
-      score1: 0, 
-      score2: 0,
-      currentBreakPlayerId: 'none',
-      breakBalls: []
-    });
-    setGroupSetup({ 
-      t1Players: [], 
-      t2Players: [], 
-      settings: {}, 
-      selectedIndex: null,
-      history: [], 
-      frameDetails: [], 
-      matchStartTime: null, 
-      score1: 0, 
-      score2: 0,
-      currentBreakPlayerId: 'none',
-      breakBalls: []
-    });
-    
-    // Clear Session State
-    setMatchHistory([]);
-    setMatchupSettings({});
-    setSelectedMatchIndex(null);
-    setCurrentBreakPlayerId('none');
-    setBreakBalls([]);
-    setMatchModeBreakSide('none'); // Important: Reset session break tracker
-    setShotClock(shotClockDuration);
-    setMatchClock(matchClockDuration);
-    setCurrentMatchFrameDetails([]);
-    setMatchStartTime(null);
-    setIsEditingNames(false);
+    // Logic for global state cleanup that should only happen if relevant
+    if (activeSetupTab === 'singles') {
+      // For singles, we might want to keep the global match history but clear session-specific things?
+      // Actually, let's keep matchHistory as general history, 
+      // but maybe clear the local frame details if we reset.
+      setCurrentMatchFrameDetails([]);
+      setMatchStartTime(null);
+    } else {
+      // For multi-match modes, clear more session state
+      setCurrentMatchFrameDetails([]);
+      setMatchStartTime(null);
+      setMatchHistory([]); // User expects match history to be cleared based on modal text
+    }
 
-    // Reset player objects to initial defaults
-    const initialP1 = { 
-      id: '1', 
-      name: '', 
-      score: 0, 
-      isTurn: true, 
-      color: '#FFFF33', 
-      bgColor: '#000000', 
-      screenColor: '#000000', 
-      bgStyle: 'default', 
-      screenStyle: 'default',
-      isDoubles: false
-    };
-    const initialP2 = { 
-      id: '2', 
-      name: '', 
-      score: 0, 
-      isTurn: false, 
-      color: '#FF001C', 
-      bgColor: '#000000', 
-      screenColor: '#000000', 
-      bgStyle: 'default', 
-      screenStyle: 'default',
-      isDoubles: false
-    };
-    setPlayer1(initialP1);
-    setPlayer2(initialP2);
-
-    // Completely purge storage to prevent any lingering state restoration
-    localStorage.removeItem('pool_app_state'); 
-    localStorage.removeItem('pool_player_prefs');
-    localStorage.removeItem('pool_team1_name');
-    localStorage.removeItem('pool_team2_name');
-    localStorage.removeItem('pool_team1_players');
-    localStorage.removeItem('pool_team2_players');
-    localStorage.removeItem('pool_match_history');
-    
     setShowClearTeamsConfirm(false);
   };
 
@@ -1657,10 +1969,10 @@ export default function App() {
     // Set transition guard to prevent saveState from scrambling data during the multi-variable swap
     setIsSwitchingTab(true);
     
-    // 1. Save data from the tab we are LEAVING
+    // 1. Capture current data for the tab we are LEAVING
     const currentData = {
-      history: matchHistory,
-      frameDetails: currentMatchFrameDetails,
+      history: [...matchHistory],
+      frameDetails: [...currentMatchFrameDetails],
       matchStartTime: matchStartTime,
       score1: player1.score,
       score2: player2.score,
@@ -1670,6 +1982,7 @@ export default function App() {
       selectedIndex: selectedMatchIndex
     };
 
+    // Save LEAVING tab back into its persist-buffer
     if (activeSetupTab === 'match') {
       setMatchSetup(prev => ({ 
         ...prev,
@@ -1695,12 +2008,22 @@ export default function App() {
       }));
     }
 
-    // 2. Load data for the tab we are ENTERING
+    // 2. LOAD data for the new tab from its persist-buffer
     let nextHistory: MatchHistoryEntry[] = [];
     let nextFrameDetails: FrameDetail[] = [];
     let nextStartTime: string | null = null;
     let nextScore1 = 0;
     let nextScore2 = 0;
+    let nextBreakPlayer: '1' | '2' | 'none' = 'none';
+    let nextBreakBalls: number[] = [];
+    let nextIdx: number | null = null;
+    let nextSettings: Record<number, MatchupSettings> = {};
+    let nextT1Name = '';
+    let nextT2Name = '';
+    let nextT1Players: string[] = [];
+    let nextT2Players: string[] = [];
+    let nextP1Name = 'PLAYER 1';
+    let nextP2Name = 'PLAYER 2';
 
     if (newTab === 'singles') {
       nextHistory = singlesSetup.history;
@@ -1708,72 +2031,84 @@ export default function App() {
       nextStartTime = singlesSetup.matchStartTime;
       nextScore1 = singlesSetup.score1;
       nextScore2 = singlesSetup.score2;
-      
-      setTeam1Name('');
-      setTeam2Name('');
-      setTeam1Players([singlesSetup.p1Name]);
-      setTeam2Players([singlesSetup.p2Name]);
-      setMatchupSettings({});
-      setSelectedMatchIndex(0);
-
-      setPlayer1(prev => ({ ...prev, name: singlesSetup.p1Name, score: nextScore1 }));
-      setPlayer2(prev => ({ ...prev, name: singlesSetup.p2Name, score: nextScore2 }));
-      setCurrentBreakPlayerId(singlesSetup.currentBreakPlayerId);
-      setBreakBalls(singlesSetup.breakBalls);
+      nextBreakPlayer = singlesSetup.currentBreakPlayerId;
+      nextBreakBalls = singlesSetup.breakBalls;
+      nextT1Players = [singlesSetup.p1Name || 'PLAYER 1'];
+      nextT2Players = [singlesSetup.p2Name || 'PLAYER 2'];
+      nextP1Name = singlesSetup.p1Name || 'PLAYER 1';
+      nextP2Name = singlesSetup.p2Name || 'PLAYER 2';
+      nextIdx = 0;
     } else if (newTab === 'match') {
-      setTeam1Name(matchSetup.t1Name);
-      setTeam2Name(matchSetup.t2Name);
-      setTeam1Players([...matchSetup.t1Players]);
-      setTeam2Players([...matchSetup.t2Players]);
-      setMatchupSettings({ ...matchSetup.settings });
-      setSelectedMatchIndex(matchSetup.selectedIndex);
       nextHistory = matchSetup.history;
       nextFrameDetails = matchSetup.frameDetails;
       nextStartTime = matchSetup.matchStartTime;
       nextScore1 = matchSetup.score1;
       nextScore2 = matchSetup.score2;
-      
-      if (matchSetup.selectedIndex !== null) {
-        const p1 = matchSetup.t1Players[matchSetup.selectedIndex] || `PLAYER ${matchSetup.selectedIndex + 1}`;
-        const p2 = matchSetup.t2Players[matchSetup.selectedIndex] || `PLAYER ${matchSetup.selectedIndex + 1}`;
-        setPlayer1(prev => ({ ...prev, name: p1, score: nextScore1 }));
-        setPlayer2(prev => ({ ...prev, name: p2, score: nextScore2 }));
+      nextBreakPlayer = matchSetup.currentBreakPlayerId;
+      nextBreakBalls = matchSetup.breakBalls;
+      nextT1Name = matchSetup.t1Name;
+      nextT2Name = matchSetup.t2Name;
+      nextT1Players = [...matchSetup.t1Players];
+      nextT2Players = [...matchSetup.t2Players];
+      nextSettings = { ...matchSetup.settings };
+      nextIdx = matchSetup.selectedIndex;
+      if (nextIdx !== null) {
+        nextP1Name = nextT1Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
+        nextP2Name = nextT2Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
       }
-      setCurrentBreakPlayerId(matchSetup.currentBreakPlayerId);
-      setBreakBalls(matchSetup.breakBalls);
     } else if (newTab === 'group') {
-      setTeam1Name('');
-      setTeam2Name('');
-      setTeam1Players([...groupSetup.t1Players]);
-      setTeam2Players([...groupSetup.t2Players]);
-      setMatchupSettings({ ...groupSetup.settings });
-      setSelectedMatchIndex(groupSetup.selectedIndex);
       nextHistory = groupSetup.history;
       nextFrameDetails = groupSetup.frameDetails;
       nextStartTime = groupSetup.matchStartTime;
       nextScore1 = groupSetup.score1;
       nextScore2 = groupSetup.score2;
-
-      if (groupSetup.selectedIndex !== null) {
-        const p1 = groupSetup.t1Players[groupSetup.selectedIndex] || `PLAYER ${groupSetup.selectedIndex + 1}`;
-        const p2 = groupSetup.t2Players[groupSetup.selectedIndex] || `PLAYER ${groupSetup.selectedIndex + 1}`;
-        setPlayer1(prev => ({ ...prev, name: p1, score: nextScore1 }));
-        setPlayer2(prev => ({ ...prev, name: p2, score: nextScore2 }));
+      nextBreakPlayer = groupSetup.currentBreakPlayerId;
+      nextBreakBalls = groupSetup.breakBalls;
+      nextT1Players = [...groupSetup.t1Players];
+      nextT2Players = [...groupSetup.t2Players];
+      nextSettings = { ...groupSetup.settings };
+      nextIdx = groupSetup.selectedIndex;
+      if (nextIdx !== null) {
+        nextP1Name = nextT1Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
+        nextP2Name = nextT2Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
       }
-      setCurrentBreakPlayerId(groupSetup.currentBreakPlayerId);
-      setBreakBalls(groupSetup.breakBalls);
     }
-    
+
+    // 3. Batch apply the next tab's state
+    setTeam1Name(nextT1Name);
+    setTeam2Name(nextT2Name);
+    setTeam1Players(nextT1Players);
+    setTeam2Players(nextT2Players);
+    setMatchupSettings(nextSettings);
+    setSelectedMatchIndex(nextIdx);
     setMatchHistory(nextHistory);
     setCurrentMatchFrameDetails(nextFrameDetails);
     setMatchStartTime(nextStartTime);
+    setCurrentBreakPlayerId(nextBreakPlayer);
+    setBreakBalls(nextBreakBalls);
+
+    // Apply names and current scores with preferences or slot defaults
+    const p1Prefs = getPlayerPref(nextP1Name, 'p1') || SLOT1_DEFAULTS;
+    const p2Prefs = getPlayerPref(nextP2Name, 'p2') || SLOT2_DEFAULTS;
+
+    setPlayer1(prev => ({ 
+      ...prev, 
+      name: nextP1Name, 
+      score: nextScore1,
+      ...p1Prefs
+    }));
+    setPlayer2(prev => ({ 
+      ...prev, 
+      name: nextP2Name, 
+      score: nextScore2,
+      ...p2Prefs
+    }));
 
     setActiveSetupTab(newTab);
     
-    // Release guard after a short delay to ensure state updates have settled
     setTimeout(() => {
       setIsSwitchingTab(false);
-    }, 50);
+    }, 100);
   };
 
   const confirmDoubles = (team: 1 | 2) => {
@@ -1961,11 +2296,11 @@ export default function App() {
     csvContent += "Team,Player Name,Highlight Color,BG Color,Screen Color,BG Style,Screen Style\n";
     
     team1Players.forEach(p => {
-      const pref = playerPreferences[p];
+      const pref = getPlayerPref(p, 'p1');
       csvContent += `"${team1Name}","${p}","${pref?.color || '#FFFF33'}","${pref?.bgColor || '#000000'}","${pref?.screenColor || '#000000'}","${pref?.bgStyle || 'default'}","${pref?.screenStyle || 'default'}"\n`;
     });
     team2Players.forEach(p => {
-      const pref = playerPreferences[p];
+      const pref = getPlayerPref(p, 'p2');
       csvContent += `"${team2Name}","${p}","${pref?.color || '#FF001C'}","${pref?.bgColor || '#000000'}","${pref?.screenColor || '#000000'}","${pref?.bgStyle || 'default'}","${pref?.screenStyle || 'default'}"\n`;
     });
 
@@ -2844,8 +3179,7 @@ export default function App() {
           </button>
           <button 
             onClick={() => {
-              setView('teams');
-              if (deviceInfo.isPhone) setIsNavVisible(false);
+              navigateToView('teams');
             }}
             className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
             style={{
@@ -2865,8 +3199,7 @@ export default function App() {
           </button>
           <button 
             onClick={() => {
-              setView('settings');
-              if (deviceInfo.isPhone) setIsNavVisible(false);
+              navigateToView('settings');
             }}
             className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
             style={{
@@ -3175,7 +3508,9 @@ export default function App() {
                     {/* 3D Reflection Gloss */}
                     <div className="absolute top-[5%] left-[5%] w-[90%] h-[25%] bg-white/10 rounded-full blur-[2px] pointer-events-none" />
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
-                    <span className="leading-none uppercase tracking-widest relative z-10">Finish Match</span>
+                    <span className="leading-none uppercase tracking-widest relative z-10">
+                      Finish Match
+                    </span>
                   </button>
                 </div>
 
@@ -3293,14 +3628,10 @@ export default function App() {
                               onChange={(e) => {
                                 const newName = e.target.value.toUpperCase();
                                 if (idx === 0) {
-                                  const pref = playerPreferences[newName];
+                                  const pref = getPlayerPref(newName, 'p1') || SLOT1_DEFAULTS;
                                   const update = {
                                     name: newName,
-                                    color: pref?.color || (idx === 0 ? '#FFFF33' : '#FF001C'),
-                                    bgColor: pref?.bgColor || '#000000',
-                                    screenColor: pref?.screenColor || '#000000',
-                                    bgStyle: (pref?.bgStyle as any) || 'default',
-                                    screenStyle: (pref?.screenStyle as any) || 'default'
+                                    ...pref
                                   };
                                   setPlayer1(prev => ({ ...prev, ...update }));
                                   if (selectedMatchIndex !== null) {
@@ -3309,14 +3640,10 @@ export default function App() {
                                     setTeam1Players(newPlayers);
                                   }
                                 } else {
-                                  const pref = playerPreferences[newName];
+                                  const pref = getPlayerPref(newName, 'p2') || SLOT2_DEFAULTS;
                                   const update = {
                                     name: newName,
-                                    color: pref?.color || (idx === 0 ? '#FFFF33' : '#FF001C'),
-                                    bgColor: pref?.bgColor || '#000000',
-                                    screenColor: pref?.screenColor || '#000000',
-                                    bgStyle: (pref?.bgStyle as any) || 'default',
-                                    screenStyle: (pref?.screenStyle as any) || 'default'
+                                    ...pref
                                   };
                                   setPlayer2(prev => ({ ...prev, ...update }));
                                   if (selectedMatchIndex !== null) {
@@ -3413,7 +3740,29 @@ export default function App() {
                                 }
                                 frameStartTimeRef.current = Date.now();
                                 // Manual Override: Always set to this player's side when clicked
-                                setCurrentBreakPlayerId(p.id as '1' | '2');
+                                const side = p.id as '1' | '2';
+                                setCurrentBreakPlayerId(side);
+
+                                // Save to matchup settings
+                                if (selectedMatchIndex !== null) {
+                                  setMatchupSettings(prev => ({
+                                    ...prev,
+                                    [selectedMatchIndex]: {
+                                      ...prev[selectedMatchIndex],
+                                      currentBreakPlayerId: side
+                                    }
+                                  }));
+                                }
+
+                                // In Match Mode, align the session's expected pattern to this choice
+                                if (activeSetupTab === 'match') {
+                                  const idx = selectedMatchIndex ?? 0;
+                                  const side = p.id as '1' | '2';
+                                  // If user picks side P for match index I:
+                                  // we calculate what the side for index 0 should be to reach P at index I
+                                  const sessionFirstSide = (idx % 2 === 0) ? side : (side === '1' ? '2' : '1');
+                                  setMatchModeBreakSide(sessionFirstSide);
+                                }
                               }
                             }}
                             className={`absolute rounded-full transition-all duration-500 z-50 flex items-center justify-center group pointer-events-auto
@@ -3436,7 +3785,10 @@ export default function App() {
                                className={`rounded-full border-solid transition-all duration-500 flex items-center justify-center
                                  ${currentBreakPlayerId === p.id 
                                    ? 'bg-white border-white shadow-[0_0_1.5rem_rgba(255,255,255,1)]' 
-                                   : 'bg-white/40 border-white/20'}`}
+                                   : (currentBreakPlayerId === 'none' && activeSetupTab === 'match' && 
+                                      (matchModeBreakSide !== 'none' && ((selectedMatchIndex ?? 0) % 2 === 0 ? matchModeBreakSide : (matchModeBreakSide === '1' ? '2' : '1')) === p.id))
+                                      ? 'bg-white/20 border-white/40 border-dashed animate-pulse'
+                                      : 'bg-white/40 border-white/20'}`}
                                style={{
                                  width: '6vh',
                                  height: '6vh',
@@ -3522,7 +3874,8 @@ export default function App() {
                           setSinglesSetup(prev => ({ ...prev, p1Name: val }));
                           if (activeSetupTab === 'singles') {
                             setTeam1Players([val]);
-                            setPlayer1(prev => ({ ...prev, name: val }));
+                            const prefs = getPlayerPref(val, 'p1') || SLOT1_DEFAULTS;
+                            setPlayer1(prev => ({ ...prev, name: val, ...prefs }));
                           }
                         }}
                         onFocus={(e) => handleInputFocus(e, 'p1-singles')}
@@ -3545,7 +3898,8 @@ export default function App() {
                           setSinglesSetup(prev => ({ ...prev, p2Name: val }));
                           if (activeSetupTab === 'singles') {
                             setTeam2Players([val]);
-                            setPlayer2(prev => ({ ...prev, name: val }));
+                            const prefs = getPlayerPref(val, 'p2') || SLOT2_DEFAULTS;
+                            setPlayer2(prev => ({ ...prev, name: val, ...prefs }));
                           }
                         }}
                         onFocus={(e) => handleInputFocus(e, 'p2-singles')}
@@ -3563,9 +3917,24 @@ export default function App() {
                   <div className="flex justify-center">
                     <button 
                       onClick={() => {
-                        setPlayer1(prev => ({ ...prev, name: singlesSetup.p1Name || 'PLAYER 1', score: 0 }));
-                        setPlayer2(prev => ({ ...prev, name: singlesSetup.p2Name || 'PLAYER 2', score: 0 }));
-                        setSelectedMatchIndex(null);
+                        const p1Prefs = getPlayerPref(singlesSetup.p1Name || 'PLAYER 1', 'p1') || SLOT1_DEFAULTS;
+                        const p2Prefs = getPlayerPref(singlesSetup.p2Name || 'PLAYER 2', 'p2') || SLOT2_DEFAULTS;
+                        const p1Update = { name: singlesSetup.p1Name || 'PLAYER 1', score: 0, ...p1Prefs };
+                        const p2Update = { name: singlesSetup.p2Name || 'PLAYER 2', score: 0, ...p2Prefs };
+                        setPlayer1(prev => ({ ...prev, ...p1Update }));
+                        setPlayer2(prev => ({ ...prev, ...p2Update }));
+                        setSelectedMatchIndex(0);
+                        // Initialize matchup settings for singles slot 0
+                        setMatchupSettings(prev => ({
+                          ...prev,
+                          [0]: {
+                            score1: 0,
+                            score2: 0,
+                            player1: p1Update,
+                            player2: p2Update,
+                            currentBreakPlayerId: 'none'
+                          }
+                        }));
                         setView('scoreboard');
                       }}
                       className="px-12 py-6 rounded-3xl font-black uppercase tracking-[0.3em] text-2xl transition-all hover:scale-105 active:scale-95 shadow-2xl"
@@ -3834,12 +4203,28 @@ export default function App() {
                       {/* Header Row */}
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
                         <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
-                        <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}
+                        <div 
+                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
+                          onClick={() => {
+                            if (activeSetupTab === 'match') {
+                              setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
+                            }
+                          }}
+                        >
+                          <span>{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
+                          {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
                         <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
-                        <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}
+                        <div 
+                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
+                          onClick={() => {
+                            if (activeSetupTab === 'match') {
+                              setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
+                            }
+                          }}
+                        >
+                          <span>{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
+                          {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
                         <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
@@ -3867,7 +4252,7 @@ export default function App() {
                               let displayScore: { score1: number, score2: number, isLive: boolean, date?: string, winner?: string } | null = null;
                               
                               // Priority 1: Current active match row (uses card scores)
-                              if (selectedMatchIndex === idx && (activeSetupTab === 'match' || activeSetupTab === 'group')) {
+                              if (selectedMatchIndex === idx) {
                                 displayScore = { 
                                   score1: player1.score, 
                                   score2: player2.score, 
@@ -3903,6 +4288,9 @@ export default function App() {
                                 }
                               }
                               
+                              const matchSessionStart = matchModeBreakSide === 'none' ? '1' : matchModeBreakSide;
+                              const rowBreaker = (idx % 2 === 0) ? matchSessionStart : (matchSessionStart === '1' ? '2' : '1');
+                              
                               return (
                                 <div 
                                   key={idx} 
@@ -3911,6 +4299,11 @@ export default function App() {
                                 >
                                   <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
                                   <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                    {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
+                                      <div className="mr-2 shrink-0">
+                                        <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                      </div>
+                                    )}
                                     <div className="flex flex-col">
                                       {matchup?.isDoubles && p1 && p1.includes('/') ? (
                                         <>
@@ -3934,6 +4327,11 @@ export default function App() {
                                         <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
                                       )}
                                     </div>
+                                    {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '2' && (
+                                      <div className="ml-2 shrink-0">
+                                        <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
                                     {displayScore ? (
@@ -3961,11 +4359,11 @@ export default function App() {
                                   <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
                                     <div className="flex items-center justify-end gap-1 sm:gap-2">
                                       {/* Only show row button in non-match modes */}
-                                      {activeSetupTab !== 'match' && (lastMatch || (selectedMatchIndex === idx && currentMatchFrameDetails.length > 0)) && (
+                                      {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || selectedMatchIndex === idx) && (
                                         <button 
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            viewMatchDetails(lastMatch ? lastMatch.id : 'live');
+                                            viewMatchDetails(lastMatch ? lastMatch.id : `live-${idx}`);
                                           }}
                                           className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
                                           title="View Details"
@@ -3973,16 +4371,17 @@ export default function App() {
                                           <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
                                         </button>
                                       )}
-                                      {(lastMatch || (selectedMatchIndex === idx && (player1.score > 0 || player2.score > 0))) && (
+                                      {/* Hide individual delete buttons in Match mode - use the main Session Reset instead */}
+                                      {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx && (player1.score > 0 || player2.score > 0))) && (
                                         <button 
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             clearMatchResult(p1Name, p2Name, idx);
                                           }}
-                                          className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                          title="Clear Score"
+                                          className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                                          title="Clear Match"
                                         >
-                                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                                          <Trash2 className="w-4 h-4" />
                                         </button>
                                       )}
                                     </div>
@@ -4002,14 +4401,24 @@ export default function App() {
                             })}
                             
                             {/* Match Session Details Button - Only for Match Mode */}
-                            {activeSetupTab === 'match' && (matchHistory.length > 0 || currentMatchFrameDetails.length > 0) && (
-                              <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex justify-center">
+                            {activeSetupTab === 'match' && (team1Players.length > 0 || team2Players.length > 0) && (
+                              <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                                 <button 
                                   onClick={() => viewMatchDetails('session')}
                                   className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs"
                                 >
                                   <FileText className="w-4 h-4" />
                                   View Detailed Match Progress
+                                </button>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowDeleteAllConfirm(true);
+                                  }}
+                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Match Data
                                 </button>
                               </div>
                             )}
@@ -4141,7 +4550,7 @@ export default function App() {
                 }}
               >
                 <Trash2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                Clear Team Data
+                {activeSetupTab === 'match' ? 'Clear Team Data' : 'Clear Player Data'}
               </button>
             </div>
           </motion.div>
@@ -4764,7 +5173,7 @@ export default function App() {
               >
                 <div className="absolute left-0 bottom-[1vh]">
                   <button 
-                    onClick={() => setView('teams')}
+                    onClick={navigateBack}
                     className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all"
                     style={{ 
                         filter: `drop-shadow(0 0 1rem ${player1.color}22)`,
@@ -4804,8 +5213,10 @@ export default function App() {
                 <h2 className="font-black uppercase tracking-tight text-white line-clamp-1 leading-none text-center" style={{ fontSize: deviceInfo.titleSizes.page }}>Match Details</h2>
               </div>
 
-               {(matchHistory.find(m => m.id === viewingMatchDetailsId) || viewingMatchDetailsId === 'live' || viewingMatchDetailsId === 'session') ? (() => {
+               {(matchHistory.find(m => m.id === viewingMatchDetailsId) || viewingMatchDetailsId === 'live' || viewingMatchDetailsId?.startsWith('live-') || viewingMatchDetailsId === 'session') ? (() => {
                 const isSession = viewingMatchDetailsId === 'session';
+                const isLiveId = viewingMatchDetailsId === 'live' || viewingMatchDetailsId?.startsWith('live-');
+                
                 const match = isSession ? {
                   id: 'session',
                   date: new Date().toISOString(),
@@ -4825,22 +5236,28 @@ export default function App() {
                   ].map((f, idx) => ({ ...f, frameNumber: idx + 1 })),
                   isLive: true,
                   isSession: true
-                } : viewingMatchDetailsId === 'live' ? {
-                  id: 'live',
-                  date: new Date().toISOString(),
-                  startTime: matchStartTime || undefined,
-                  player1: player1.name || 'Player 1',
-                  player2: player2.name || 'Player 2',
-                  team1: team1Name || undefined,
-                  team2: team2Name || undefined,
-                  score1: player1.score,
-                  score2: player2.score,
-                  winner: player1.score > player2.score ? player1.name : player2.name,
-                  shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
-                  matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
-                  frameDetails: currentMatchFrameDetails,
-                  isLive: true
-                } : { ...matchHistory.find(m => m.id === viewingMatchDetailsId)!, isLive: false };
+                } : isLiveId ? (() => {
+                  const liveIdx = viewingMatchDetailsId === 'live' ? selectedMatchIndex : parseInt(viewingMatchDetailsId.split('-')[1]);
+                  const isCurrentActive = liveIdx !== null && liveIdx === selectedMatchIndex;
+                  const settings = liveIdx !== null ? matchupSettings[liveIdx] : null;
+                  
+                  return {
+                    id: viewingMatchDetailsId,
+                    date: new Date().toISOString(),
+                    startTime: (isCurrentActive ? matchStartTime : null) || undefined,
+                    player1: (isCurrentActive ? player1.name : (liveIdx !== null ? team1Players[liveIdx] : 'Player 1')) || 'Player 1',
+                    player2: (isCurrentActive ? player2.name : (liveIdx !== null ? team2Players[liveIdx] : 'Player 2')) || 'Player 2',
+                    team1: team1Name || undefined,
+                    team2: team2Name || undefined,
+                    score1: isCurrentActive ? player1.score : (settings?.score1 || 0),
+                    score2: isCurrentActive ? player2.score : (settings?.score2 || 0),
+                    winner: (isCurrentActive ? (player1.score > player2.score ? player1.name : player2.name) : (settings ? ((settings.score1 || 0) > (settings.score2 || 0) ? (liveIdx !== null ? team1Players[liveIdx] : 'Player 1') : (liveIdx !== null ? team2Players[liveIdx] : 'Player 2')) : 'Player 1')) || 'Player 1',
+                    shotClockSetting: isCurrentActive ? (isShotClockEnabled ? shotClockDuration : undefined) : (settings?.isShotClockEnabled ? settings.shotClock : undefined),
+                    matchClockRemaining: isCurrentActive ? (isMatchClockEnabled ? matchClock : undefined) : undefined,
+                    frameDetails: isCurrentActive ? currentMatchFrameDetails : (settings?.frameDetails || []),
+                    isLive: true
+                  };
+                })() : { ...matchHistory.find(m => m.id === viewingMatchDetailsId)!, isLive: false };
                 return (
                   <div className="space-y-6">
                     {/* Header Info */}
@@ -4965,7 +5382,7 @@ export default function App() {
 
                     <div className="pt-12 flex justify-start">
                        <button 
-                         onClick={() => setView('teams')}
+                         onClick={() => navigateToView('teams')}
                          className="group relative h-[calc(5rem+1vh)] active:scale-95 transition-all"
                          style={{ 
                             filter: `drop-shadow(0 0 1.25rem ${player1.color}22)`,
@@ -5033,9 +5450,9 @@ export default function App() {
               >
                 <div className="flex items-center gap-4 text-red-500">
                   <Trash2 className="w-8 h-8" />
-                  <h3 className="text-xl font-bold">Clear Team Data?</h3>
+                  <h3 className="text-xl font-bold">{activeSetupTab === 'match' ? 'Clear Team Data?' : 'Clear Player Data?'}</h3>
                 </div>
-                <p className="text-slate-400">This will permanently delete team names, player lists, current scores, and match history. This action cannot be undone.</p>
+                <p className="text-slate-400">This will permanently delete {activeSetupTab === 'match' ? 'team names, player lists' : 'player names'}, current scores, and match history. This action cannot be undone.</p>
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowClearTeamsConfirm(false)}
@@ -5047,7 +5464,7 @@ export default function App() {
                     onClick={clearTeams}
                     className="flex-1 h-12 bg-red-500 hover:bg-red-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
                   >
-                    Clear Team Data
+                    {activeSetupTab === 'match' ? 'Clear Team Data' : 'Clear Player Data'}
                   </button>
                 </div>
               </motion.div>
@@ -5184,28 +5601,25 @@ export default function App() {
                   <button 
                     onClick={() => {
                       // Restore User Preferences Only (Colors and Clocks)
-                      setPlayer1(prev => ({ 
-                        ...prev, 
-                        color: '#FFFF33', 
-                        bgColor: '#000000', 
-                        screenColor: '#000000',
-                        bgStyle: 'default',
-                        screenStyle: 'default'
-                      }));
-                      setPlayer2(prev => ({ 
-                        ...prev, 
-                        color: '#FF001C', 
-                        bgColor: '#000000', 
-                        screenColor: '#000000',
-                        bgStyle: 'default',
-                        screenStyle: 'default'
-                      }));
+                      setPlayer1({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
+                      setPlayer2({ id: '2', name: '', score: 0, isTurn: false, ...SLOT2_DEFAULTS });
+                      setSinglesSetup(prev => ({ ...prev, p1Name: '', p2Name: '' }));
+                      setMatchSetup(prev => ({ ...prev, t1Name: '', t2Name: '', t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
+                      setGroupSetup(prev => ({ ...prev, t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
+                      setTeam1Name('');
+                      setTeam2Name('');
+                      setTeam1Players([]);
+                      setTeam2Players([]);
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
                       setIsShotClockEnabled(false);
                       setMatchClockDuration(600);
                       setIsMatchClockEnabled(false);
                       setPlayerPreferences({});
                       setMatchupSettings({});
+                      setPairTrackerSettings({});
+                      setSelectedMatchIndex(null);
+                      setCurrentMatchFrameDetails([]);
+                      setMatchStartTime(null);
                       setShowDeviceTime(true);
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
@@ -5256,6 +5670,94 @@ export default function App() {
               </motion.div>
             </div>
           )}
+          {showWinnerBanner && matchWinner && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+              <motion.div 
+                initial={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
+                animate={{ scale: !deviceInfo.isDesktop ? 0.7 : 1, opacity: 1, y: 0 }}
+                exit={{ scale: !deviceInfo.isDesktop ? 0.5 : 0.8, opacity: 0, y: 20 }}
+                className="bg-black border-2 p-6 sm:p-10 rounded-[1.875rem] sm:rounded-[2.5rem] max-w-2xl w-full space-y-6 sm:space-y-10 text-center"
+                style={{ 
+                  borderColor: matchWinner.color,
+                  boxShadow: `0 0 3.125rem ${matchWinner.color}22`
+                }}
+              >
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <div className="p-4 sm:p-6 rounded-full" style={{ backgroundColor: `${matchWinner.color}22` }}>
+                      <Trophy className="w-12 h-12 sm:w-16 sm:h-16" style={{ color: matchWinner.color }} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[0.625rem] sm:text-xs">Match Winner</p>
+                    <h2 className="text-4xl sm:text-7xl font-black uppercase tracking-tighter text-white break-words px-2">{matchWinner.name}</h2>
+                    {matchWinner.team && (
+                      <p className="text-lg sm:text-2xl font-black uppercase tracking-widest" style={{ color: matchWinner.color }}>{matchWinner.team}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-6 sm:gap-10">
+                   <div className="text-center">
+                     <p className="text-xs font-black text-slate-600 uppercase mb-1">Result</p>
+                     <div className="text-4xl sm:text-6xl font-black text-white tabular-nums">
+                       {matchWinner.score1} — {matchWinner.score2}
+                     </div>
+                   </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setShowWinnerBanner(false);
+                    completeMatchAndAdvance();
+                  }}
+                  className="w-full h-14 sm:h-20 text-slate-950 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-2xl uppercase tracking-widest transition-all active:scale-95 shadow-2xl"
+                  style={{ 
+                    backgroundColor: matchWinner.color,
+                    boxShadow: `0 0.625rem 1.25rem ${matchWinner.color}44`
+                  }}
+                >
+                  Continue
+                </button>
+              </motion.div>
+            </div>
+          )}
+          {showDeleteAllConfirm && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-black border-2 border-red-500/50 p-6 sm:p-10 rounded-[2.5rem] max-w-lg w-full space-y-6 sm:space-y-8 text-center shadow-[0_0_50px_rgba(239,68,68,0.2)]"
+              >
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <div className="p-4 rounded-full bg-red-500/10 text-red-500">
+                      <Trash2 className="w-10 h-10 sm:w-16 sm:h-16" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-2xl sm:text-4xl font-black uppercase text-white">Reset Session?</h2>
+                    <p className="text-slate-400 text-sm sm:text-base font-medium">This will permanently delete all match results, scores, and break tracking data for this entire session. This action cannot be undone.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => setShowDeleteAllConfirm(false)}
+                    className="h-14 sm:h-16 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-black uppercase tracking-widest text-sm transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={clearAllTableData}
+                    className="h-14 sm:h-16 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_4px_15px_rgba(220,38,38,0.4)]"
+                  >
+                    Reset All
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
           {showTeamTotals && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 
@@ -5296,7 +5798,7 @@ export default function App() {
                 <button 
                   onClick={() => {
                     setShowTeamTotals(false);
-                    setView('teams');
+                    navigateToView('teams');
                   }}
                   className="w-full h-14 sm:h-20 text-slate-950 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-2xl uppercase tracking-widest transition-all active:scale-95"
                   style={{ 
@@ -5333,14 +5835,14 @@ export default function App() {
               Score
             </button>
             <button 
-              onClick={() => setView('teams')}
+              onClick={() => navigateToView('teams')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${view === 'teams' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'teams' ? { backgroundColor: player1.color } : {}}
             >
               Teams
             </button>
             <button 
-              onClick={() => setView('settings')}
+              onClick={() => navigateToView('settings')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${view === 'settings' ? 'text-slate-950' : 'text-slate-400'}`}
               style={view === 'settings' ? { backgroundColor: player2.color } : {}}
             >

@@ -30,6 +30,9 @@ export interface MatchupSettings {
   isDoubles?: boolean;
   currentBreakPlayerId?: '1' | '2' | 'none';
   breakBalls?: number[];
+  shotClock?: number;
+  isShotClockEnabled?: boolean;
+  frameDetails?: FrameDetail[];
 }
 
 export interface FrameDetail {
