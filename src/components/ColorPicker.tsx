@@ -11,14 +11,16 @@ interface ColorPickerProps {
   isOpen: boolean;
   onToggle: (isOpen: boolean) => void;
   themeColor?: string;
-  pickerStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial';
-  onStyleChange?: (style: 'default' | 'balls' | 'cloth' | 'speed' | 'dial') => void;
-  allowedStyles?: ('default' | 'balls' | 'cloth' | 'speed' | 'dial')[];
+  pickerStyle?: 'default' | 'balls' | 'cloth' | 'speed' | 'dial' | 'backdrop';
+  onStyleChange?: (style: 'default' | 'balls' | 'cloth' | 'speed' | 'dial' | 'backdrop') => void;
+  allowedStyles?: ('default' | 'balls' | 'cloth' | 'speed' | 'dial' | 'backdrop')[];
+  disabled?: boolean;
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({ 
   label, value, onChange, colors, icon, isOpen, onToggle, themeColor, 
-  pickerStyle = 'default', onStyleChange, allowedStyles = ['default']
+  pickerStyle = 'default', onStyleChange, allowedStyles = ['default'],
+  disabled = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -90,12 +92,12 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   }, [hexUnit]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={`relative ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`} ref={containerRef}>
       <div className="flex items-center justify-between p-[2vh] bg-slate-950/30 rounded-xl border transition-all cursor-pointer group active:scale-[0.98]"
            style={{ 
              borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
            }}
-           onClick={() => onToggle(!isOpen)}>
+           onClick={() => !disabled && onToggle(!isOpen)}>
         <div className="flex items-center gap-[1vw]">
           <div className="p-[1.5vh] bg-slate-800 rounded-lg text-slate-400 transition-colors"
                style={{ color: isOpen ? (themeColor || '#10b981') : undefined }}>
@@ -104,7 +106,16 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
           <div>
             <p className="text-[2vh] font-bold uppercase tracking-wider text-slate-500">{label}</p>
             <div className="flex items-center gap-[0.5vw] h-[6vh]">
-              {pickerStyle === 'balls' && colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.image ? (
+              {(pickerStyle === 'balls' || pickerStyle === 'backdrop') && colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.thumbnail ? (
+                <div className={`${pickerStyle === 'backdrop' ? 'w-[8vw] sm:w-[6vw]' : 'w-[8vw] sm:w-[5vw]'} h-[6vw] sm:h-[4vw] rounded-lg overflow-hidden border border-white/10 shadow-lg`}>
+                  <img 
+                    src={colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.thumbnail} 
+                    alt="Selected"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ) : pickerStyle === 'balls' && colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.image ? (
                 <div className="w-[8vw] h-[8vw] sm:w-[5vw] sm:h-[5vw] rounded-full overflow-hidden border border-white/10 shadow-lg">
                   <img 
                     src={colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.image} 
@@ -116,7 +127,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               ) : (
                 <div className="w-[4vh] h-[4vh] rounded-full border border-white/20" style={{ backgroundColor: value }} />
               )}
-              <span className="text-[3vh] font-black text-slate-200 uppercase leading-none">
+              <span className="text-[3vh] font-black text-slate-200 uppercase leading-none truncate max-w-[20vw]">
                 {colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.name || value}
               </span>
             </div>
@@ -135,10 +146,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               scale: isMobile && pickerStyle === 'default' ? 1.5 : 1 
             }}
             exit={{ opacity: 0, y: 10, scale: isMobile && pickerStyle === 'default' ? 1.4 : 0.95 }}
-            className={`absolute left-0 right-0 top-full mt-[1vh] z-[110] px-[4%] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top
+            className={`absolute left-1/2 -translate-x-1/2 top-full mt-[1vh] z-[110] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top
+              ${pickerStyle === 'backdrop' ? 'w-[75vw] sm:w-[60vw]' : 'left-0 right-0 px-[4%]'}
               ${pickerStyle === 'default' 
-                ? 'py-[2.5vh] gap-[1vh]' 
-                : 'pt-[1.5vh] pb-[4.5vh] gap-[1.5vh] sm:pt-[2.5vh] sm:pb-[5.5vh]'
+                ? 'py-[2.5vh] gap-[1vh] px-[4%]' 
+                : pickerStyle === 'backdrop' ? 'pt-[1vh] pb-[2.5vh] gap-[1vh] px-[2%]' : 'pt-[1.5vh] pb-[4.5vh] gap-[1.5vh] sm:pt-[2.5vh] sm:pb-[5.5vh] px-[4%]' 
               }`}
             style={{ 
               borderColor: (themeColor || '#10b981') + '33'
@@ -200,7 +212,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 })}
               </div>
             ) : pickerStyle === 'balls' ? (
-              <div className="grid grid-cols-5 gap-[4%] w-full">
+              <div className="grid grid-cols-3 gap-[3vh] w-full max-h-[60vh] overflow-y-auto no-scrollbar p-2">
                 {colors.map((ball) => {
                   const isActive = value.toUpperCase() === ball.value.toUpperCase();
                   return (
@@ -210,10 +222,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         onChange(ball.value);
                         onToggle(false);
                       }}
-                      className={`relative w-full aspect-square rounded-full transition-all duration-300 group active:scale-90 ${isActive ? 'scale-110 ring-2 ring-white ring-offset-4 ring-offset-slate-900 z-10' : 'hover:scale-105'}`}
+                      className={`relative w-full aspect-square rounded-full transition-all duration-300 group active:scale-90 ${isActive ? 'scale-110 ring-4 ring-white ring-offset-4 ring-offset-slate-900 z-10' : 'hover:scale-110'}`}
                       style={{ 
                         backgroundColor: ball.value,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                        boxShadow: '0 8px 16px rgba(0,0,0,0.5)'
                       }}
                       title={ball.name}
                     >
@@ -221,16 +233,54 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         <img 
                           src={ball.thumbnail || ball.image} 
                           alt={ball.name} 
-                          className="absolute inset-0 w-full h-full object-contain rounded-full"
+                          className="absolute inset-0 w-full h-full object-contain rounded-full p-0.5"
                           referrerPolicy="no-referrer"
                           fetchPriority="high"
                           loading="eager"
                         />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center font-bold text-[2.5vh] text-white">
+                        <div className="absolute inset-0 flex items-center justify-center font-bold text-[3.5vh] text-white">
                           {ball.number}
                         </div>
                       )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : pickerStyle === 'backdrop' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-[2vmin] w-full max-h-[60vh] overflow-y-auto no-scrollbar p-3">
+                {colors.map((b) => {
+                  const isActive = value.toLowerCase() === b.value.toLowerCase();
+                  return (
+                    <button
+                      key={b.value}
+                      onClick={() => {
+                        onChange(b.value);
+                        onToggle(false);
+                      }}
+                      className={`flex flex-col gap-[0.4vmin] p-[0.6vmin] rounded-xl border-2 transition-all active:scale-95 ${isActive ? 'bg-white/20 border-white ring-2 ring-white/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                    >
+                      <div className="w-full aspect-[16/10] rounded-lg shadow-2xl flex items-center justify-center overflow-hidden relative bg-slate-800">
+                         {b.thumbnail ? (
+                           <img 
+                             src={b.thumbnail} 
+                             alt={b.name} 
+                             className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                             referrerPolicy="no-referrer"
+                           />
+                         ) : (
+                           <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-bold uppercase">
+                             {b.name}
+                           </div>
+                         )}
+                         <div className="absolute inset-0 shadow-[inset_0_0_1rem_rgba(0,0,0,0.4)]" />
+                         {isActive && (
+                           <div className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-lg">
+                             <Check className="w-2 h-2 text-slate-900" strokeWidth={5} />
+                           </div>
+                         )}
+                      </div>
+                      <span className="text-[1vh] sm:text-[1.2vh] font-bold text-slate-200 uppercase tracking-tight text-center truncate w-full mt-1">{b.name}</span>
                     </button>
                   );
                 })}

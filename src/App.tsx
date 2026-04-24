@@ -38,7 +38,8 @@ import {
   BACKGROUND_COLORS, 
   POOL_BALLS, 
   CLOTH_COLORS, 
-  SPEED_CLOTH_COLORS 
+  SPEED_CLOTH_COLORS,
+  FULL_SCREEN_BACKDROPS
 } from './constants';
 import { ColorPicker } from './components/ColorPicker';
 import portraitBackdrop from './assets/portrait_mode_backdrop.png';
@@ -164,6 +165,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
+  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('black');
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
@@ -716,6 +718,12 @@ export default function App() {
       setPlayer1(p1);
       setPlayer2(p2);
       
+      if (state.userPreferences?.fullScreenBackdrop !== undefined) {
+        setFullScreenBackdrop(state.userPreferences.fullScreenBackdrop);
+      } else if (state.gameData?.fullScreenBackdrop !== undefined) {
+        setFullScreenBackdrop(state.gameData.fullScreenBackdrop);
+      }
+      
       if (state.userPreferences?.view !== undefined) setView(state.userPreferences.view);
       if (state.userPreferences?.isNavVisible !== undefined) setIsNavVisible(state.userPreferences.isNavVisible);
       if (state.userPreferences?.showDeviceTime !== undefined) setShowDeviceTime(state.userPreferences.showDeviceTime);
@@ -790,6 +798,7 @@ export default function App() {
         view,
         isNavVisible,
         showDeviceTime,
+        fullScreenBackdrop,
         deviceTimePosition,
         matchClockPosition,
         shotClockPosition
@@ -804,7 +813,7 @@ export default function App() {
     player1.score, player2.score, player1.name, player2.name,
     currentBreakPlayerId, breakBalls, matchupSettings, selectedMatchIndex,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide,
+    isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide, fullScreenBackdrop,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
     playerPreferences, pairTrackerSettings, apiConfig
   ]);
@@ -1008,7 +1017,7 @@ export default function App() {
 
   // Load player preferences when names change (e.g. typed in scoreboard)
   useEffect(() => {
-    if (!isLoaded || !player1.name) return;
+    if (!isLoaded || !player1.name || focusedField) return;
     
     const pref = getPlayerPref(player1.name, 'p1');
     if (pref) {
@@ -1035,31 +1044,11 @@ export default function App() {
           };
         });
       }
-    } else {
-      const defaultColor = '#FFFF33';
-      const nameChanged = prevNamesRef.current.p1 !== player1.name;
-      const justLoaded = prevNamesRef.current.p1 === '';
-      
-      // Only reset to defaults if the name REALLY changed to something unknown
-      // and it wasn't just the initial app load (where names were populated by initialization)
-      if (nameChanged && !justLoaded && (player1.bgStyle !== 'default' || player1.screenStyle !== 'default')) {
-        setPlayer1(prev => {
-          if (prev.name !== player1.name) return prev;
-          return {
-            ...prev,
-            color: defaultColor,
-            bgColor: '#000000',
-            screenColor: '#000000',
-            bgStyle: 'default',
-            screenStyle: 'default'
-          };
-        });
-      }
     }
-  }, [player1.name, playerPreferences, isLoaded]); // Removed player1.id/others from deps to be focused
+  }, [player1.name, playerPreferences, isLoaded, focusedField]); // Removed player1.id/others from deps to be focused
 
   useEffect(() => {
-    if (!isLoaded || !player2.name) return;
+    if (!isLoaded || !player2.name || focusedField) return;
     
     const pref = getPlayerPref(player2.name, 'p2');
     if (pref) {
@@ -1083,26 +1072,8 @@ export default function App() {
           };
         });
       }
-    } else {
-      const defaultColor = '#FF001C';
-      const nameChanged = prevNamesRef.current.p2 !== player2.name;
-      const justLoaded = prevNamesRef.current.p2 === '';
-
-      if (nameChanged && !justLoaded && (player2.bgStyle !== 'default' || player2.screenStyle !== 'default')) {
-        setPlayer2(prev => {
-          if (prev.name !== player2.name) return prev;
-          return {
-            ...prev,
-            color: defaultColor,
-            bgColor: '#000000',
-            screenColor: '#000000',
-            bgStyle: 'default',
-            screenStyle: 'default'
-          };
-        });
-      }
     }
-  }, [player2.name, playerPreferences, isLoaded]);
+  }, [player2.name, playerPreferences, isLoaded, focusedField]);
 
   // Ensure player names are fresh whenever entering gameplay view
   useEffect(() => {
@@ -2983,6 +2954,8 @@ export default function App() {
 
   return (
     <div className={`relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden ${deviceInfo.isPhone ? 'is-phone' : (deviceInfo.isTablet ? 'is-tablet' : 'is-desktop')}`}>
+      {/* Base Background Layer */}
+      <div className="fixed inset-0 z-[-20] bg-black" />
       {/* SVG Gradient Definitions */}
       <svg width="0" height="0" className="absolute pointer-events-none">
         <defs>
@@ -2994,9 +2967,46 @@ export default function App() {
       </svg>
 
       {/* Background Layer */}
-      <div className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none">
+      <motion.div 
+        animate={{ 
+          top: (view === 'scoreboard' && isNavVisible) 
+            ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
+            : 0,
+          left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+          right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+          bottom: 0
+        }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
+        className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none"
+      >
+        {/* Full Screen Backdrop */}
+        {(() => {
+          const activeBackItem = FULL_SCREEN_BACKDROPS.find(b => b.value === fullScreenBackdrop);
+          return activeBackItem && activeBackItem.image && fullScreenBackdrop !== 'none' ? (
+            <div className="absolute inset-0 z-[-10] flex items-center justify-center">
+              <img 
+                src={activeBackItem.image} 
+                className="w-full h-full object-contain" 
+                alt="" 
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          ) : null;
+        })()}
+
         {/* Split Screen (Scoreboard only) */}
-        <div className={`absolute inset-0 flex transition-opacity duration-700 ${isLoaded && view === 'scoreboard' ? 'opacity-100' : 'opacity-0'}`}>
+        <motion.div 
+          animate={{ 
+            top: (view === 'scoreboard' && isNavVisible) 
+              ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh'))
+              : 0,
+            left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+            right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+            bottom: 0
+          }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          className={`absolute flex transition-opacity duration-700 ${isLoaded && view === 'scoreboard' && (fullScreenBackdrop === 'none' || !fullScreenBackdrop) ? 'opacity-100' : 'opacity-0'}`}
+        >
           {[player1, player2].map((p, idx) => (
             <div 
               key={p.id} 
@@ -3004,10 +3014,17 @@ export default function App() {
               style={{ backgroundColor: p.screenColor }}
             >
               {(p.screenStyle === 'cloth' || p.screenStyle === 'speed') && (CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase()) || SPEED_CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase())) && (
-                <div className="absolute inset-0 z-0 scale-[1.05]">
+                <div className="absolute inset-0 z-0 flex items-center justify-center">
                   <div 
-                    className={`w-full h-full border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_10vh_rgba(0,0,0,0.5)] ${idx === 0 ? 'border-r-0' : 'border-l-0'}`} 
-                    style={{ backgroundColor: p.screenColor }}
+                    className={`border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_6vh_rgba(0,0,0,0.25)] ${idx === 0 ? 'border-r-0 ml-auto' : 'border-l-0 mr-auto'}`} 
+                    style={{ 
+                      backgroundColor: p.screenColor,
+                      width: '100%',
+                      height: '100%',
+                      aspectRatio: '1/1',
+                      maxHeight: '100%',
+                      maxWidth: '100%'
+                    }}
                   >
                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: p.screenStyle === 'speed' ? 'radial-gradient(#000 0.03rem, transparent 0.03rem)' : 'radial-gradient(#000 0.06rem, transparent 0.06rem)', backgroundSize: p.screenStyle === 'speed' ? '0.8vw 0.8vw' : '1.5vw 1.5vw' }} />
                     {/* Corner Pockets */}
@@ -3037,32 +3054,26 @@ export default function App() {
               )}
             </div>
           ))}
-        </div>
+        </motion.div>
         
         {/* Plain Background (Teams & Settings) */}
         <div className={`absolute inset-0 bg-black transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
         
         {/* Subtle Gradient Overlay for Plain Background */}
         <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
-      </div>
+      </motion.div>
 
       {/* Navigation Bar */}
         <motion.nav 
           initial={false}
           animate={{ 
-            y: (!deviceInfo.isDesktop && (
-              (!isNavVisible && deviceInfo.isPhone) || 
-              (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
-            )) ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
+            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) ? (deviceInfo.isPhone ? '-16vh' : (deviceInfo.isTablet ? '-8vh' : '-10vh')) : 0,
             opacity: 1
           }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
-          className="fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw]"
+          className="fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-2xl z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw] shadow-[0_4px_30px_rgba(0,0,0,0.5)] border-b border-white/5"
           style={{ 
-            borderBottom: '0.125rem solid',
-            borderImage: isLoaded ? `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` : 'none',
-            height: deviceInfo.isPhone ? '16vh' : '10vh',
-            borderColor: isLoaded ? 'transparent' : '#111'
+            height: deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')
           }}
         >
           <div className="flex items-center gap-[1vw] shrink-0">
@@ -3087,7 +3098,7 @@ export default function App() {
               className="w-auto overflow-visible"
             >
               <defs>
-                <linearGradient id="logo-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id="selected-player-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor={isLoaded ? player1.color : '#334155'} />
                   <stop offset="100%" stopColor={isLoaded ? player2.color : '#475569'} />
                 </linearGradient>
@@ -3095,7 +3106,7 @@ export default function App() {
                 <text 
                   x="0" 
                   y="32" 
-                  fill="url(#logo-grad-svg)" 
+                  fill="url(#selected-player-grad-svg)" 
                   style={{ 
                     fontFamily: 'Inter, sans-serif', 
                     fontWeight: 900, 
@@ -3113,16 +3124,16 @@ export default function App() {
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
           {!deviceInfo.shouldHideDeviceTime && (
             <div 
-              className="flex items-center justify-center px-4 bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
+              className="flex items-center justify-center px-4 bg-black/40 border border-white/10 backdrop-blur-md pointer-events-auto shadow-2xl"
               style={{ 
-                height: '9vh',
+                height: '8.5vh',
                 borderRadius: '1.5vh'
               }}
             >
               <span 
                 className="font-mono font-black text-white tracking-wider tabular-nums leading-none"
                 style={{
-                  fontSize: '6vh'
+                  fontSize: '5.5vh'
                 }}
               >
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -3131,89 +3142,93 @@ export default function App() {
           )}
         </div>
         
-        <div className="flex items-center gap-[1vw] shrink-0 ml-auto">
+        <div className="flex items-center gap-[1vw] shrink-0 ml-auto mr-[0.5vw]">
           <button 
             onClick={toggleFullscreen}
-            className="flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 active:scale-95"
+            className="group flex items-center justify-center transition-all duration-300 border border-white/10 bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative"
             style={{
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
               height: deviceInfo.isPhone ? '12.5vh' : '8vh',
               borderRadius: '1.5vh'
             }}
-            title="Toggle Fullscreen"
           >
+            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
             {isFullscreen ? 
               <Minimize 
+                className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '9vh' : '6vh',
+                  height: deviceInfo.isPhone ? '9vh' : '6vh'
                 }} 
               /> : 
               <Maximize 
+                className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '9vh' : '6vh',
+                  height: deviceInfo.isPhone ? '9vh' : '6vh'
                 }} 
               />
             }
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'scoreboard' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'scoreboard' ? `${player1.color}33` : undefined,
+              backgroundColor: view === 'scoreboard' ? `${player1.color}22` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
               height: deviceInfo.isPhone ? '12.5vh' : '8vh',
               borderRadius: '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'scoreboard' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
             <Trophy 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '9vh' : '6vh',
+                height: deviceInfo.isPhone ? '9vh' : '6vh'
               }} 
             />
           </button>
           <button 
-            onClick={() => {
-              navigateToView('teams');
-            }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            onClick={() => navigateToView('teams')}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'teams' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'teams' ? `${player1.color}33` : undefined,
+              backgroundColor: view === 'teams' ? `${player1.color}22` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
               height: deviceInfo.isPhone ? '12.5vh' : '8vh',
               borderRadius: '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'teams' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
             <Users 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '9vh' : '6vh',
+                height: deviceInfo.isPhone ? '9vh' : '6vh'
               }} 
             />
           </button>
           <button 
-            onClick={() => {
-              navigateToView('settings');
-            }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            onClick={() => navigateToView('settings')}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'settings' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'settings' ? `${player2.color}33` : undefined,
+              backgroundColor: view === 'settings' ? `${player2.color}22` : undefined,
               width: deviceInfo.isPhone ? '12.5vh' : '8vh',
               height: deviceInfo.isPhone ? '12.5vh' : '8vh',
               borderRadius: '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'settings' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player2.color }} />
             <Settings 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '9vh' : '6vh',
+                height: deviceInfo.isPhone ? '9vh' : '6vh'
               }} 
             />
           </button>
@@ -3408,14 +3423,12 @@ export default function App() {
       <motion.main 
         initial={false}
         animate={{ 
-          paddingTop: (view === 'teams' || view === 'settings')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 4vh)`
-            : (view === 'match-details'
-                ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 1vh)`
-                : (view === 'scoreboard' 
-                    ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
-                    : 0)),
-          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
+          paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
+            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + ${view === 'match-details' ? '1vh' : '4vh'})`
+            : (view === 'scoreboard' 
+                ? (isNavVisible ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) : 0)
+                : 0),
+          y: 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -3440,9 +3453,9 @@ export default function App() {
               <div 
                 className="fixed inset-x-0 flex justify-between px-[1vh] pointer-events-none z-50 transition-all duration-500"
                 style={{ 
-                  top: deviceInfo.isPhone 
-                    ? (isNavVisible ? '17vh' : '1vh') 
-                    : (deviceInfo.isTablet ? '9vh' : '11vh'),
+                  top: isNavVisible 
+                    ? (deviceInfo.isPhone ? '17vh' : (deviceInfo.isTablet ? '9vh' : '11vh'))
+                    : '1vh',
                 }}
               >
                 <button
@@ -3545,11 +3558,11 @@ export default function App() {
                             boxShadow: p.bgStyle === 'balls'
                               ? '0 1.5vh 3vh rgba(0,0,0,0.4)'
                               : `0 0 4vh -1.5vh ${p.color}66`,
-                            width: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '35vw',
+                            width: p.bgStyle === 'balls' ? 'min(38vw, 70vh)' : '38vw',
                             margin: '0 auto',
-                            height: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '65vh',
-                            maxHeight: '65vh',
-                            maxWidth: '35vw'
+                            height: p.bgStyle === 'balls' ? 'min(38vw, 70vh)' : '70vh',
+                            maxHeight: '70vh',
+                            maxWidth: '38vw'
                           }}
                         >
                           {/* Pool Ball Visual Elements - Only if Ball mode */}
@@ -3628,24 +3641,24 @@ export default function App() {
                               onChange={(e) => {
                                 const newName = e.target.value.toUpperCase();
                                 if (idx === 0) {
-                                  const pref = getPlayerPref(newName, 'p1') || SLOT1_DEFAULTS;
-                                  const update = {
+                                  const pref = getPlayerPref(newName, 'p1');
+                                  setPlayer1(prev => ({ 
+                                    ...prev, 
                                     name: newName,
-                                    ...pref
-                                  };
-                                  setPlayer1(prev => ({ ...prev, ...update }));
+                                    ...(pref || {}) 
+                                  }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team1Players];
                                     newPlayers[selectedMatchIndex] = newName;
                                     setTeam1Players(newPlayers);
                                   }
                                 } else {
-                                  const pref = getPlayerPref(newName, 'p2') || SLOT2_DEFAULTS;
-                                  const update = {
+                                  const pref = getPlayerPref(newName, 'p2');
+                                  setPlayer2(prev => ({ 
+                                    ...prev, 
                                     name: newName,
-                                    ...pref
-                                  };
-                                  setPlayer2(prev => ({ ...prev, ...update }));
+                                    ...(pref || {})
+                                  }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team2Players];
                                     newPlayers[selectedMatchIndex] = newName;
@@ -3874,12 +3887,17 @@ export default function App() {
                           setSinglesSetup(prev => ({ ...prev, p1Name: val }));
                           if (activeSetupTab === 'singles') {
                             setTeam1Players([val]);
-                            const prefs = getPlayerPref(val, 'p1') || SLOT1_DEFAULTS;
-                            setPlayer1(prev => ({ ...prev, name: val, ...prefs }));
+                            // Only load preferences if not empty and name is full (simple heuristic: don't load while typing short names unless explicitly desired)
+                            // Better: Only sync name, let preferences load on blur or focus gain if stable
+                            setPlayer1(prev => ({ ...prev, name: val }));
                           }
                         }}
                         onFocus={(e) => handleInputFocus(e, 'p1-singles')}
-                        onBlur={() => setFocusedField(null)}
+                        onBlur={() => {
+                          setFocusedField(null);
+                          const pref = getPlayerPref(singlesSetup.p1Name, 'p1');
+                          if (pref) setPlayer1(prev => ({ ...prev, ...pref }));
+                        }}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
                         style={{ 
                           ...teamEntryStyle, 
@@ -3898,12 +3916,15 @@ export default function App() {
                           setSinglesSetup(prev => ({ ...prev, p2Name: val }));
                           if (activeSetupTab === 'singles') {
                             setTeam2Players([val]);
-                            const prefs = getPlayerPref(val, 'p2') || SLOT2_DEFAULTS;
-                            setPlayer2(prev => ({ ...prev, name: val, ...prefs }));
+                            setPlayer2(prev => ({ ...prev, name: val }));
                           }
                         }}
                         onFocus={(e) => handleInputFocus(e, 'p2-singles')}
-                        onBlur={() => setFocusedField(null)}
+                        onBlur={() => {
+                          setFocusedField(null);
+                          const pref = getPlayerPref(singlesSetup.p2Name, 'p2');
+                          if (pref) setPlayer2(prev => ({ ...prev, ...pref }));
+                        }}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
                         style={{ 
                           ...teamEntryStyle, 
@@ -3994,7 +4015,15 @@ export default function App() {
                                   updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                                 }}
                                 onFocus={(e) => handleInputFocus(e, `p1-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
+                                onBlur={() => {
+                                  setFocusedField(null);
+                                  const pref = getPlayerPref(player, 'p1');
+                                  if (pref) {
+                                    // Normally we don't force load team members immediately to avoid confusion, 
+                                    // but we sync them to the card IF this is the active match
+                                    if (selectedMatchIndex === idx) setPlayer1(prev => ({ ...prev, ...pref }));
+                                  }
+                                }}
                                 className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
@@ -4112,7 +4141,13 @@ export default function App() {
                                   updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                                 }}
                                 onFocus={(e) => handleInputFocus(e, `p2-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
+                                onBlur={() => {
+                                  setFocusedField(null);
+                                  const pref = getPlayerPref(player, 'p2');
+                                  if (pref) {
+                                    if (selectedMatchIndex === idx) setPlayer2(prev => ({ ...prev, ...pref }));
+                                  }
+                                }}
                                 className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
@@ -4202,9 +4237,9 @@ export default function App() {
                     <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[300px]">
                       {/* Header Row */}
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
+                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
                         <div 
-                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
+                          className={`flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
                           onClick={() => {
                             if (activeSetupTab === 'match') {
                               setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
@@ -4214,9 +4249,9 @@ export default function App() {
                           <span>{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
                           {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
-                        <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                         <div 
-                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
+                          className={`flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
                           onClick={() => {
                             if (activeSetupTab === 'match') {
                               setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
@@ -4226,15 +4261,15 @@ export default function App() {
                           <span>{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
                           {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
-                        <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
-                        <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
-                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[15%] items-center">TIMERS</div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
+                        <div className="flex px-[1vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
+                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[15%] items-center">TIMERS</div>
                       </div>
 
                       {/* Body */}
                       <div className="flex flex-col">
                         {Math.max(team1Players.length, team2Players.length) === 0 ? (
-                          <div className="px-6 py-12 text-center text-slate-500 italic uppercase tracking-widest font-bold text-[2vw] sm:text-sm">Add players to generate matchups.</div>
+                          <div className="px-6 py-12 text-center text-slate-500 italic uppercase tracking-widest font-bold text-[3vw] sm:text-sm">Add players to generate matchups.</div>
                         ) : (
                           <>
                             {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
@@ -4297,8 +4332,8 @@ export default function App() {
                                   onClick={() => selectTeamMatch(idx)}
                                   className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                                 >
-                                  <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                  <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
                                     {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
                                       <div className="mr-2 shrink-0">
                                         <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
@@ -4307,21 +4342,21 @@ export default function App() {
                                     <div className="flex flex-col">
                                       {p1 && p1.includes('/') ? (
                                         <>
-                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs">{p1.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs mt-1 opacity-80">{p1.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none text-[2.5vw] sm:text-xs">{p1.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none text-[2.5vw] sm:text-xs mt-1 opacity-80">{p1.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
                                         <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
+                                  <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[2vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                                  <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
                                     <div className="flex flex-col">
                                       {p2 && p2.includes('/') ? (
                                         <>
-                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs">{p2.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none text-[1.8vw] sm:text-xs mt-1 opacity-80">{p2.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none text-[2.5vw] sm:text-xs">{p2.split('/')[0].trim()}</span>
+                                          <span className="truncate leading-none text-[2.5vw] sm:text-xs mt-1 opacity-80">{p2.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
                                         <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
@@ -4336,7 +4371,7 @@ export default function App() {
                                   <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
                                     {displayScore ? (
                                       <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
-                                        <span className={`text-[1.8vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
+                                        <span className={`text-[2.5vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
                                           displayScore.isLive 
                                             ? 'bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]' 
                                             : displayScore.winner === p1Name 
@@ -4350,10 +4385,10 @@ export default function App() {
                                             <span className="ml-1 text-[0.4rem] bg-blue-500/30 text-blue-300 px-1 rounded animate-pulse align-middle">LIVE</span>
                                           )}
                                         </span>
-                                        <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'ACTIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
+                                        <span className="text-[2vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'ACTIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-[1.8vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest">READY</span>
+                                      <span className="text-[2.5vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest">READY</span>
                                     )}
                                   </div>
                                   <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
@@ -4605,6 +4640,59 @@ export default function App() {
                   >
                     Colour Preferences
                   </h3>
+
+                  {/* Full Screen Backdrops Tile */}
+                  <div 
+                    className={`bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative transition-all duration-300 ${activePicker === 'fs-backdrop' ? 'z-[40] ring-4 ring-white/10' : 'z-10'}`} 
+                    style={{ borderColor: player1.color }}
+                  >
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Full Screen Backdrops</p>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between gap-[4vw]">
+                        <div className="flex-1">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Choose a high-resolution table backdrop for the entire interface.</p>
+                          <p className="text-slate-500 font-black uppercase tracking-[0.1em] text-left mt-2 text-[1.4vh] sm:text-[1.2vh] leading-relaxed">
+                            <span className="text-amber-500/80 mr-2">Note:</span>
+                            Individual background options are disabled when full screen background is enabled
+                          </p>
+                        </div>
+                        <div className="shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextValue = fullScreenBackdrop === 'none' ? 'black' : 'none';
+                              setFullScreenBackdrop(nextValue);
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative active:scale-95`}
+                            style={{ backgroundColor: fullScreenBackdrop !== 'none' ? player1.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${fullScreenBackdrop !== 'none' ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {fullScreenBackdrop !== 'none' && (
+                        <div className="flex justify-center pt-4 border-t border-white/5">
+                           <ColorPicker
+                             label="SELECT BACKDROP"
+                             value={fullScreenBackdrop}
+                             onChange={(val) => setFullScreenBackdrop(val)}
+                             colors={FULL_SCREEN_BACKDROPS.filter(b => b.value !== 'none')}
+                             icon={<Layout className="w-4 h-4" />}
+                             isOpen={activePicker === 'fs-backdrop'}
+                             onToggle={(isOpen) => setActivePicker(isOpen ? 'fs-backdrop' : null)}
+                             themeColor={player1.color}
+                             pickerStyle="backdrop"
+                             allowedStyles={['backdrop']}
+                           />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
                     {[player1, player2].map((p, idx) => (
                       <div 
@@ -4630,13 +4718,29 @@ export default function App() {
                         <input
                           type="text"
                           value={p.name}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            const pref = getPlayerPref(val, idx === 0 ? 'p1' : 'p2');
+                            if (idx === 0) {
+                              setPlayer1(prev => ({...prev, name: val, ...(pref || {})}));
+                              setSinglesSetup(prev => ({...prev, p1Name: val}));
+                            } else {
+                              setPlayer2(prev => ({...prev, name: val, ...(pref || {})}));
+                              setSinglesSetup(prev => ({...prev, p2Name: val}));
+                            }
+                          }}
+                          onBlur={() => {
+                            const pref = getPlayerPref(p.name, idx === 0 ? 'p1' : 'p2');
+                            if (pref) {
+                              if (idx === 0) setPlayer1(prev => ({...prev, ...pref}));
+                              else setPlayer2(prev => ({...prev, ...pref}));
+                            }
+                          }}
                           placeholder={`PLAYER ${idx + 1} NAME`}
-                          readOnly
-                          className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all cursor-not-allowed opacity-70"
+                          className="w-full bg-slate-950/30 border-2 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all shadow-inner"
                           style={{ 
-                            borderColor: 'transparent',
-                            outline: 'none',
-                            boxShadow: 'none'
+                            borderColor: p.color + '33',
+                            color: 'white'
                           }}
                         />
                         <div className="space-y-6">
@@ -4655,7 +4759,7 @@ export default function App() {
                            />
 
                           <ColorPicker
-                            label="Card Background"
+                            label="Card Style / Border"
                             value={p.bgColor}
                             onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, bgColor: color})) : setPlayer2(prev => ({...prev, bgColor: color}))}
                             colors={p.bgStyle === 'balls' ? POOL_BALLS : BACKGROUND_COLORS}
@@ -4681,6 +4785,7 @@ export default function App() {
                               pickerStyle={p.screenStyle || 'default'}
                               allowedStyles={['default', 'cloth', 'speed']}
                               onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, screenStyle: style})) : setPlayer2(prev => ({...prev, screenStyle: style}))}
+                              disabled={false}
                             />
                             {/* Screen Color Indicator Circle - 3rem (w-12 h-12) - Attached to Card Edge */}
                             <div 
@@ -5320,13 +5425,13 @@ export default function App() {
                       <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[400px]">
                         {/* Header Row */}
                         <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800/50">
-                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.6vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
+                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.2vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
                         </div>
 
                         {/* Body */}
