@@ -59,6 +59,45 @@ export default function App() {
   const [team2Name, setTeam2Name] = useState<string>('');
   const [team1Players, setTeam1Players] = useState<string[]>([]);
   const [team2Players, setTeam2Players] = useState<string[]>([]);
+  const [singlesSetup, setSinglesSetup] = useState({ 
+    p1Name: '', 
+    p2Name: '',
+    history: [] as MatchHistoryEntry[],
+    frameDetails: [] as FrameDetail[],
+    matchStartTime: null as string | null,
+    score1: 0,
+    score2: 0,
+    currentBreakPlayerId: 'none' as '1' | '2' | 'none',
+    breakBalls: [] as number[]
+  });
+  const [matchSetup, setMatchSetup] = useState({ 
+    t1Name: '', 
+    t2Name: '', 
+    t1Players: [] as string[], 
+    t2Players: [] as string[],
+    settings: {} as Record<number, MatchupSettings>,
+    selectedIndex: null as number | null,
+    history: [] as MatchHistoryEntry[],
+    frameDetails: [] as FrameDetail[],
+    matchStartTime: null as string | null,
+    score1: 0,
+    score2: 0,
+    currentBreakPlayerId: 'none' as '1' | '2' | 'none',
+    breakBalls: [] as number[]
+  });
+  const [groupSetup, setGroupSetup] = useState({ 
+    t1Players: [] as string[], 
+    t2Players: [] as string[],
+    settings: {} as Record<number, MatchupSettings>,
+    selectedIndex: null as number | null,
+    history: [] as MatchHistoryEntry[],
+    frameDetails: [] as FrameDetail[],
+    matchStartTime: null as string | null,
+    score1: 0,
+    score2: 0,
+    currentBreakPlayerId: 'none' as '1' | '2' | 'none',
+    breakBalls: [] as number[]
+  });
   const [matchHistory, setMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [currentMatchFrameDetails, setCurrentMatchFrameDetails] = useState<FrameDetail[]>([]);
   const [viewingMatchDetailsId, setViewingMatchDetailsId] = useState<string | null>(null);
@@ -67,6 +106,7 @@ export default function App() {
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [isSwitchingTab, setIsSwitchingTab] = useState(false);
   const prevNamesRef = useRef({ p1: player1.name, p2: player2.name });
   const [windowSize, setWindowSize] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -225,9 +265,14 @@ export default function App() {
     const targetWidth = cardWidth - cardPadding;
 
     const getFontSize = (name: string) => {
-      const len = Math.max(1, (name || "PLAYER").length);
+      const parts = (name || "").split(' / ');
+      const longestPart = parts.reduce((a, b) => a.length > b.length ? a : b, "");
+      const len = Math.max(1, (longestPart || "PLAYER").length);
       const scale = deviceInfo.isPhone ? 1.5 : 1.2;
-      return (targetWidth * scale) / len;
+      let fs = (targetWidth * scale) / len;
+      // If it's doubles, we need to scale down slightly for vertical space
+      if (parts.length > 1) fs *= 0.85;
+      return fs;
     };
 
     const fs1 = getFontSize(player1.name);
@@ -409,6 +454,7 @@ export default function App() {
       const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
       const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
       
+      // 1. If it's the currently active match, use the live scores directly from player state
       if (selectedMatchIndex === i) {
         t1 += player1.score;
         t2 += player2.score;
@@ -416,9 +462,11 @@ export default function App() {
         const settings = matchupSettings[i];
         const match = getMatchResult(p1Name, p2Name);
         
+        // 2. Use matchupSettings if available (which carries progress from the session)
         let m1 = settings?.score1 ?? 0;
         let m2 = settings?.score2 ?? 0;
         
+        // 3. If no matchupSettings scores, use history (for completed matches)
         if (m1 === 0 && m2 === 0 && match) {
           if (match.player1 === p1Name) {
             m1 = match.score1;
@@ -436,6 +484,35 @@ export default function App() {
     return { t1, t2 };
   }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score, matchupSettings]);
 
+  // --- Real-time Sync: Keep matchupSettings in sync with live cards for table updates ---
+  useEffect(() => {
+    if (isLoaded && selectedMatchIndex !== null && (activeSetupTab === 'match' || activeSetupTab === 'group')) {
+      setMatchupSettings(prev => {
+        const current = prev[selectedMatchIndex];
+        // Skip if nothing changed to prevent unnecessary re-renders
+        if (current && 
+            current.score1 === player1.score && 
+            current.score2 === player2.score &&
+            current.player1.name === player1.name &&
+            current.player2.name === player2.name) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [selectedMatchIndex]: {
+            ...current,
+            score1: player1.score,
+            score2: player2.score,
+            player1: { ...player1 },
+            player2: { ...player2 },
+            lastUpdated: Date.now()
+          }
+        };
+      });
+    }
+  }, [player1.score, player2.score, player1.name, player2.name, selectedMatchIndex, isLoaded, activeSetupTab]);
+
   // --- Initialization ---
   useEffect(() => {
     try {
@@ -447,40 +524,107 @@ export default function App() {
         return stateVal !== undefined ? stateVal : (localStorage.getItem(legacyKey) || undefined);
       };
 
-      // Load Team Data
+      // Load active tab
+      const loadedTab = state.activeSetupTab as SetupTab | undefined;
       const t1Name = getVal('team1Name', state.teamData?.team1Name, 'pool_team1_name');
       const t2Name = getVal('team2Name', state.teamData?.team2Name, 'pool_team2_name');
-      if (t1Name !== undefined) setTeam1Name(t1Name);
-      if (t2Name !== undefined) setTeam2Name(t2Name);
+      const t1PlayersLoaded = state.teamData?.team1Players || JSON.parse(localStorage.getItem('pool_team1_players') || 'null') || [];
+      const t2PlayersLoaded = state.teamData?.team2Players || JSON.parse(localStorage.getItem('pool_team2_players') || 'null') || [];
 
-      const t1Players = state.teamData?.team1Players || JSON.parse(localStorage.getItem('pool_team1_players') || 'null');
-      const t2Players = state.teamData?.team2Players || JSON.parse(localStorage.getItem('pool_team2_players') || 'null');
-      if (t1Players) setTeam1Players(t1Players);
-      if (t2Players) setTeam2Players(t2Players);
+      if (loadedTab) setActiveSetupTab(loadedTab);
 
-      // Load Game Data
-      const history = state.gameData?.matchHistory || JSON.parse(localStorage.getItem('pool_match_history') || 'null');
-      if (history) setMatchHistory(history);
-      
-      const selIndex = state.gameData?.selectedMatchIndex !== undefined ? state.gameData.selectedMatchIndex : null;
-      if (selIndex !== null) setSelectedMatchIndex(selIndex);
-      
+      // Load isolated setup buffers
+      if (state.singlesSetup) setSinglesSetup(state.singlesSetup);
+      if (state.matchSetup) setMatchSetup(state.matchSetup);
+      if (state.groupSetup) setGroupSetup(state.groupSetup);
+
+      // Initialize defaults for active players
+      let p1Name = 'PLAYER 1';
+      let p2Name = 'PLAYER 2';
+      let currentT1Name = t1Name || '';
+      let currentT2Name = t2Name || '';
+      let currentT1Players = t1PlayersLoaded;
+      let currentT2Players = t2PlayersLoaded;
+      let history = state.gameData?.matchHistory || JSON.parse(localStorage.getItem('pool_match_history') || 'null') || [];
+      let frameDetails = state.gameData?.currentMatchFrameDetails || [];
+      let selIndex = state.gameData?.selectedMatchIndex !== undefined ? state.gameData.selectedMatchIndex : null;
+
+      // Refine based on tab
+      if (loadedTab === 'match' && state.matchSetup) {
+        currentT1Name = state.matchSetup.t1Name || currentT1Name;
+        currentT2Name = state.matchSetup.t2Name || currentT2Name;
+        if (state.matchSetup.t1Players?.length > 0) currentT1Players = state.matchSetup.t1Players;
+        if (state.matchSetup.t2Players?.length > 0) currentT2Players = state.matchSetup.t2Players;
+        if (state.matchSetup.history?.length > 0) history = state.matchSetup.history;
+        if (state.matchSetup.frameDetails?.length > 0) frameDetails = state.matchSetup.frameDetails;
+        if (state.matchSetup.settings && Object.keys(state.matchSetup.settings).length > 0) {
+          setMatchupSettings(state.matchSetup.settings);
+        }
+        selIndex = state.matchSetup.selectedIndex;
+        if (selIndex !== null) {
+          p1Name = currentT1Players[selIndex] || 'PLAYER 1';
+          p2Name = currentT2Players[selIndex] || 'PLAYER 2';
+        }
+      } else if (loadedTab === 'group' && state.groupSetup) {
+        currentT1Name = '';
+        currentT2Name = '';
+        if (state.groupSetup.t1Players?.length > 0) currentT1Players = state.groupSetup.t1Players;
+        if (state.groupSetup.t2Players?.length > 0) currentT2Players = state.groupSetup.t2Players;
+        if (state.groupSetup.history?.length > 0) history = state.groupSetup.history;
+        if (state.groupSetup.frameDetails?.length > 0) frameDetails = state.groupSetup.frameDetails;
+        if (state.groupSetup.settings && Object.keys(state.groupSetup.settings).length > 0) {
+          setMatchupSettings(state.groupSetup.settings);
+        }
+        selIndex = state.groupSetup.selectedIndex;
+        if (selIndex !== null) {
+          p1Name = currentT1Players[selIndex] || 'PLAYER 1';
+          p2Name = currentT2Players[selIndex] || 'PLAYER 2';
+        }
+      } else if (loadedTab === 'singles' && state.singlesSetup) {
+        currentT1Name = '';
+        currentT2Name = '';
+        currentT1Players = [state.singlesSetup.p1Name || 'PLAYER 1'];
+        currentT2Players = [state.singlesSetup.p2Name || 'PLAYER 2'];
+        if (state.singlesSetup.history?.length > 0) history = state.singlesSetup.history;
+        if (state.singlesSetup.frameDetails?.length > 0) frameDetails = state.singlesSetup.frameDetails;
+        p1Name = state.singlesSetup.p1Name || 'PLAYER 1';
+        p2Name = state.singlesSetup.p2Name || 'PLAYER 2';
+        selIndex = 0;
+      }
+
+      // Apply states
+      setTeam1Name(currentT1Name);
+      setTeam2Name(currentT2Name);
+      setTeam1Players(currentT1Players);
+      setTeam2Players(currentT2Players);
+      setMatchHistory(history);
+      setCurrentMatchFrameDetails(frameDetails);
+      setSelectedMatchIndex(selIndex);
+
       if (state.gameData?.shotClock !== undefined) setShotClock(state.gameData.shotClock);
       if (state.gameData?.matchClock !== undefined) setMatchClock(state.gameData.matchClock);
       if (state.gameData?.matchStartTime !== undefined) setMatchStartTime(state.gameData.matchStartTime);
-      if (state.gameData?.currentMatchFrameDetails !== undefined) setCurrentMatchFrameDetails(state.gameData.currentMatchFrameDetails);
       if (state.gameData?.breakBalls !== undefined) setBreakBalls(state.gameData.breakBalls);
+      if (state.gameData?.matchModeBreakSide !== undefined) setMatchModeBreakSide(state.gameData.matchModeBreakSide);
       if (state.pairTrackerSettings) setPairTrackerSettings(state.pairTrackerSettings);
 
       // Load Other Data (Load preferences early so they can be applied to player objects)
       const loadedPrefs = state.playerPreferences || {};
       if (state.playerPreferences) setPlayerPreferences(state.playerPreferences);
-      if (state.matchupSettings) setMatchupSettings(state.matchupSettings);
+      
+      // Load matchup settings: priority to the global settings if tab-specific ones are missing or empty
+      const tabPrefix = loadedTab === 'match' ? 'match' : (loadedTab === 'group' ? 'group' : 'singles');
+      const tabSettings = state[`${tabPrefix}Setup`]?.settings;
+      if (tabSettings && Object.keys(tabSettings).length > 0) {
+        setMatchupSettings(tabSettings);
+      } else if (state.matchupSettings) {
+        setMatchupSettings(state.matchupSettings);
+      }
       if (state.apiConfig) setApiConfig(state.apiConfig);
 
       // Prepare Player Objects
-      let p1 = { ...player1 };
-      let p2 = { ...player2 };
+      let p1 = { ...player1, name: p1Name };
+      let p2 = { ...player2, name: p2Name };
 
       // Load Preferences onto Player Objects
       if (state.userPreferences) {
@@ -499,8 +643,7 @@ export default function App() {
         }
         
         if (state.userPreferences.currentBreakPlayerId !== undefined) {
-          const hasActiveScore = (state.gameData?.player1Score || 0) > 0 || (state.gameData?.player2Score || 0) > 0;
-          setCurrentBreakPlayerId(hasActiveScore ? state.userPreferences.currentBreakPlayerId : 'none');
+          setCurrentBreakPlayerId(state.userPreferences.currentBreakPlayerId || 'none');
         }
         
         if (state.userPreferences.player1) {
@@ -543,10 +686,10 @@ export default function App() {
       if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
 
       // Finalize loading after state updates
-      setIsLoaded(true);
+      setTimeout(() => setIsLoaded(true), 100);
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
-      setIsLoaded(true);
+      // Do not set isLoaded to true here to prevent wiping data with empty state
     }
   }, []);
 
@@ -562,19 +705,34 @@ export default function App() {
   const saveState = useCallback(() => {
     if (!isLoaded) return;
 
-    const stateToSave = {
-      teamData: { team1Name, team2Name, team1Players, team2Players },
-      gameData: { 
-        matchHistory, 
-        player1Score: player1.score, 
-        player2Score: player2.score, 
-        selectedMatchIndex, 
-        shotClock, 
-        matchClock,
-        matchStartTime,
-        currentMatchFrameDetails,
-        breakBalls
-      },
+      const currentData = {
+        history: matchHistory,
+        frameDetails: currentMatchFrameDetails,
+        matchStartTime: matchStartTime,
+        score1: player1.score,
+        score2: player2.score,
+        settings: matchupSettings,
+        selectedIndex: selectedMatchIndex
+      };
+
+      const stateToSave = {
+        activeSetupTab,
+        teamData: { team1Name, team2Name, team1Players, team2Players },
+        singlesSetup: (activeSetupTab === 'singles' && !isSwitchingTab) ? { ...singlesSetup, ...currentData, p1Name: player1.name, p2Name: player2.name } : singlesSetup,
+        matchSetup: (activeSetupTab === 'match' && !isSwitchingTab) ? { ...matchSetup, ...currentData, t1Name: team1Name, t2Name: team2Name, t1Players: [...team1Players], t2Players: [...team2Players] } : matchSetup,
+        groupSetup: (activeSetupTab === 'group' && !isSwitchingTab) ? { ...groupSetup, ...currentData, t1Players: [...team1Players], t2Players: [...team2Players] } : groupSetup,
+        gameData: { 
+          matchHistory, 
+          player1Score: player1.score, 
+          player2Score: player2.score, 
+          selectedMatchIndex, 
+          shotClock, 
+          matchClock,
+          matchStartTime,
+          currentMatchFrameDetails,
+          breakBalls,
+          matchModeBreakSide
+        },
       userPreferences: {
         player1: { 
           name: player1.name, 
@@ -620,10 +778,13 @@ export default function App() {
     localStorage.setItem('pool_app_state', JSON.stringify(stateToSave));
   }, [
     isLoaded,
+    activeSetupTab,
+    isSwitchingTab,
     team1Name, team2Name, team1Players, team2Players,
+    singlesSetup, matchSetup, groupSetup,
     matchHistory, player1, player2, selectedMatchIndex, shotClock, matchClock,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    isBreakTrackingEnabled, currentBreakPlayerId, matchStartTime, currentMatchFrameDetails,
+    isBreakTrackingEnabled, currentBreakPlayerId, matchModeBreakSide, matchStartTime, currentMatchFrameDetails,
     view, isNavVisible,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
     matchupSettings, playerPreferences, pairTrackerSettings, apiConfig
@@ -736,7 +897,7 @@ export default function App() {
 
   // Load from Pair Persistence when players change
   useEffect(() => {
-    if (!isLoaded || !pairKey) return;
+    if (!isLoaded || !pairKey || activeSetupTab !== 'singles') return;
     const saved = pairTrackerSettings[pairKey];
     if (saved) {
       setBreakBalls(saved.breakBalls);
@@ -746,11 +907,11 @@ export default function App() {
       setBreakBalls([]);
       setCurrentBreakPlayerId('none');
     }
-  }, [pairKey, isLoaded]);
+  }, [pairKey, isLoaded, activeSetupTab]);
 
   // Save to Pair Persistence when state changes
   useEffect(() => {
-    if (!isLoaded || !pairKey) return;
+    if (!isLoaded || !pairKey || activeSetupTab !== 'singles') return;
     
     // Only save if the values are actually different to avoid unnecessary state updates
     const current = pairTrackerSettings[pairKey];
@@ -762,7 +923,7 @@ export default function App() {
         [pairKey]: { breakBalls, currentBreakPlayerId }
       }));
     }
-  }, [breakBalls, currentBreakPlayerId, pairKey, isLoaded]);
+  }, [breakBalls, currentBreakPlayerId, pairKey, isLoaded, activeSetupTab]);
 
   // Load matchup settings when match index changes
   useEffect(() => {
@@ -792,6 +953,9 @@ export default function App() {
 
     if (settings.breakBalls) {
       setBreakBalls(settings.breakBalls);
+    }
+    if (settings.currentBreakPlayerId) {
+      setCurrentBreakPlayerId(settings.currentBreakPlayerId);
     }
   }, [selectedMatchIndex, isLoaded]); // Only run when match index changes
 
@@ -995,8 +1159,28 @@ export default function App() {
 
     if (playerId === '1') {
       setPlayer1(prev => ({ ...prev, score: prev.score + 1 }));
+      if (selectedMatchIndex !== null) {
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            ...prev[selectedMatchIndex],
+            score1: nextScore1,
+            player1: { ...player1, score: nextScore1 }
+          }
+        }));
+      }
     } else {
       setPlayer2(prev => ({ ...prev, score: prev.score + 1 }));
+      if (selectedMatchIndex !== null) {
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            ...prev[selectedMatchIndex],
+            score2: nextScore2,
+            player2: { ...player2, score: nextScore2 }
+          }
+        }));
+      }
     }
     
     if (!matchStartTime) {
@@ -1026,9 +1210,36 @@ export default function App() {
     });
 
     if (playerId === '1') {
-      setPlayer1(prev => ({ ...prev, score: Math.max(0, prev.score - 1) }));
+      const nextScore = Math.max(0, player1.score - 1);
+      setPlayer1(prev => ({ ...prev, score: nextScore }));
+      if (selectedMatchIndex !== null) {
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            ...prev[selectedMatchIndex],
+            score1: nextScore,
+            player1: { ...player1, score: nextScore }
+          }
+        }));
+      }
     } else {
-      setPlayer2(prev => ({ ...prev, score: Math.max(0, prev.score - 1) }));
+      const nextScore = Math.max(0, player2.score - 1);
+      setPlayer2(prev => ({ ...prev, score: nextScore }));
+      if (selectedMatchIndex !== null) {
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            ...prev[selectedMatchIndex],
+            score2: nextScore,
+            player2: { ...player2, score: nextScore }
+          }
+        }));
+      }
+    }
+
+    // Match Mode Alternating Break: Swap back when score is undone
+    if (isBreakTrackingEnabled && currentBreakPlayerId !== 'none') {
+      setCurrentBreakPlayerId(prev => prev === '1' ? '2' : '1');
     }
   };
 
@@ -1082,6 +1293,8 @@ export default function App() {
         // Reset game if no more matches
         setPlayer1(prev => ({ ...prev, score: 0 }));
         setPlayer2(prev => ({ ...prev, score: 0 }));
+        setCurrentBreakPlayerId('none');
+        setBreakBalls([]);
         setSelectedMatchIndex(null);
         resetTimer();
       }
@@ -1089,6 +1302,8 @@ export default function App() {
       // Reset game for non-team matches
       setPlayer1(prev => ({ ...prev, score: 0 }));
       setPlayer2(prev => ({ ...prev, score: 0 }));
+      setCurrentBreakPlayerId('none');
+      setBreakBalls([]);
       resetTimer();
     }
   };
@@ -1109,7 +1324,8 @@ export default function App() {
             ...next[index],
             score1: 0,
             score2: 0,
-            currentBreakPlayerId: 'none'
+            currentBreakPlayerId: 'none',
+            breakBalls: []
           };
         }
         return next;
@@ -1119,6 +1335,8 @@ export default function App() {
       if (selectedMatchIndex === index) {
         setPlayer1(prev => ({ ...prev, score: 0 }));
         setPlayer2(prev => ({ ...prev, score: 0 }));
+        setCurrentBreakPlayerId('none'); // Ensure Ready State
+        setBreakBalls([]);
         setCurrentMatchFrameDetails([]);
         setMatchStartTime(null);
       }
@@ -1175,9 +1393,22 @@ export default function App() {
     
     setSelectedMatchIndex(index);
     
-    // Match Mode Alternating Break Logic
+    // Match Mode Alternating Break Logic: Flip team side every time pairs change
     if (activeSetupTab === 'match') {
-      setCurrentBreakPlayerId(matchModeBreakSide);
+      const nextSide = (matchModeBreakSide === 'none' || matchModeBreakSide === '2') ? '1' : '2';
+      setMatchModeBreakSide(nextSide);
+      
+      // If the match already has a breaker decided (saved in settings), use it.
+      // Otherwise, start in 'none' (Ready state) for fresh matches.
+      const hasData = (p1Score > 0 || p2Score > 0);
+      if (settings?.currentBreakPlayerId && settings.currentBreakPlayerId !== 'none') {
+        setCurrentBreakPlayerId(settings.currentBreakPlayerId);
+      } else if (!hasData) {
+        setCurrentBreakPlayerId('none');
+      } else {
+        // Fallback for matches with data but no clear breaker: use the alternating side
+        setCurrentBreakPlayerId(nextSide);
+      }
     } else {
       setCurrentBreakPlayerId(settings?.currentBreakPlayerId || 'none');
     }
@@ -1243,50 +1474,62 @@ export default function App() {
     setTeam1Players([]);
     setTeam2Players([]);
     
-    // Clear Game Data
-    setPlayer1(prev => ({ 
-      ...prev, 
-      name: '', 
-      score: 0, 
-      isTurn: true,
-      color: '#FFFF33',
-      bgColor: '#000000',
-      screenColor: '#000000',
-      bgStyle: 'default',
-      screenStyle: 'default'
-    }));
-    setPlayer2(prev => ({ 
-      ...prev, 
-      name: '', 
-      score: 0, 
-      isTurn: false,
-      color: '#FF001C',
-      bgColor: '#000000',
-      screenColor: '#000000',
-      bgStyle: 'default',
-      screenStyle: 'default'
-    }));
+    // Clear isolated setup buffers
+    setSinglesSetup({ 
+      p1Name: '', 
+      p2Name: '', 
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0, 
+      currentBreakPlayerId: 'none', 
+      breakBalls: [] 
+    });
+    setMatchSetup({ 
+      t1Name: '', 
+      t2Name: '', 
+      t1Players: [], 
+      t2Players: [], 
+      settings: {}, 
+      selectedIndex: null,
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: []
+    });
+    setGroupSetup({ 
+      t1Players: [], 
+      t2Players: [], 
+      settings: {}, 
+      selectedIndex: null,
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: []
+    });
+    
+    // Clear Session State
     setMatchHistory([]);
     setMatchupSettings({});
     setSelectedMatchIndex(null);
     setCurrentBreakPlayerId('none');
+    setBreakBalls([]);
+    setMatchModeBreakSide('none'); // Important: Reset session break tracker
     setShotClock(shotClockDuration);
     setMatchClock(matchClockDuration);
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     setIsEditingNames(false);
 
-    // Clear legacy keys too
-    localStorage.removeItem('pool_team1_name');
-    localStorage.removeItem('pool_team2_name');
-    localStorage.removeItem('pool_team1_players');
-    localStorage.removeItem('pool_team2_players');
-    localStorage.removeItem('pool_match_history');
-    localStorage.removeItem('pool_app_state'); 
-    localStorage.removeItem('pool_player_prefs');
-    
-    // Reset player objects to initial defaults beyond just name
-    setPlayer1({ 
+    // Reset player objects to initial defaults
+    const initialP1 = { 
       id: '1', 
       name: '', 
       score: 0, 
@@ -1295,9 +1538,10 @@ export default function App() {
       bgColor: '#000000', 
       screenColor: '#000000', 
       bgStyle: 'default', 
-      screenStyle: 'default' 
-    });
-    setPlayer2({ 
+      screenStyle: 'default',
+      isDoubles: false
+    };
+    const initialP2 = { 
       id: '2', 
       name: '', 
       score: 0, 
@@ -1306,18 +1550,11 @@ export default function App() {
       bgColor: '#000000', 
       screenColor: '#000000', 
       bgStyle: 'default', 
-      screenStyle: 'default' 
-    });
-    
-    setMatchHistory([]);
-    setMatchupSettings({});
-    setSelectedMatchIndex(null);
-    setCurrentBreakPlayerId('none');
-    setShotClock(shotClockDuration);
-    setMatchClock(matchClockDuration);
-    setCurrentMatchFrameDetails([]);
-    setMatchStartTime(null);
-    setIsEditingNames(false);
+      screenStyle: 'default',
+      isDoubles: false
+    };
+    setPlayer1(initialP1);
+    setPlayer2(initialP2);
 
     // Completely purge storage to prevent any lingering state restoration
     localStorage.removeItem('pool_app_state'); 
@@ -1337,17 +1574,53 @@ export default function App() {
     t2Name: string, 
     t2Players: string[]
   ) => {
+    // Basic guards
+    if (!Array.isArray(t1Players) || !Array.isArray(t2Players)) return;
+
     setTeam1Name(t1Name);
-    setTeam1Players(t1Players);
+    setTeam1Players([...t1Players]);
     setTeam2Name(t2Name);
-    setTeam2Players(t2Players);
+    setTeam2Players([...t2Players]);
+
+    const currentData = {
+      history: matchHistory,
+      frameDetails: currentMatchFrameDetails,
+      matchStartTime: matchStartTime,
+      score1: player1.score,
+      score2: player2.score,
+      settings: { ...matchupSettings },
+      selectedIndex: selectedMatchIndex
+    };
+
+    // Sync buffers
+    if (activeSetupTab === 'match' && !isSwitchingTab) {
+      setMatchSetup(prev => ({ 
+        ...prev, 
+        t1Name, t2Name, t1Players: [...t1Players], t2Players: [...t2Players],
+        ...currentData
+      }));
+    } else if (activeSetupTab === 'group' && !isSwitchingTab) {
+      setGroupSetup(prev => ({ 
+        ...prev, 
+        t1Players: [...t1Players], t2Players: [...t2Players],
+        ...currentData
+      }));
+    } else if (activeSetupTab === 'singles' && !isSwitchingTab) {
+      setSinglesSetup(prev => ({
+        ...prev,
+        p1Name: t1Players[0] || '',
+        p2Name: t2Players[0] || '',
+        ...currentData
+      }));
+    }
 
     // Sync active player names if a match is selected
     if (selectedMatchIndex !== null) {
       const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      
       setPlayer1(prev => {
-        const pref = playerPreferences[p1];
+        const pref = p1 ? playerPreferences[p1] : null;
         return {
           ...prev,
           name: p1,
@@ -1359,7 +1632,7 @@ export default function App() {
         };
       });
       setPlayer2(prev => {
-        const pref = playerPreferences[p2];
+        const pref = p2 ? playerPreferences[p2] : null;
         return {
           ...prev,
           name: p2,
@@ -1376,6 +1649,131 @@ export default function App() {
   const handleAddDoubles = (team: 1 | 2) => {
     setDoublesSelection([]);
     setShowDoublesPicker({ team, isOpen: true });
+  };
+
+  const handleTabSwitch = (newTab: SetupTab) => {
+    if (newTab === activeSetupTab) return;
+    
+    // Set transition guard to prevent saveState from scrambling data during the multi-variable swap
+    setIsSwitchingTab(true);
+    
+    // 1. Save data from the tab we are LEAVING
+    const currentData = {
+      history: matchHistory,
+      frameDetails: currentMatchFrameDetails,
+      matchStartTime: matchStartTime,
+      score1: player1.score,
+      score2: player2.score,
+      currentBreakPlayerId: currentBreakPlayerId,
+      breakBalls: [...breakBalls],
+      settings: { ...matchupSettings },
+      selectedIndex: selectedMatchIndex
+    };
+
+    if (activeSetupTab === 'match') {
+      setMatchSetup(prev => ({ 
+        ...prev,
+        t1Name: team1Name, 
+        t2Name: team2Name, 
+        t1Players: [...team1Players], 
+        t2Players: [...team2Players],
+        ...currentData
+      }));
+    } else if (activeSetupTab === 'group') {
+      setGroupSetup(prev => ({ 
+        ...prev,
+        t1Players: [...team1Players], 
+        t2Players: [...team2Players],
+        ...currentData
+      }));
+    } else if (activeSetupTab === 'singles') {
+      setSinglesSetup(prev => ({ 
+        ...prev,
+        p1Name: player1.name,
+        p2Name: player2.name,
+        ...currentData
+      }));
+    }
+
+    // 2. Load data for the tab we are ENTERING
+    let nextHistory: MatchHistoryEntry[] = [];
+    let nextFrameDetails: FrameDetail[] = [];
+    let nextStartTime: string | null = null;
+    let nextScore1 = 0;
+    let nextScore2 = 0;
+
+    if (newTab === 'singles') {
+      nextHistory = singlesSetup.history;
+      nextFrameDetails = singlesSetup.frameDetails;
+      nextStartTime = singlesSetup.matchStartTime;
+      nextScore1 = singlesSetup.score1;
+      nextScore2 = singlesSetup.score2;
+      
+      setTeam1Name('');
+      setTeam2Name('');
+      setTeam1Players([singlesSetup.p1Name]);
+      setTeam2Players([singlesSetup.p2Name]);
+      setMatchupSettings({});
+      setSelectedMatchIndex(0);
+
+      setPlayer1(prev => ({ ...prev, name: singlesSetup.p1Name, score: nextScore1 }));
+      setPlayer2(prev => ({ ...prev, name: singlesSetup.p2Name, score: nextScore2 }));
+      setCurrentBreakPlayerId(singlesSetup.currentBreakPlayerId);
+      setBreakBalls(singlesSetup.breakBalls);
+    } else if (newTab === 'match') {
+      setTeam1Name(matchSetup.t1Name);
+      setTeam2Name(matchSetup.t2Name);
+      setTeam1Players([...matchSetup.t1Players]);
+      setTeam2Players([...matchSetup.t2Players]);
+      setMatchupSettings({ ...matchSetup.settings });
+      setSelectedMatchIndex(matchSetup.selectedIndex);
+      nextHistory = matchSetup.history;
+      nextFrameDetails = matchSetup.frameDetails;
+      nextStartTime = matchSetup.matchStartTime;
+      nextScore1 = matchSetup.score1;
+      nextScore2 = matchSetup.score2;
+      
+      if (matchSetup.selectedIndex !== null) {
+        const p1 = matchSetup.t1Players[matchSetup.selectedIndex] || `PLAYER ${matchSetup.selectedIndex + 1}`;
+        const p2 = matchSetup.t2Players[matchSetup.selectedIndex] || `PLAYER ${matchSetup.selectedIndex + 1}`;
+        setPlayer1(prev => ({ ...prev, name: p1, score: nextScore1 }));
+        setPlayer2(prev => ({ ...prev, name: p2, score: nextScore2 }));
+      }
+      setCurrentBreakPlayerId(matchSetup.currentBreakPlayerId);
+      setBreakBalls(matchSetup.breakBalls);
+    } else if (newTab === 'group') {
+      setTeam1Name('');
+      setTeam2Name('');
+      setTeam1Players([...groupSetup.t1Players]);
+      setTeam2Players([...groupSetup.t2Players]);
+      setMatchupSettings({ ...groupSetup.settings });
+      setSelectedMatchIndex(groupSetup.selectedIndex);
+      nextHistory = groupSetup.history;
+      nextFrameDetails = groupSetup.frameDetails;
+      nextStartTime = groupSetup.matchStartTime;
+      nextScore1 = groupSetup.score1;
+      nextScore2 = groupSetup.score2;
+
+      if (groupSetup.selectedIndex !== null) {
+        const p1 = groupSetup.t1Players[groupSetup.selectedIndex] || `PLAYER ${groupSetup.selectedIndex + 1}`;
+        const p2 = groupSetup.t2Players[groupSetup.selectedIndex] || `PLAYER ${groupSetup.selectedIndex + 1}`;
+        setPlayer1(prev => ({ ...prev, name: p1, score: nextScore1 }));
+        setPlayer2(prev => ({ ...prev, name: p2, score: nextScore2 }));
+      }
+      setCurrentBreakPlayerId(groupSetup.currentBreakPlayerId);
+      setBreakBalls(groupSetup.breakBalls);
+    }
+    
+    setMatchHistory(nextHistory);
+    setCurrentMatchFrameDetails(nextFrameDetails);
+    setMatchStartTime(nextStartTime);
+
+    setActiveSetupTab(newTab);
+    
+    // Release guard after a short delay to ensure state updates have settled
+    setTimeout(() => {
+      setIsSwitchingTab(false);
+    }, 50);
   };
 
   const confirmDoubles = (team: 1 | 2) => {
@@ -1418,7 +1816,7 @@ export default function App() {
       {(['singles', 'group', 'match'] as SetupTab[]).map(tab => (
         <button
           key={tab}
-          onClick={() => setActiveSetupTab(tab)}
+          onClick={() => handleTabSwitch(tab)}
           className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${
             activeSetupTab === tab 
               ? 'bg-white text-slate-950 scale-105 shadow-lg' 
@@ -1426,7 +1824,7 @@ export default function App() {
           }`}
           style={activeSetupTab === tab ? { backgroundColor: player1.color } : {}}
         >
-          {tab === 'group' ? 'Group Practise' : tab}
+          {tab === 'group' ? 'Group Session' : tab}
         </button>
       ))}
     </div>
@@ -2936,41 +3334,57 @@ export default function App() {
                             />
                             </div>
                           ) : (
-                             p.name && (
-                               <div className={`absolute left-0 right-0 flex justify-center pointer-events-none z-10 ${p.bgStyle === 'balls' ? 'inset-x-0 bottom-0 top-[-0.5vh] pt-0' : 'top-[2.5vh]'}`}>
-                                 {p.bgStyle === 'balls' ? (
-                                   <div id={`ball-name-container-${p.id}`} className="w-full aspect-square relative overflow-visible">
-                                    <svg id={`ball-name-svg-${p.id}`} viewBox="0 0 200 200" className="w-full h-full overflow-visible">
-                                      <defs>
-                                        <path id={`curve-${p.id}`} d="M 20,100 A 80,80 0 0 1 180,100" />
-                                      </defs>
-                                      <text 
-                                        className="font-bold fill-current uppercase tracking-wider" 
-                                        style={{ 
-                                          color: p.color,
-                                          filter: 'drop-shadow(0 0.8vh 1.2vh rgba(0,0,0,0.8))'
-                                        }}
-                                        fontSize="18"
-                                      >
-                                        <textPath href={`#curve-${p.id}`} startOffset="50%" textAnchor="middle">
-                                          {p.name}
-                                        </textPath>
-                                      </text>
-                                    </svg>
-                                  </div>
-                                ) : (
-                                <h2 
-                                  className="font-bold uppercase w-full text-center whitespace-nowrap leading-none m-0 p-0" 
-                                  style={{ 
-                                    color: p.color,
-                                    fontSize: sharedPlayerNameFontSize
-                                  }}
-                                >
-                                  {p.name}
-                                </h2>
-                              )}
-                            </div>
-                          )
+                             p.name && (() => {
+                               const nameParts = p.name.split(' / ');
+                               const displayNames = nameParts.length > 1 
+                                 ? [...nameParts].sort((a, b) => b.length - a.length)
+                                 : nameParts;
+                               
+                               return (
+                                 <div className={`absolute left-0 right-0 flex justify-center pointer-events-none z-10 ${p.bgStyle === 'balls' ? 'inset-x-0 bottom-0 top-[-0.5vh] pt-0' : 'top-[2.5vh]'}`}>
+                                   {p.bgStyle === 'balls' ? (
+                                     <div id={`ball-name-container-${p.id}`} className="w-full aspect-square relative overflow-visible">
+                                      <svg id={`ball-name-svg-${p.id}`} viewBox="0 0 200 200" className="w-full h-full overflow-visible">
+                                        <defs>
+                                          <path id={`curve-${p.id}`} d="M 20,100 A 80,80 0 0 1 180,100" />
+                                        </defs>
+                                        {displayNames.map((name, nIdx) => (
+                                          <text 
+                                            key={nIdx}
+                                            className="font-bold fill-current uppercase tracking-wider" 
+                                            style={{ 
+                                              color: p.color,
+                                              filter: 'drop-shadow(0 0.8vh 1.2vh rgba(0,0,0,0.8))'
+                                            }}
+                                            fontSize={displayNames.length > 1 ? "14" : "18"}
+                                            dy={displayNames.length > 1 ? (nIdx === 0 ? "-6" : "12") : "0"}
+                                          >
+                                            <textPath href={`#curve-${p.id}`} startOffset="50%" textAnchor="middle">
+                                              {name}
+                                            </textPath>
+                                          </text>
+                                        ))}
+                                      </svg>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-center w-full leading-[0.85] gap-0">
+                                      {displayNames.map((name, nIdx) => (
+                                        <h2 
+                                          key={nIdx}
+                                          className="font-bold uppercase w-full text-center whitespace-nowrap m-0 p-0" 
+                                          style={{ 
+                                            color: p.color,
+                                            fontSize: displayNames.length > 1 ? `calc(${sharedPlayerNameFontSize} * 0.9)` : sharedPlayerNameFontSize
+                                          }}
+                                        >
+                                          {name}
+                                        </h2>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                               );
+                             })()
                           )}
 
                           <div className={`flex items-center justify-center w-full min-h-0 ${p.bgStyle === 'balls' ? 'absolute inset-0' : ''}`}>
@@ -3102,8 +3516,15 @@ export default function App() {
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player1.color }}>Player 1</label>
                       <input 
-                        value={player1.name} 
-                        onChange={(e) => setPlayer1(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                        value={singlesSetup.p1Name} 
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setSinglesSetup(prev => ({ ...prev, p1Name: val }));
+                          if (activeSetupTab === 'singles') {
+                            setTeam1Players([val]);
+                            setPlayer1(prev => ({ ...prev, name: val }));
+                          }
+                        }}
                         onFocus={(e) => handleInputFocus(e, 'p1-singles')}
                         onBlur={() => setFocusedField(null)}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
@@ -3118,8 +3539,15 @@ export default function App() {
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player2.color }}>Player 2</label>
                       <input 
-                        value={player2.name} 
-                        onChange={(e) => setPlayer2(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                        value={singlesSetup.p2Name} 
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setSinglesSetup(prev => ({ ...prev, p2Name: val }));
+                          if (activeSetupTab === 'singles') {
+                            setTeam2Players([val]);
+                            setPlayer2(prev => ({ ...prev, name: val }));
+                          }
+                        }}
                         onFocus={(e) => handleInputFocus(e, 'p2-singles')}
                         onBlur={() => setFocusedField(null)}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
@@ -3135,6 +3563,8 @@ export default function App() {
                   <div className="flex justify-center">
                     <button 
                       onClick={() => {
+                        setPlayer1(prev => ({ ...prev, name: singlesSetup.p1Name || 'PLAYER 1', score: 0 }));
+                        setPlayer2(prev => ({ ...prev, name: singlesSetup.p2Name || 'PLAYER 2', score: 0 }));
                         setSelectedMatchIndex(null);
                         setView('scoreboard');
                       }}
@@ -3405,11 +3835,11 @@ export default function App() {
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
                         <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {activeSetupTab === 'group' ? 'PLAYER A' : (team1Name || 'TEAM A')}
+                          {activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}
                         </div>
                         <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-white w-[27%] sm:w-[22%] items-center truncate">
-                          {activeSetupTab === 'group' ? 'PLAYER B' : (team2Name || 'TEAM B')}
+                          {activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}
                         </div>
                         <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
                         <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
@@ -3423,15 +3853,12 @@ export default function App() {
                         ) : (
                           <>
                             {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
-                              // In non-match modes, only show the selected pair to avoid overwhelming the user
-                              // If no match is selected, show all to allow selection
-                              if (activeSetupTab !== 'match' && selectedMatchIndex !== null && selectedMatchIndex !== idx) return null;
+                              // In singles mode, only show the active selection
+                              if (activeSetupTab === 'singles' && selectedMatchIndex !== null && selectedMatchIndex !== idx) return null;
                               
                               const p1 = team1Players[idx];
                               const p2 = team2Players[idx];
                               
-                              if (!p1 && !p2) return null;
-
                               const p1Name = p1 || `PLAYER ${idx + 1}`;
                               const p2Name = p2 || `PLAYER ${idx + 1}`;
                               const matchup = matchupSettings[idx];
@@ -3439,33 +3866,48 @@ export default function App() {
                               
                               let displayScore: { score1: number, score2: number, isLive: boolean, date?: string, winner?: string } | null = null;
                               
-                              if (selectedMatchIndex === idx) {
+                              // Priority 1: Current active match row (uses card scores)
+                              if (selectedMatchIndex === idx && (activeSetupTab === 'match' || activeSetupTab === 'group')) {
                                 displayScore = { 
                                   score1: player1.score, 
                                   score2: player2.score, 
                                   isLive: true 
                                 };
-                              } else if (matchup?.score1 !== undefined || matchup?.score2 !== undefined) {
+                              } 
+                              // Priority 2: Session progress in matchups (includes live sync)
+                              else if (matchup && (matchup.score1 > 0 || matchup.score2 > 0)) {
                                 displayScore = { 
-                                  score1: matchup.score1 || 0, 
-                                  score2: matchup.score2 || 0, 
+                                  score1: matchup.score1, 
+                                  score2: matchup.score2, 
                                   isLive: true 
                                 };
-                              } else if (lastMatch) {
-                                displayScore = { 
-                                  score1: lastMatch.score1,
-                                  score2: lastMatch.score2,
-                                  isLive: false,
-                                  date: lastMatch.date,
-                                  winner: lastMatch.winner
-                                };
+                              } 
+                              // Priority 3: Historical data for this pair
+                              else if (lastMatch) {
+                                if (lastMatch.player1 === p1Name) {
+                                  displayScore = { 
+                                    score1: lastMatch.score1,
+                                    score2: lastMatch.score2,
+                                    isLive: false,
+                                    date: lastMatch.date,
+                                    winner: lastMatch.winner
+                                  };
+                                } else {
+                                  displayScore = { 
+                                    score1: lastMatch.score2,
+                                    score2: lastMatch.score1,
+                                    isLive: false,
+                                    date: lastMatch.date,
+                                    winner: lastMatch.winner
+                                  };
+                                }
                               }
                               
                               return (
                                 <div 
                                   key={idx} 
                                   onClick={() => selectTeamMatch(idx)}
-                                  className={`group flex items-center cursor-pointer transition-colors border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
+                                  className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                                 >
                                   <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
                                   <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
@@ -3473,10 +3915,10 @@ export default function App() {
                                       {matchup?.isDoubles && p1 && p1.includes('/') ? (
                                         <>
                                           <span className="truncate leading-none">{p1.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1 opacity-60 text-[0.8em]">{p1.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none mt-1">{p1.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
-                                        <span className="truncate">{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
                                       )}
                                     </div>
                                   </div>
@@ -3486,19 +3928,19 @@ export default function App() {
                                       {matchup?.isDoubles && p2 && p2.includes('/') ? (
                                         <>
                                           <span className="truncate leading-none">{p2.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1 opacity-60 text-[0.8em]">{p2.split('/')[1].trim()}</span>
+                                          <span className="truncate leading-none mt-1">{p2.split('/')[1].trim()}</span>
                                         </>
                                       ) : (
-                                        <span className="truncate">{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
                                       )}
                                     </div>
                                   </div>
                                   <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
                                     {displayScore ? (
                                       <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
-                                        <span className={`text-[1.8vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap ${
+                                        <span className={`text-[1.8vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
                                           displayScore.isLive 
-                                            ? 'bg-blue-500/20 text-blue-400' 
+                                            ? 'bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]' 
                                             : displayScore.winner === p1Name 
                                               ? 'bg-emerald-500/20 text-emerald-400' 
                                               : displayScore.winner === p2Name
@@ -3506,11 +3948,14 @@ export default function App() {
                                                 : 'bg-slate-800 text-slate-400'
                                         }`}>
                                           {displayScore.score1}-{displayScore.score2}
+                                          {displayScore.isLive && selectedMatchIndex === idx && (
+                                            <span className="ml-1 text-[0.4rem] bg-blue-500/30 text-blue-300 px-1 rounded animate-pulse align-middle">LIVE</span>
+                                          )}
                                         </span>
-                                        <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'LIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
+                                        <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'ACTIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-[1.8vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase">NONE</span>
+                                      <span className="text-[1.8vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest">READY</span>
                                     )}
                                   </div>
                                   <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
@@ -4766,6 +5211,7 @@ export default function App() {
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
                       setCurrentBreakPlayerId('none');
+                      setBreakBalls([]);
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
