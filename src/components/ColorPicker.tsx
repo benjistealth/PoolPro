@@ -146,11 +146,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               scale: isMobile && pickerStyle === 'default' ? 1.5 : 1 
             }}
             exit={{ opacity: 0, y: 10, scale: isMobile && pickerStyle === 'default' ? 1.4 : 0.95 }}
-            className={`absolute left-1/2 -translate-x-1/2 top-full mt-[1vh] z-[110] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top
-              ${pickerStyle === 'backdrop' ? 'w-[75vw] sm:w-[60vw]' : 'left-0 right-0 px-[4%]'}
+            className={`absolute top-full mt-[1vh] z-[110] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top
+              ${pickerStyle === 'backdrop' ? 'w-[75vw] sm:w-[60vw] left-1/2 -translate-x-1/2' : 'inset-x-0'}
               ${pickerStyle === 'default' 
-                ? 'py-[2.5vh] gap-[1vh] px-[4%]' 
-                : pickerStyle === 'backdrop' ? 'pt-[1vh] pb-[2.5vh] gap-[1vh] px-[2%]' : 'pt-[1.5vh] pb-[4.5vh] gap-[1.5vh] sm:pt-[2.5vh] sm:pb-[5.5vh] px-[4%]' 
+                ? 'py-[2.5vh] gap-[1vh] px-[6%]' 
+                : pickerStyle === 'backdrop' ? 'pt-[1vh] pb-[2.5vh] gap-[1vh] px-[2%]' : 'pt-[1.5vh] pb-[4.5vh] gap-[1.5vh] sm:pt-[2.5vh] sm:pb-[5.5vh] px-[6%]' 
               }`}
             style={{ 
               borderColor: (themeColor || '#10b981') + '33'
