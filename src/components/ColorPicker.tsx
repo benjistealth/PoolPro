@@ -93,6 +93,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
   return (
     <div className={`relative w-full ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`} ref={containerRef}>
+      {pickerStyle === 'backdrop' && (
+        <p className="font-bold uppercase tracking-wider text-slate-500 text-[4vh] mb-[2vh] ml-[1vh]">{label}</p>
+      )}
       <div className="flex items-center justify-between p-[2vh] bg-slate-950/30 rounded-xl border transition-all cursor-pointer group active:scale-[0.98] w-full"
            style={{ 
              borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
@@ -104,7 +107,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             {icon}
           </div>
           <div>
-            <p className="text-[2vh] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+            {pickerStyle !== 'backdrop' && (
+              <p className="font-bold uppercase tracking-wider text-slate-500 text-[2vh]">{label}</p>
+            )}
             <div className="flex items-center gap-[0.5vw] h-[6vh]">
               {(pickerStyle === 'balls' || pickerStyle === 'backdrop') && colors.find(c => c.value.toLowerCase() === value.toLowerCase())?.thumbnail ? (
                 <div className={`${pickerStyle === 'backdrop' ? 'w-[8vw] sm:w-[6vw]' : 'w-[8vw] sm:w-[5vw]'} h-[6vw] sm:h-[4vw] rounded-lg overflow-hidden border border-white/10 shadow-lg`}>

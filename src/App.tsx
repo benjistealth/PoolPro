@@ -1116,6 +1116,46 @@ export default function App() {
     }
   }, [view, selectedMatchIndex, team1Players, team2Players]); // Removed playerPreferences to prevent feedback loop
 
+  // --- Sound Logic ---
+  const playBeep = useCallback((freq: number, volume = 0.025) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      
+      const audioCtx = new AudioCtx();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      
+      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch (e) {
+      // Audio context might be blocked by browser policy until interaction
+    }
+  }, []);
+
+  // Beeps for shot clock (Higher tone: 880Hz)
+  useEffect(() => {
+    if (isTimerRunning && isShotClockEnabled && shotClock <= 5 && shotClock > 0) {
+      playBeep(880);
+    }
+  }, [shotClock, isTimerRunning, isShotClockEnabled, playBeep]);
+
+  // Beeps for match clock (Lower tone: 440Hz)
+  useEffect(() => {
+    if (isTimerRunning && isMatchClockEnabled && matchClock <= 5 && matchClock > 0) {
+      playBeep(440);
+    }
+  }, [matchClock, isTimerRunning, isMatchClockEnabled, playBeep]);
+
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
