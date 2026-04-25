@@ -3564,7 +3564,7 @@ export default function App() {
                 </div>
 
                 {/* Score Cards Grid */}
-                <div className="relative flex items-center justify-center w-full py-2">
+                <div className="relative flex items-center justify-center w-full py-0" style={{ transform: 'translateY(-1vh)' }}>
 
                 <div 
                   className="flex items-center justify-center w-full"
