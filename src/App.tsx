@@ -2126,19 +2126,19 @@ export default function App() {
 
   // --- Rendering Helpers ---
   const renderSetupTabs = () => (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center w-[95vw] mx-auto bg-white/5 rounded-2xl p-1 mb-8 overflow-hidden">
       {(['singles', 'group', 'match'] as SetupTab[]).map(tab => (
         <button
           key={tab}
           onClick={() => handleTabSwitch(tab)}
-          className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${
+          className={`flex-1 py-2 rounded-xl font-black uppercase tracking-widest transition-all text-[1.6rem] sm:text-2xl ${
             activeSetupTab === tab 
-              ? 'bg-white text-slate-950 scale-105 shadow-lg' 
-              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              ? 'text-slate-950 shadow-lg' 
+              : 'text-slate-400 hover:bg-white/5'
           }`}
           style={activeSetupTab === tab ? { backgroundColor: player1.color } : {}}
         >
-          {tab === 'group' ? 'Group Session' : tab}
+          {tab}
         </button>
       ))}
     </div>
