@@ -3112,13 +3112,13 @@ export default function App() {
             height: deviceInfo.isTablet ? '8vh' : '10vh'
           }}
         >
-          <div className="flex items-center gap-[1vw] shrink-0">
+          <div className="flex items-center gap-[0.5vw] shrink-0">
           <Trophy 
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: '8vh',
-              height: '8vh'
+              width: '7.2vh',
+              height: '7.2vh'
             }}
           />
           <h1 
@@ -3146,7 +3146,7 @@ export default function App() {
                   style={{ 
                     fontFamily: 'Inter, sans-serif', 
                     fontWeight: 900, 
-                    fontSize: '2rem', 
+                    fontSize: '2.2rem', 
                     letterSpacing: '-0.03em' 
                   }}
                 >
