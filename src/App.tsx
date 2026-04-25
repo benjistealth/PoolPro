@@ -28,6 +28,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Eraser,
   RefreshCw,
   ArrowUpDown
 } from 'lucide-react';
@@ -495,32 +496,37 @@ export default function App() {
       const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
       const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
       
+      let m1 = 0;
+      let m2 = 0;
+
       // 1. If it's the currently active match, use the live scores directly from player state
       if (selectedMatchIndex === i) {
-        t1 += player1.score;
-        t2 += player2.score;
+        m1 = Number(player1.score) || 0;
+        m2 = Number(player2.score) || 0;
       } else {
         const settings = matchupSettings[i];
         const match = getMatchResult(p1Name, p2Name);
         
         // 2. Use matchupSettings if available (which carries progress from the session)
-        let m1 = settings?.score1 ?? 0;
-        let m2 = settings?.score2 ?? 0;
+        m1 = Number(settings?.score1 ?? 0) || 0;
+        m2 = Number(settings?.score2 ?? 0) || 0;
         
         // 3. If no matchupSettings scores, use history (for completed matches)
         if (m1 === 0 && m2 === 0 && match) {
+          const s1 = Number(match.score1) || 0;
+          const s2 = Number(match.score2) || 0;
           if (match.player1 === p1Name) {
-            m1 = match.score1;
-            m2 = match.score2;
+            m1 = s1;
+            m2 = s2;
           } else {
-            m1 = match.score2;
-            m2 = match.score1;
+            m1 = s2;
+            m2 = s1;
           }
         }
-        
-        t1 += m1;
-        t2 += m2;
       }
+      
+      t1 += m1;
+      t2 += m2;
     }
     return { t1, t2 };
   }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score, matchupSettings]);
@@ -1117,7 +1123,7 @@ export default function App() {
   }, [view, selectedMatchIndex, team1Players, team2Players]); // Removed playerPreferences to prevent feedback loop
 
   // --- Sound Logic ---
-  const playBeep = useCallback((freq: number, volume = 0.025) => {
+  const playBeep = useCallback((freq: number, volume = 0.012) => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
@@ -1208,8 +1214,8 @@ export default function App() {
     const now = Date.now();
     const duration = Math.round((now - frameStartTimeRef.current) / 1000);
     
-    const nextScore1 = playerId === '1' ? player1.score + 1 : player1.score;
-    const nextScore2 = playerId === '2' ? player2.score + 1 : player2.score;
+    const nextScore1 = playerId === '1' ? (Number(player1.score) || 0) + 1 : (Number(player1.score) || 0);
+    const nextScore2 = playerId === '2' ? (Number(player2.score) || 0) + 1 : (Number(player2.score) || 0);
     
     const breakerId = currentBreakPlayerId;
     const breakerName = breakerId === '1' ? player1.name : player2.name;
@@ -1377,8 +1383,8 @@ export default function App() {
     const isGroupMode = activeSetupTab === 'group';
     
     // Scores to use
-    const s1 = overrideScores ? overrideScores.score1 : player1.score;
-    const s2 = overrideScores ? overrideScores.score2 : player2.score;
+    const s1 = Number(overrideScores ? overrideScores.score1 : player1.score) || 0;
+    const s2 = Number(overrideScores ? overrideScores.score2 : player2.score) || 0;
     const frames = overrideFrameDetails || currentMatchFrameDetails;
 
     // In match mode, enforce score of 1 requirement if someone has scored
@@ -3059,7 +3065,9 @@ export default function App() {
       {/* Background Layer */}
       <motion.div 
         animate={{ 
-          top: (view === 'scoreboard' && isNavVisible) ? (deviceInfo.isTablet ? '8vh' : '10vh') : 0,
+          top: (view === 'scoreboard' && isNavVisible) 
+            ? (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
+            : 0,
           left: 0,
           right: 0,
           bottom: 0
@@ -3086,7 +3094,7 @@ export default function App() {
         <motion.div 
           animate={{ 
             top: (view === 'scoreboard' && isNavVisible) 
-              ? (deviceInfo.isTablet ? '8vh' : '10vh')
+              ? (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'))
               : 0,
             left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
             right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
@@ -3155,13 +3163,15 @@ export default function App() {
         <motion.nav 
           initial={false}
           animate={{ 
-            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0,
+            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) 
+              ? (deviceInfo.isPhone ? '-15vh' : (deviceInfo.isTablet ? '-8vh' : '-10vh')) 
+              : 0,
             opacity: 1
           }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
           className="fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-2xl z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw] shadow-[0_4px_30px_rgba(0,0,0,0.5)] border-b border-white/5"
           style={{ 
-            height: deviceInfo.isTablet ? '8vh' : '10vh'
+            height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')
           }}
         >
           <div className="flex items-center gap-[0.5vw] shrink-0">
@@ -3169,14 +3179,14 @@ export default function App() {
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: '7.2vh',
-              height: '7.2vh'
+              width: deviceInfo.isPhone ? '8.64vh' : (deviceInfo.isTablet ? '5.76vh' : '7.2vh'),
+              height: deviceInfo.isPhone ? '8.64vh' : (deviceInfo.isTablet ? '5.76vh' : '7.2vh')
             }}
           />
           <h1 
             className={`transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''} flex items-center`}
             style={{ 
-              height: '9vh',
+              height: deviceInfo.isPhone ? '13.5vh' : (deviceInfo.isTablet ? '7.2vh' : '9vh'),
             }}
           >
             <svg 
@@ -3214,14 +3224,14 @@ export default function App() {
             <div 
               className="flex items-center justify-center px-4 bg-black/40 border border-white/10 backdrop-blur-md pointer-events-auto shadow-2xl"
               style={{ 
-                height: '8.5vh',
-                borderRadius: '1.5vh'
+                height: deviceInfo.isPhone ? '11.05vh' : (deviceInfo.isTablet ? '6.8vh' : '8.5vh'),
+                borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
               }}
             >
               <span 
                 className="font-mono font-black text-white tracking-wider tabular-nums leading-none"
                 style={{
-                  fontSize: '5.5vh'
+                  fontSize: deviceInfo.isPhone ? '7.15vh' : (deviceInfo.isTablet ? '4.4vh' : '5.5vh')
                 }}
               >
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -3235,9 +3245,9 @@ export default function App() {
             onClick={toggleFullscreen}
             className="group flex items-center justify-center transition-all duration-300 border border-white/10 bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative"
             style={{
-              width: '8vh',
-              height: '8vh',
-              borderRadius: '1.5vh'
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
             <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -3246,16 +3256,16 @@ export default function App() {
                 className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: '6vh',
-                  height: '6vh'
+                  width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                  height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
                 }} 
               /> : 
               <Maximize 
                 className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: '6vh',
-                  height: '6vh'
+                  width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                  height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
                 }} 
               />
             }
@@ -3265,9 +3275,9 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'scoreboard' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'scoreboard' ? `${player1.color}22` : undefined,
-              width: '8vh',
-              height: '8vh',
-              borderRadius: '1.5vh'
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
             <div className={`absolute inset-0 transition-opacity ${view === 'scoreboard' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
@@ -3275,8 +3285,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: '6vh',
-                height: '6vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
@@ -3285,9 +3295,9 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'teams' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'teams' ? `${player1.color}22` : undefined,
-              width: '8vh',
-              height: '8vh',
-              borderRadius: '1.5vh'
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
             <div className={`absolute inset-0 transition-opacity ${view === 'teams' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
@@ -3295,8 +3305,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: '6vh',
-                height: '6vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
@@ -3305,9 +3315,9 @@ export default function App() {
             className={`group flex items-center justify-center transition-all duration-300 border ${view === 'settings' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
               backgroundColor: view === 'settings' ? `${player2.color}22` : undefined,
-              width: '8vh',
-              height: '8vh',
-              borderRadius: '1.5vh'
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
             <div className={`absolute inset-0 transition-opacity ${view === 'settings' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player2.color }} />
@@ -3315,8 +3325,8 @@ export default function App() {
               className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: '6vh',
-                height: '6vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
@@ -3332,12 +3342,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? '-15vh' : (deviceInfo.isTablet && !isNavVisible ? '-8vh' : (deviceInfo.isDesktop && !isNavVisible ? '-10vh' : 0))
               }}
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isTablet ? '8vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -3355,12 +3365,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? (deviceInfo.isTablet ? '-8vh' : '-10vh') : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? '-15vh' : (deviceInfo.isTablet && !isNavVisible ? '-8vh' : (deviceInfo.isDesktop && !isNavVisible ? '-10vh' : 0))
               }}
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isTablet ? '8vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
@@ -3512,9 +3522,9 @@ export default function App() {
         initial={false}
         animate={{ 
           paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + ${view === 'match-details' ? '1vh' : '4vh'})`
+            ? `calc(${deviceInfo.isPhone ? '24vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + ${view === 'match-details' ? '1vh' : '4vh'})`
             : (view === 'scoreboard' 
-                ? (isNavVisible ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) : 0)
+                ? (isNavVisible ? (deviceInfo.isPhone ? '24vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) : 0)
                 : 0),
           y: 0,
           paddingBottom: 0 
@@ -3550,8 +3560,8 @@ export default function App() {
                   onClick={goPrevMatch}
                   className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
-                    width: '10vh',
-                    height: '10vh',
+                    width: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
+                    height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
                     borderColor: `${player1.color}44`,
                     position: 'relative'
                   }}
@@ -3567,8 +3577,8 @@ export default function App() {
                   onClick={goNextMatch}
                   className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
-                    width: '10vh',
-                    height: '10vh',
+                    width: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
+                    height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
                     borderColor: `${player2.color}44`,
                     position: 'relative'
                   }}
@@ -3969,59 +3979,107 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4 sm:gap-10">
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player1.color }}>Player 1</label>
-                      <input 
-                        value={singlesSetup.p1Name} 
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setSinglesSetup(prev => ({ ...prev, p1Name: val }));
-                          if (activeSetupTab === 'singles') {
-                            setTeam1Players([val]);
-                            // Only load preferences if not empty and name is full (simple heuristic: don't load while typing short names unless explicitly desired)
-                            // Better: Only sync name, let preferences load on blur or focus gain if stable
-                            setPlayer1(prev => ({ ...prev, name: val }));
-                          }
-                        }}
-                        onFocus={(e) => handleInputFocus(e, 'p1-singles')}
-                        onBlur={() => {
-                          setFocusedField(null);
-                          const pref = getPlayerPref(singlesSetup.p1Name, 'p1');
-                          setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
-                        }}
-                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
-                        style={{ 
-                          ...teamEntryStyle, 
-                          borderColor: focusedField === 'p1-singles' ? player1.color : player1.color + '66',
-                          fontSize: '8vh'
-                        }}
-                        placeholder="NAME"
-                      />
+                      <div className="relative group">
+                        <input 
+                          value={singlesSetup.p1Name} 
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setSinglesSetup(prev => ({ ...prev, p1Name: val }));
+                            if (activeSetupTab === 'singles') {
+                              setTeam1Players([val]);
+                              // Only load preferences if not empty and name is full (simple heuristic: don't load while typing short names unless explicitly desired)
+                              // Better: Only sync name, let preferences load on blur or focus gain if stable
+                              setPlayer1(prev => ({ ...prev, name: val }));
+                            }
+                          }}
+                          onFocus={(e) => handleInputFocus(e, 'p1-singles')}
+                          onBlur={() => {
+                            setFocusedField(null);
+                            const pref = getPlayerPref(singlesSetup.p1Name, 'p1');
+                            setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
+                          }}
+                          className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center pr-24 sm:pr-40" 
+                          style={{ 
+                            ...teamEntryStyle, 
+                            borderColor: focusedField === 'p1-singles' ? player1.color : player1.color + '66',
+                            fontSize: '8vh'
+                          }}
+                          placeholder="NAME"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 sm:gap-2 pr-2">
+                          <button 
+                            onClick={() => {
+                              setSinglesSetup(prev => ({ ...prev, p1Name: '' }));
+                              setTeam1Players(['']);
+                              setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+                            }}
+                            className="p-1 sm:p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Clear Player"
+                          >
+                            <Trash2 className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              clearMatchResult(singlesSetup.p1Name, singlesSetup.p2Name, 0);
+                            }}
+                            className="p-1 sm:p-2 text-slate-500 hover:text-emerald-400 transition-colors"
+                            title="Delete Match Data"
+                          >
+                            <Eraser className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player2.color }}>Player 2</label>
-                      <input 
-                        value={singlesSetup.p2Name} 
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setSinglesSetup(prev => ({ ...prev, p2Name: val }));
-                          if (activeSetupTab === 'singles') {
-                            setTeam2Players([val]);
-                            setPlayer2(prev => ({ ...prev, name: val }));
-                          }
-                        }}
-                        onFocus={(e) => handleInputFocus(e, 'p2-singles')}
-                        onBlur={() => {
-                          setFocusedField(null);
-                          const pref = getPlayerPref(singlesSetup.p2Name, 'p2');
-                          setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
-                        }}
-                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
-                        style={{ 
-                          ...teamEntryStyle, 
-                          borderColor: focusedField === 'p2-singles' ? player2.color : player2.color + '66',
-                          fontSize: '8vh'
-                        }}
-                        placeholder="NAME"
-                      />
+                      <div className="relative group">
+                        <input 
+                          value={singlesSetup.p2Name} 
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setSinglesSetup(prev => ({ ...prev, p2Name: val }));
+                            if (activeSetupTab === 'singles') {
+                              setTeam2Players([val]);
+                              setPlayer2(prev => ({ ...prev, name: val }));
+                            }
+                          }}
+                          onFocus={(e) => handleInputFocus(e, 'p2-singles')}
+                          onBlur={() => {
+                            setFocusedField(null);
+                            const pref = getPlayerPref(singlesSetup.p2Name, 'p2');
+                            setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
+                          }}
+                          className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center pr-24 sm:pr-40" 
+                          style={{ 
+                            ...teamEntryStyle, 
+                            borderColor: focusedField === 'p2-singles' ? player2.color : player2.color + '66',
+                            fontSize: '8vh'
+                          }}
+                          placeholder="NAME"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 sm:gap-2 pr-2">
+                          <button 
+                            onClick={() => {
+                              setSinglesSetup(prev => ({ ...prev, p2Name: '' }));
+                              setTeam2Players(['']);
+                              setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+                            }}
+                            className="p-1 sm:p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Clear Player"
+                          >
+                            <Trash2 className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              clearMatchResult(singlesSetup.p1Name, singlesSetup.p2Name, 0);
+                            }}
+                            className="p-1 sm:p-2 text-slate-500 hover:text-emerald-400 transition-colors"
+                            title="Delete Match Data"
+                          >
+                            <Eraser className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-center">
@@ -4111,7 +4169,7 @@ export default function App() {
                                   // but we sync them to the card IF this is the active match
                                   if (selectedMatchIndex === idx) setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
                                 }}
-                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-24 sm:pr-40 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
                                   borderColor: focusedField === `p1-${idx}` ? player1.color : player1.color + '66' 
@@ -4119,15 +4177,28 @@ export default function App() {
                                 placeholder={`P${idx + 1}`}
                                 readOnly={player.includes('/')}
                               />
-                              <button 
-                                onClick={() => {
-                                  const newPlayers = team1Players.filter((_, i) => i !== idx);
-                                  updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                                }}
-                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all active:scale-90"
-                              >
-                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                              </button>
+                              <div className="absolute right-0 top-0 h-full flex items-center pr-2 sm:pr-4 gap-1 sm:gap-2">
+                                <button 
+                                  onClick={() => {
+                                    const p2Name = team2Players[idx] || 'PLAYER 2';
+                                    clearMatchResult(player, p2Name, idx);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-slate-500 hover:text-emerald-400 transition-all active:scale-95"
+                                  title="Delete Match Data"
+                                >
+                                  <Eraser className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const newPlayers = team1Players.filter((_, i) => i !== idx);
+                                    updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90"
+                                  title="Clear Player"
+                                >
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -4233,7 +4304,7 @@ export default function App() {
                                   const pref = getPlayerPref(player, 'p2');
                                   if (selectedMatchIndex === idx) setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
                                 }}
-                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-24 sm:pr-40 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
                                   borderColor: focusedField === `p2-${idx}` ? player2.color : player2.color + '66' 
@@ -4241,15 +4312,28 @@ export default function App() {
                                 placeholder={`P${idx + 1}`}
                                 readOnly={player.includes('/')}
                               />
-                              <button 
-                                onClick={() => {
-                                  const newPlayers = team2Players.filter((_, i) => i !== idx);
-                                  updateTeamData(team1Name, team1Players, team2Name, newPlayers);
-                                }}
-                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
-                              >
-                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                              </button>
+                              <div className="absolute right-0 top-0 h-full flex items-center pr-2 sm:pr-4 gap-1 sm:gap-2">
+                                <button 
+                                  onClick={() => {
+                                    const p1Name = team1Players[idx] || 'PLAYER 1';
+                                    clearMatchResult(p1Name, player, idx);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-slate-500 hover:text-emerald-400 transition-all active:scale-95"
+                                  title="Delete Match Data"
+                                >
+                                  <Eraser className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const newPlayers = team2Players.filter((_, i) => i !== idx);
+                                    updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                  title="Clear Player"
+                                >
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -4491,8 +4575,8 @@ export default function App() {
                                           <FileText className="w-5 h-5 sm:w-8 sm:h-8 2xl:w-3 2xl:h-3" />
                                         </button>
                                       )}
-                                      {/* Hide individual delete buttons in Match mode - use the main Session Reset instead */}
-                                      {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx && (player1.score > 0 || player2.score > 0))) && (
+                                      {/* Clear match button - now always visible for consistency as requested */}
+                                      {(lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx)) && (
                                         <button 
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -4758,8 +4842,9 @@ export default function App() {
                       {fullScreenBackdrop !== 'none' && (
                         <div className="flex justify-center pt-4 border-t border-white/5">
                            <div className="w-[75vw] sm:w-[60vw]">
+                              <p className="font-black uppercase tracking-[0.4em] text-slate-500 text-[4vh] sm:text-[8vh] pb-[4vh] text-center w-full">SELECT BACKDROP</p>
                               <ColorPicker
-                                label="SELECT BACKDROP"
+                                label="Backdrop"
                                 value={fullScreenBackdrop}
                                 onChange={(val) => setFullScreenBackdrop(val)}
                                 colors={FULL_SCREEN_BACKDROPS.filter(b => b.value !== 'none')}

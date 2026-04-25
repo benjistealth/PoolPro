@@ -93,9 +93,6 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
   return (
     <div className={`relative w-full ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`} ref={containerRef}>
-      {pickerStyle === 'backdrop' && (
-        <p className="font-bold uppercase tracking-wider text-slate-500 text-[4vh] mb-[2vh] ml-[1vh]">{label}</p>
-      )}
       <div className="flex items-center justify-between p-[2vh] bg-slate-950/30 rounded-xl border transition-all cursor-pointer group active:scale-[0.98] w-full"
            style={{ 
              borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
