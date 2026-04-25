@@ -1,45 +1,20 @@
-## Description
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-Pool-Pro.uk is a feature rich web application for pool scoring for teams and singles.
+# Run and deploy your AI Studio app
 
+This contains everything you need to run your app locally.
 
-## Features
-- player names
-- team names
-- data export
-- data import
-- custom colours per player 
-- persistent data storage
-- shot clock - movable widget
-- match clock - movable widget
-- device time
-- Break Tracker
-- Match Details Table
-- Score Tracking & Totals
-- Match Timings recorded
-- clear team data
-- restore defaults
-- API - send data to server
-- epic auto sizing of long names to fit space
-- Retracting top bar when keyboard is active
+View your app in AI Studio: https://ai.studio/apps/9f241ee6-3d3d-4fdc-b139-c0204c3b39d6
 
-## Screenshot of Gameplay Page
+## Run Locally
 
-<img alt="Screenshot_1" src="./public/pool-pro.uk.gameplay.png">
+**Prerequisites:**  Node.js
 
 
-
-## Try it here: 
-
-- development (sometimes breaks - but has all of the newest features on test)
-
-- https://benjistealth.github.io/PoolPro/
-
-
-
-- Production (more reliable in theory) 
-
-- https://pool-pro.uk/
-
-
-
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

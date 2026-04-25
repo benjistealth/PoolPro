@@ -2154,19 +2154,19 @@ export default function App() {
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="w-full max-w-sm bg-slate-900 border-t-2 lg:border-2 border-x-2 lg:border-white/10 rounded-t-[2.5rem] lg:rounded-[2rem] p-6 pb-0 lg:p-8 space-y-4 lg:space-y-6 shadow-2xl h-[92vh] lg:h-auto lg:max-h-[85vh] flex flex-col relative z-[9999]"
+          className="w-full max-w-sm bg-slate-900 border-t-2 lg:border-2 border-x-2 lg:border-white/10 rounded-t-[2.5rem] lg:rounded-[2rem] px-5 pt-5 pb-0 lg:p-8 space-y-3 lg:space-y-6 shadow-2xl h-[92dvh] lg:h-auto lg:max-h-[85vh] flex flex-col relative z-[9999]"
           style={{ borderColor: teamIdx === 1 ? player1.color : player2.color }}
         >
           <div className="flex items-center justify-between shrink-0">
-            <h3 className="text-xl font-black uppercase tracking-tight text-white leading-tight">Select Doubles Pair</h3>
+            <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white leading-tight">Select Doubles Pair</h3>
             <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false })} className="p-2 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="grid grid-cols-2 gap-3 overflow-y-auto pb-4 flex-1 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="grid grid-cols-2 gap-2 overflow-y-auto pb-2 flex-1 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
             {availablePlayers.length < 2 && (
-              <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold">Add at least 2 unique players to create a doubles pair.</p>
+              <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold text-xs">Add at least 2 unique players to create a doubles pair.</p>
             )}
             {availablePlayers.map((name) => (
               <button
@@ -2178,26 +2178,26 @@ export default function App() {
                     setDoublesSelection([...doublesSelection, name]);
                   }
                 }}
-                className={`p-4 rounded-xl font-bold uppercase transition-all flex items-center justify-between gap-1 border-2 ${
+                className={`p-2.5 sm:p-3 rounded-xl font-bold uppercase transition-all flex items-center justify-between gap-1 border-2 ${
                   doublesSelection.includes(name) 
                     ? 'bg-white/20' 
                     : 'bg-white/5 border-transparent'
                 }`}
                 style={{ borderColor: doublesSelection.includes(name) ? (teamIdx === 1 ? player1.color : player2.color) : 'transparent' }}
               >
-                <span className={`truncate text-xs sm:text-sm ${doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}`}>{name}</span>
-                {doublesSelection.includes(name) && <Check className="w-4 h-4 shrink-0 text-emerald-400" />}
+                <span className={`truncate text-[10px] sm:text-xs tracking-tight ${doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}`}>{name}</span>
+                {doublesSelection.includes(name) && <Check className="w-3 h-3 shrink-0 text-emerald-400" />}
               </button>
             ))}
           </div>
 
-          <div className="mt-auto pt-4 pb-4 lg:pb-0 border-t border-white/5 shrink-0">
+          <div className="mt-auto pt-2 pb-5 lg:pb-0 border-t border-white/5 shrink-0">
             <button
               disabled={doublesSelection.length !== 2}
               onClick={() => confirmDoubles(teamIdx)}
-              className={`w-full py-3.5 rounded-xl font-black uppercase tracking-widest transition-all ${
+              className={`w-full py-2 rounded-xl font-black uppercase tracking-widest transition-all text-xs sm:text-sm ${
                 doublesSelection.length === 2 
-                  ? 'opacity-100 scale-105 shadow-[0_0_25px_rgba(0,0,0,0.3)]' 
+                  ? 'opacity-100 scale-102 shadow-lg' 
                   : 'opacity-50 cursor-not-allowed grayscale'
               }`}
               style={{ 
