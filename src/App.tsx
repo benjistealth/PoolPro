@@ -49,16 +49,16 @@ const SHOT_CLOCK_DEFAULT = 30;
 type SetupTab = 'singles' | 'group' | 'match';
 
 const SLOT1_DEFAULTS = {
-  color: '#FF001C',
-  bgColor: '#7F1D1D',
+  color: '#FFFF33',
+  bgColor: '#FFD700',
   screenColor: '#000000',
   bgStyle: 'balls',
   screenStyle: 'default'
 };
 
 const SLOT2_DEFAULTS = {
-  color: '#FFFF33',
-  bgColor: '#FFD700',
+  color: '#FF001C',
+  bgColor: '#7F1D1D',
   screenColor: '#000000',
   bgStyle: 'balls',
   screenStyle: 'default'
@@ -2929,6 +2929,20 @@ export default function App() {
   if (deviceInfo.isPortrait) {
     return (
       <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center overflow-hidden">
+        {/* SVG Gradient Definitions for Portrait View */}
+        <svg width="0" height="0" className="absolute pointer-events-none">
+          <defs>
+            <linearGradient id="portrait-cup-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={player1.color} />
+              <stop offset="100%" stopColor={player2.color} />
+            </linearGradient>
+            <linearGradient id="portrait-logo-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={player1.color} />
+              <stop offset="100%" stopColor={player2.color} />
+            </linearGradient>
+          </defs>
+        </svg>
+
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -2940,6 +2954,30 @@ export default function App() {
             className="w-full h-full object-cover sm:object-contain"
             referrerPolicy="no-referrer"
           />
+
+          {/* Logo & Icon at top center */}
+          <div className="absolute top-[8vh] left-1/2 -translate-x-1/2 flex items-center justify-center gap-[0.5vw] z-20 whitespace-nowrap">
+            <Trophy 
+              className="transition-all duration-500 shrink-0" 
+              style={{ 
+                stroke: 'url(#portrait-cup-gradient)',
+                width: '6vh',
+                height: '6vh'
+              }}
+            />
+            <h1 
+              className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r"
+              style={{ 
+                fontSize: '6.5vh',
+                lineHeight: 1,
+                backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                fontFamily: 'Inter, sans-serif'
+              }}
+            >
+              Pool-Pro.uk
+            </h1>
+          </div>
+
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/20 backdrop-blur-[2px]">
              <div className="bg-black/60 p-8 rounded-[4vh] border border-white/10 backdrop-blur-xl flex flex-col items-center shadow-2xl">
                <RotateCcw className="w-[8vh] h-[8vh] text-emerald-400 animate-spin-reverse mb-[3vh]" />
@@ -4651,11 +4689,7 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex items-center justify-between gap-[4vw]">
                         <div className="flex-1">
-                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Choose a high-resolution table backdrop for the entire interface.</p>
-                          <p className="text-slate-500 font-black uppercase tracking-[0.1em] text-left mt-2 text-[1.4vh] sm:text-[1.2vh] leading-relaxed">
-                            <span className="text-amber-500/80 mr-2">Note:</span>
-                            Individual background options are disabled when full screen background is enabled
-                          </p>
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Note: Individual background options are disabled when full screen background is enabled</p>
                         </div>
                         <div className="shrink-0">
                           <button 
@@ -4674,18 +4708,20 @@ export default function App() {
 
                       {fullScreenBackdrop !== 'none' && (
                         <div className="flex justify-center pt-4 border-t border-white/5">
-                           <ColorPicker
-                             label="SELECT BACKDROP"
-                             value={fullScreenBackdrop}
-                             onChange={(val) => setFullScreenBackdrop(val)}
-                             colors={FULL_SCREEN_BACKDROPS.filter(b => b.value !== 'none')}
-                             icon={<Layout className="w-4 h-4" />}
-                             isOpen={activePicker === 'fs-backdrop'}
-                             onToggle={(isOpen) => setActivePicker(isOpen ? 'fs-backdrop' : null)}
-                             themeColor={player1.color}
-                             pickerStyle="backdrop"
-                             allowedStyles={['backdrop']}
-                           />
+                           <div className="w-[75vw] sm:w-[60vw]">
+                              <ColorPicker
+                                label="SELECT BACKDROP"
+                                value={fullScreenBackdrop}
+                                onChange={(val) => setFullScreenBackdrop(val)}
+                                colors={FULL_SCREEN_BACKDROPS.filter(b => b.value !== 'none')}
+                                icon={<Layout className="w-4 h-4" />}
+                                isOpen={activePicker === 'fs-backdrop'}
+                                onToggle={(isOpen) => setActivePicker(isOpen ? 'fs-backdrop' : null)}
+                                themeColor={player1.color}
+                                pickerStyle="backdrop"
+                                allowedStyles={['backdrop']}
+                              />
+                           </div>
                         </div>
                       )}
                     </div>

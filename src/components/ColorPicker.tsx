@@ -92,8 +92,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
   }, [hexUnit]);
 
   return (
-    <div className={`relative ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`} ref={containerRef}>
-      <div className="flex items-center justify-between p-[2vh] bg-slate-950/30 rounded-xl border transition-all cursor-pointer group active:scale-[0.98]"
+    <div className={`relative w-full ${disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`} ref={containerRef}>
+      <div className="flex items-center justify-between p-[2vh] bg-slate-950/30 rounded-xl border transition-all cursor-pointer group active:scale-[0.98] w-full"
            style={{ 
              borderColor: isOpen ? (themeColor || '#10b981') : 'rgba(255,255,255,0.05)',
            }}
@@ -146,8 +146,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               scale: isMobile && pickerStyle === 'default' ? 1.5 : 1 
             }}
             exit={{ opacity: 0, y: 10, scale: isMobile && pickerStyle === 'default' ? 1.4 : 0.95 }}
-            className={`absolute top-full mt-[1vh] z-[110] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top
-              ${pickerStyle === 'backdrop' ? 'w-[75vw] sm:w-[60vw] left-1/2 -translate-x-1/2' : 'inset-x-0'}
+            className={`absolute top-full mt-[1vh] z-[110] bg-slate-900 border rounded-3xl shadow-2xl backdrop-blur-xl flex flex-col items-center origin-top inset-x-0
               ${pickerStyle === 'default' 
                 ? 'py-[2.5vh] gap-[1vh] px-[6%]' 
                 : pickerStyle === 'backdrop' ? 'pt-[1vh] pb-[2.5vh] gap-[1vh] px-[2%]' : 'pt-[1.5vh] pb-[4.5vh] gap-[1.5vh] sm:pt-[2.5vh] sm:pb-[5.5vh] px-[6%]' 
