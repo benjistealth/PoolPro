@@ -1587,24 +1587,20 @@ export default function App() {
     
     setPlayer1(prev => ({ 
       ...prev, 
+      ...SLOT1_DEFAULTS,
       name: p1Name, 
       score: p1Score,
-      color: p1Pref?.color || (settings?.player1.color) || '#FFFF33',
-      bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#000000',
-      screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000',
-      bgStyle: p1Pref?.bgStyle || (settings?.player1.bgStyle) || 'default',
-      screenStyle: p1Pref?.screenStyle || (settings?.player1.screenStyle) || 'default'
+      ...(settings?.player1 || {}),
+      ...(p1Pref || {})
     }));
     
     setPlayer2(prev => ({ 
       ...prev, 
+      ...SLOT2_DEFAULTS,
       name: p2Name, 
       score: p2Score,
-      color: p2Pref?.color || (settings?.player2.color) || '#FF001C',
-      bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
-      screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000',
-      bgStyle: p2Pref?.bgStyle || (settings?.player2.bgStyle) || 'default',
-      screenStyle: p2Pref?.screenStyle || (settings?.player2.screenStyle) || 'default'
+      ...(settings?.player2 || {}),
+      ...(p2Pref || {})
     }));
     
     setSelectedMatchIndex(index);
@@ -1909,29 +1905,26 @@ export default function App() {
     if (selectedMatchIndex !== null) {
       const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
       const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      const settings = matchupSettings[selectedMatchIndex];
       
       setPlayer1(prev => {
-        const pref = p1 ? playerPreferences[p1] : null;
+        const pref = getPlayerPref(p1, 'p1');
         return {
           ...prev,
+          ...SLOT1_DEFAULTS,
           name: p1,
-          color: pref?.color || '#FFFF33',
-          bgColor: pref?.bgColor || '#000000',
-          screenColor: pref?.screenColor || '#000000',
-          bgStyle: (pref?.bgStyle as any) || 'default',
-          screenStyle: (pref?.screenStyle as any) || 'default'
+          ...(settings?.player1 || {}),
+          ...(pref || {})
         };
       });
       setPlayer2(prev => {
-        const pref = p2 ? playerPreferences[p2] : null;
+        const pref = getPlayerPref(p2, 'p2');
         return {
           ...prev,
+          ...SLOT2_DEFAULTS,
           name: p2,
-          color: pref?.color || '#FF001C',
-          bgColor: pref?.bgColor || '#000000',
-          screenColor: pref?.screenColor || '#000000',
-          bgStyle: (pref?.bgStyle as any) || 'default',
-          screenStyle: (pref?.screenStyle as any) || 'default'
+          ...(settings?.player2 || {}),
+          ...(pref || {})
         };
       });
     }
@@ -2067,20 +2060,25 @@ export default function App() {
     setBreakBalls(nextBreakBalls);
 
     // Apply names and current scores with preferences or slot defaults
-    const p1Prefs = getPlayerPref(nextP1Name, 'p1') || SLOT1_DEFAULTS;
-    const p2Prefs = getPlayerPref(nextP2Name, 'p2') || SLOT2_DEFAULTS;
+    const p1Pref = getPlayerPref(nextP1Name, 'p1');
+    const p2Pref = getPlayerPref(nextP2Name, 'p2');
+    const settings = nextIdx !== null ? nextSettings[nextIdx] : null;
 
     setPlayer1(prev => ({ 
       ...prev, 
+      ...SLOT1_DEFAULTS,
       name: nextP1Name, 
       score: nextScore1,
-      ...p1Prefs
+      ...(settings?.player1 || {}),
+      ...(p1Pref || {})
     }));
     setPlayer2(prev => ({ 
       ...prev, 
+      ...SLOT2_DEFAULTS,
       name: nextP2Name, 
       score: nextScore2,
-      ...p2Prefs
+      ...(settings?.player2 || {}),
+      ...(p2Pref || {})
     }));
 
     setActiveSetupTab(newTab);
@@ -2102,8 +2100,8 @@ export default function App() {
         [newIndex]: {
           ...prev[newIndex],
           isDoubles: true,
-          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+          player1: { ...SLOT1_DEFAULTS },
+          player2: { ...SLOT2_DEFAULTS }
         }
       }));
       updateTeamData(team1Name, newPlayers, team2Name, team2Players);
@@ -2115,8 +2113,8 @@ export default function App() {
         [newIndex]: {
           ...prev[newIndex],
           isDoubles: true,
-          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+          player1: { ...SLOT1_DEFAULTS },
+          player2: { ...SLOT2_DEFAULTS }
         }
       }));
       updateTeamData(team1Name, team1Players, team2Name, newPlayers);
@@ -2145,29 +2143,30 @@ export default function App() {
   );
 
   const renderDoublesPicker = () => {
-    if (!showDoublesPicker.isOpen) return null;
     const teamIdx = showDoublesPicker.team;
     const players = teamIdx === 1 ? team1Players : team2Players;
     const availablePlayers = players.filter(p => p && !p.includes('/')).filter((v, i, a) => a.indexOf(v) === i);
 
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div key="doubles-picker-overlay" className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-slate-900 border-2 border-white/10 rounded-[2rem] p-8 space-y-6 shadow-2xl"
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="w-full max-w-sm bg-slate-900 border-t-2 lg:border-2 border-x-2 lg:border-white/10 rounded-t-[2.5rem] lg:rounded-[2rem] p-6 pb-0 lg:p-8 space-y-4 lg:space-y-6 shadow-2xl h-[92vh] lg:h-auto lg:max-h-[85vh] flex flex-col relative z-[9999]"
           style={{ borderColor: teamIdx === 1 ? player1.color : player2.color }}
         >
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-black uppercase tracking-tight text-white">Select Doubles Pair</h3>
+          <div className="flex items-center justify-between shrink-0">
+            <h3 className="text-xl font-black uppercase tracking-tight text-white leading-tight">Select Doubles Pair</h3>
             <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false })} className="p-2 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
+          <div className="grid grid-cols-2 gap-3 overflow-y-auto pb-4 flex-1 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
             {availablePlayers.length < 2 && (
-              <p className="text-slate-500 italic text-center py-4 uppercase font-bold">Add at least 2 unique players to create a doubles pair.</p>
+              <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold">Add at least 2 unique players to create a doubles pair.</p>
             )}
             {availablePlayers.map((name) => (
               <button
@@ -2179,31 +2178,36 @@ export default function App() {
                     setDoublesSelection([...doublesSelection, name]);
                   }
                 }}
-                className={`w-full p-4 rounded-xl font-bold uppercase transition-all flex items-center justify-between ${
+                className={`p-4 rounded-xl font-bold uppercase transition-all flex items-center justify-between gap-1 border-2 ${
                   doublesSelection.includes(name) 
-                    ? 'bg-white/20 border-2' 
-                    : 'bg-white/5 border border-white/5'
+                    ? 'bg-white/20' 
+                    : 'bg-white/5 border-transparent'
                 }`}
                 style={{ borderColor: doublesSelection.includes(name) ? (teamIdx === 1 ? player1.color : player2.color) : 'transparent' }}
               >
-                <span className={doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}>{name}</span>
-                {doublesSelection.includes(name) && <Check className="w-5 h-5 text-emerald-400" />}
+                <span className={`truncate text-xs sm:text-sm ${doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}`}>{name}</span>
+                {doublesSelection.includes(name) && <Check className="w-4 h-4 shrink-0 text-emerald-400" />}
               </button>
             ))}
           </div>
 
-          <button
-            disabled={doublesSelection.length !== 2}
-            onClick={() => confirmDoubles(teamIdx)}
-            className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all ${
-              doublesSelection.length === 2 
-                ? 'opacity-100 scale-105 shadow-xl' 
-                : 'opacity-50 cursor-not-allowed'
-            }`}
-            style={{ backgroundColor: teamIdx === 1 ? player1.color : player2.color, color: '#000' }}
-          >
-            Confirm Pair
-          </button>
+          <div className="mt-auto pt-4 pb-4 lg:pb-0 border-t border-white/5 shrink-0">
+            <button
+              disabled={doublesSelection.length !== 2}
+              onClick={() => confirmDoubles(teamIdx)}
+              className={`w-full py-3.5 rounded-xl font-black uppercase tracking-widest transition-all ${
+                doublesSelection.length === 2 
+                  ? 'opacity-100 scale-105 shadow-[0_0_25px_rgba(0,0,0,0.3)]' 
+                  : 'opacity-50 cursor-not-allowed grayscale'
+              }`}
+              style={{ 
+                backgroundColor: doublesSelection.length === 2 ? (teamIdx === 1 ? player1.color : player2.color) : '#334155', 
+                color: '#000' 
+              }}
+            >
+              Confirm Pair
+            </button>
+          </div>
         </motion.div>
       </div>
     );
@@ -3688,6 +3692,7 @@ export default function App() {
                                   const pref = getPlayerPref(newName, 'p1');
                                   setPlayer1(prev => ({ 
                                     ...prev, 
+                                    ...SLOT1_DEFAULTS,
                                     name: newName,
                                     ...(pref || {}) 
                                   }));
@@ -3700,6 +3705,7 @@ export default function App() {
                                   const pref = getPlayerPref(newName, 'p2');
                                   setPlayer2(prev => ({ 
                                     ...prev, 
+                                    ...SLOT2_DEFAULTS,
                                     name: newName,
                                     ...(pref || {})
                                   }));
@@ -3917,7 +3923,6 @@ export default function App() {
               </div>
 
               {renderSetupTabs()}
-              {renderDoublesPicker()}
 
               {activeSetupTab === 'singles' ? (
                 <div className="space-y-12">
@@ -3940,7 +3945,7 @@ export default function App() {
                         onBlur={() => {
                           setFocusedField(null);
                           const pref = getPlayerPref(singlesSetup.p1Name, 'p1');
-                          if (pref) setPlayer1(prev => ({ ...prev, ...pref }));
+                          setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
                         }}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
                         style={{ 
@@ -3967,7 +3972,7 @@ export default function App() {
                         onBlur={() => {
                           setFocusedField(null);
                           const pref = getPlayerPref(singlesSetup.p2Name, 'p2');
-                          if (pref) setPlayer2(prev => ({ ...prev, ...pref }));
+                          setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
                         }}
                         className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
                         style={{ 
@@ -4062,11 +4067,9 @@ export default function App() {
                                 onBlur={() => {
                                   setFocusedField(null);
                                   const pref = getPlayerPref(player, 'p1');
-                                  if (pref) {
-                                    // Normally we don't force load team members immediately to avoid confusion, 
-                                    // but we sync them to the card IF this is the active match
-                                    if (selectedMatchIndex === idx) setPlayer1(prev => ({ ...prev, ...pref }));
-                                  }
+                                  // Normally we don't force load team members immediately to avoid confusion, 
+                                  // but we sync them to the card IF this is the active match
+                                  if (selectedMatchIndex === idx) setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
                                 }}
                                 className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
@@ -4188,9 +4191,7 @@ export default function App() {
                                 onBlur={() => {
                                   setFocusedField(null);
                                   const pref = getPlayerPref(player, 'p2');
-                                  if (pref) {
-                                    if (selectedMatchIndex === idx) setPlayer2(prev => ({ ...prev, ...pref }));
-                                  }
+                                  if (selectedMatchIndex === idx) setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
                                 }}
                                 className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
@@ -4444,10 +4445,10 @@ export default function App() {
                                             e.stopPropagation();
                                             viewMatchDetails(lastMatch ? lastMatch.id : `live-${idx}`);
                                           }}
-                                          className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                          className="p-3 sm:p-5 2xl:p-1 flex items-center justify-center text-blue-500 hover:bg-blue-500/10 rounded-xl transition-all active:scale-95 shadow-lg bg-blue-500/5 sm:bg-transparent"
                                           title="View Details"
                                         >
-                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                          <FileText className="w-5 h-5 sm:w-8 sm:h-8 2xl:w-3 2xl:h-3" />
                                         </button>
                                       )}
                                       {/* Hide individual delete buttons in Match mode - use the main Session Reset instead */}
@@ -4457,10 +4458,10 @@ export default function App() {
                                             e.stopPropagation();
                                             clearMatchResult(p1Name, p2Name, idx);
                                           }}
-                                          className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                                          className="p-2 min-h-[38px] min-w-[38px] flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-lg border border-white/20 shadow-lg transition-all active:scale-90"
                                           title="Clear Match"
                                         >
-                                          <Trash2 className="w-4 h-4" />
+                                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3.5 lg:h-3.5" />
                                         </button>
                                       )}
                                     </div>
@@ -4484,9 +4485,9 @@ export default function App() {
                               <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                                 <button 
                                   onClick={() => viewMatchDetails('session')}
-                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                  className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px]"
                                 >
-                                  <FileText className="w-4 h-4" />
+                                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3 lg:h-3 transition-transform group-hover:scale-110" />
                                   View Detailed Match Progress
                                 </button>
                                 <button 
@@ -4494,9 +4495,9 @@ export default function App() {
                                     e.stopPropagation();
                                     setShowDeleteAllConfirm(true);
                                   }}
-                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                  className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white border-2 border-white/30 shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px] active:scale-95"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3 lg:h-3 transition-transform group-hover:scale-110" />
                                   Delete Match Data
                                 </button>
                               </div>
@@ -4567,10 +4568,10 @@ export default function App() {
                                             e.stopPropagation();
                                             viewMatchDetails(m.id);
                                           }}
-                                          className="p-1 text-slate-500 hover:bg-slate-700 rounded transition-colors"
+                                          className="p-2 sm:p-4 2xl:p-1 flex items-center justify-center text-slate-500 hover:bg-slate-700 rounded-xl transition-all active:scale-95 bg-slate-800/20 sm:bg-transparent"
                                           title="View Details"
                                         >
-                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                          <FileText className="w-4 h-4 sm:w-7 sm:h-7 2xl:w-2.5 2xl:h-2.5 px-0.5" />
                                         </button>
                                       </div>
                                       <div className="hidden sm:flex px-[1.5vw] py-3 w-[15%] items-center" />
@@ -5912,6 +5913,7 @@ export default function App() {
               </motion.div>
             </div>
           )}
+          {showDoublesPicker.isOpen && renderDoublesPicker()}
           {showDeleteAllConfirm && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 
