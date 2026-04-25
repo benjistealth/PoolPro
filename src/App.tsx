@@ -50,7 +50,7 @@ type SetupTab = 'singles' | 'group' | 'match';
 
 const SLOT1_DEFAULTS = {
   color: '#FFFF33',
-  bgColor: '#FFD700',
+  bgColor: '#800080',
   screenColor: '#000000',
   bgStyle: 'balls',
   screenStyle: 'default'
@@ -58,7 +58,7 @@ const SLOT1_DEFAULTS = {
 
 const SLOT2_DEFAULTS = {
   color: '#FF001C',
-  bgColor: '#7F1D1D',
+  bgColor: '#111111',
   screenColor: '#000000',
   bgStyle: 'balls',
   screenStyle: 'default'
@@ -165,7 +165,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
-  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('kernow');
+  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('magma');
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
@@ -180,6 +180,13 @@ export default function App() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
     const handleResize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
@@ -207,6 +214,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       clearInterval(timeInterval);
     };
   }, []);
@@ -5804,6 +5812,9 @@ export default function App() {
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
+                      
+                      // Restore Backdrop
+                      setFullScreenBackdrop('magma');
                       
                       setShowRestoreDefaultsConfirm(false);
                     }}
