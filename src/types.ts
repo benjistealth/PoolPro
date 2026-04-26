@@ -61,6 +61,7 @@ export interface MatchHistoryEntry {
   score2: number;
   winner: string;
   isDoubles?: boolean;
+  mode?: 'singles' | 'group' | 'match';
   shotClockSetting?: number;
   matchClockRemaining?: number;
   frameDetails?: FrameDetail[];
