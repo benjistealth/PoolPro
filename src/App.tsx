@@ -641,13 +641,44 @@ export default function App() {
   const teamTotals = useMemo(() => {
     let t1 = 0;
     let t2 = 0;
-    
-    // In Singles mode, use the explicitly updated session total scores
+
+    // In Singles mode, compute totals directly from history + live scores.
+    // This avoids stale-state issues with the sessionScore useEffect.
     if (activeSetupTab === 'singles') {
-      return { 
-        t1: Number(singlesSetup.sessionScore1) || 0, 
-        t2: Number(singlesSetup.sessionScore2) || 0 
-      };
+      const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
+      const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
+
+      matchHistory.forEach(m => {
+        if (m.mode === 'singles') {
+          const mP1 = (m.player1 || '').trim().toLowerCase();
+          const mP2 = (m.player2 || '').trim().toLowerCase();
+          if (p1 && p2) {
+            if (mP1 === p1 && mP2 === p2) {
+              t1 += Number(m.score1) || 0;
+              t2 += Number(m.score2) || 0;
+            } else if (mP1 === p2 && mP2 === p1) {
+              t1 += Number(m.score2) || 0;
+              t2 += Number(m.score1) || 0;
+            }
+          } else {
+            t1 += Number(m.score1) || 0;
+            t2 += Number(m.score2) || 0;
+          }
+        }
+      });
+
+      // Add live scores — in singles the live score is always part of the total
+      const cp1 = (player1.name || '').trim().toLowerCase();
+      const cp2 = (player2.name || '').trim().toLowerCase();
+      if (cp1 === p1 && cp2 === p2) {
+        t1 += Number(player1.score) || 0;
+        t2 += Number(player2.score) || 0;
+      } else if (cp1 === p2 && cp2 === p1) {
+        t1 += Number(player2.score) || 0;
+        t2 += Number(player1.score) || 0;
+      }
+
+      return { t1, t2 };
     }
 
     // Default Match/Group mode matching logic
