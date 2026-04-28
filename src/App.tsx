@@ -130,11 +130,7 @@ const SLOT2_DEFAULTS = {
 export default function App() {
   // --- State ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-<<<<<<< HEAD
   const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('singles');
-=======
-  const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('match');
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
   const [matchModeBreakSide, setMatchModeBreakSide] = useState<'1' | '2' | 'none'>('none');
   const [showDoublesPicker, setShowDoublesPicker] = useState<{ team: 1 | 2, isOpen: boolean, mode: 'singles' | 'doubles' }>({ team: 1, isOpen: false, mode: 'doubles' });
   const [doublesSelection, setDoublesSelection] = useState<string[]>([]);
@@ -646,7 +642,6 @@ export default function App() {
     let t1 = 0;
     let t2 = 0;
     
-<<<<<<< HEAD
     // In Singles mode, use the explicitly updated session total scores
     if (activeSetupTab === 'singles') {
       return { 
@@ -657,33 +652,6 @@ export default function App() {
 
     // Default Match/Group mode matching logic
     const maxMatches = Math.max(team1Players.length, team2Players.length);
-=======
-    // In Singles mode, we want the sum of ALL matches in the session's history
-    if (activeSetupTab === 'singles') {
-      matchHistory.forEach(m => {
-        const p1Name = (team1Players[0] || 'PLAYER 1').trim().toLowerCase();
-        const p2Name = (team2Players[0] || 'PLAYER 2').trim().toLowerCase();
-        const mP1 = m.player1.trim().toLowerCase();
-        const mP2 = m.player2.trim().toLowerCase();
-
-        if (mP1 === p1Name && mP2 === p2Name) {
-          t1 += Number(m.score1) || 0;
-          t2 += Number(m.score2) || 0;
-        } else if (mP1 === p2Name && mP2 === p1Name) {
-          t1 += Number(m.score2) || 0;
-          t2 += Number(m.score1) || 0;
-        }
-      });
-      // Also add live score if a match is active
-      if (selectedMatchIndex !== null) {
-        t1 += Number(player1.score) || 0;
-        t2 += Number(player2.score) || 0;
-      }
-      return { t1, t2 };
-    }
-
-    // Default Match/Group mode matching logic
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
     for (let i = 0; i < maxMatches; i++) {
       const p1Name = team1Players[i] || '';
       const p2Name = team2Players[i] || '';
@@ -1681,25 +1649,16 @@ export default function App() {
           score2: s2,
           player1: { ...player1, score: s1 },
           player2: { ...player2, score: s2 },
-<<<<<<< HEAD
           winner: s1 > s2 ? player1.name : (s2 > s1 ? player2.name : (s1 === s2 ? 'TIE' : undefined)),
           frameDetails: frames,
           isLive: false,
           date: new Date().toISOString()
-=======
-          frameDetails: frames
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
         }
       }));
     }
 
-<<<<<<< HEAD
     // For singles, allow finishing even at 0-0. For match mode, keep the 1-score requirement.
     if (activeSetupTab === 'match' && s1 === 0 && s2 === 0) {
-=======
-    // In match mode, enforce score of 1 requirement if someone has scored
-    if (isMatchMode && s1 === 0 && s2 === 0) {
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
       // Allow clearing/resetting instead of finishing if no data
       return;
     }
@@ -1719,11 +1678,7 @@ export default function App() {
       team2: team2Name || undefined,
       score1: s1,
       score2: s2,
-<<<<<<< HEAD
       winner: isTie ? 'TIE' : winner,
-=======
-      winner,
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
       mode: activeSetupTab,
       shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
       matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
@@ -2047,7 +2002,6 @@ export default function App() {
 
   const clearSinglesData = () => {
     // 1. Clear Singles Specific State
-<<<<<<< HEAD
     setPlayer1(prev => ({ 
       ...prev,
       score: 0, 
@@ -2063,26 +2017,6 @@ export default function App() {
     
     setSinglesSetup(prev => ({ 
       ...prev,
-=======
-    setPlayer1({ 
-      id: '1', 
-      name: '', 
-      score: 0, 
-      isTurn: true, 
-      ...SLOT1_DEFAULTS 
-    });
-    setPlayer2({ 
-      id: '2', 
-      name: '', 
-      score: 0, 
-      isTurn: false, 
-      ...SLOT2_DEFAULTS 
-    });
-    
-    setSinglesSetup({ 
-      p1Name: '', 
-      p2Name: '', 
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
       history: [], 
       frameDetails: [], 
       matchStartTime: null, 
@@ -2090,11 +2024,7 @@ export default function App() {
       score2: 0, 
       currentBreakPlayerId: 'none', 
       breakBalls: [] 
-<<<<<<< HEAD
     }));
-=======
-    });
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
     
     // Clear persistent pair tracker for current match if any
     if (player1.name && player2.name) {
@@ -2243,13 +2173,8 @@ export default function App() {
 
     // Sync active player names if a match is selected
     if (selectedMatchIndex !== null) {
-<<<<<<< HEAD
       const p1 = t1Players[selectedMatchIndex] || '';
       const p2 = t2Players[selectedMatchIndex] || '';
-=======
-      const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
-      const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
       const settings = matchupSettings[selectedMatchIndex];
       
       setPlayer1(prev => {
@@ -2343,7 +2268,6 @@ export default function App() {
     let nextP2Name = '';
 
     if (newTab === 'singles') {
-<<<<<<< HEAD
       if (activeSetupTab === 'singles') {
         nextT1Players = [player1.name];
         nextT2Players = [player2.name];
@@ -2374,22 +2298,6 @@ export default function App() {
       }
       nextT1Name = '';
       nextT2Name = '';
-=======
-      nextHistory = singlesSetup.history;
-      nextFrameDetails = singlesSetup.frameDetails;
-      nextStartTime = singlesSetup.matchStartTime;
-      nextScore1 = singlesSetup.score1;
-      nextScore2 = singlesSetup.score2;
-      nextBreakPlayer = singlesSetup.currentBreakPlayerId;
-      nextBreakBalls = singlesSetup.breakBalls;
-      nextT1Players = [singlesSetup.p1Name || 'PLAYER 1'];
-      nextT2Players = [singlesSetup.p2Name || 'PLAYER 2'];
-      nextT1Name = '';
-      nextT2Name = '';
-      nextP1Name = singlesSetup.p1Name || 'PLAYER 1';
-      nextP2Name = singlesSetup.p2Name || 'PLAYER 2';
-      nextIdx = 0;
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
     } else if (newTab === 'match') {
       nextHistory = matchSetup.history;
       nextFrameDetails = matchSetup.frameDetails;
@@ -2484,11 +2392,7 @@ export default function App() {
         ...prev,
         [newIndex]: {
           ...prev[newIndex],
-<<<<<<< HEAD
           isDoubles: isDoubles,
-=======
-          isDoubles: true,
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
           player1: { ...SLOT1_DEFAULTS },
           player2: { ...SLOT2_DEFAULTS }
         }
@@ -2501,11 +2405,7 @@ export default function App() {
         ...prev,
         [newIndex]: {
           ...prev[newIndex],
-<<<<<<< HEAD
           isDoubles: isDoubles,
-=======
-          isDoubles: true,
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
           player1: { ...SLOT1_DEFAULTS },
           player2: { ...SLOT2_DEFAULTS }
         }
@@ -2536,11 +2436,7 @@ export default function App() {
   );
 
   const renderDoublesPicker = () => {
-<<<<<<< HEAD
     const { team: teamIdx, mode } = showDoublesPicker;
-=======
-    const teamIdx = showDoublesPicker.team;
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
     const players = teamIdx === 1 ? team1Players : team2Players;
     const availablePlayers = players.filter(p => p && !p.includes('/')).filter((v, i, a) => a.indexOf(v) === i);
     const requiredCount = mode === 'doubles' ? 2 : 1;
@@ -2556,29 +2452,19 @@ export default function App() {
           style={{ borderColor: teamIdx === 1 ? player1.color : player2.color }}
         >
           <div className="flex items-center justify-between shrink-0">
-<<<<<<< HEAD
             <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white leading-tight">
               {mode === 'doubles' ? 'Select Doubles Pair' : 'Select Player'}
             </h3>
             <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false, mode: 'doubles' })} className="p-2 text-slate-400 hover:text-white">
-=======
-            <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white leading-tight">Select Doubles Pair</h3>
-            <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false })} className="p-2 text-slate-400 hover:text-white">
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
               <X className="w-6 h-6" />
             </button>
           </div>
           
           <div className="grid grid-cols-2 gap-2 overflow-y-auto pb-2 flex-1 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
-<<<<<<< HEAD
             {availablePlayers.length < requiredCount && (
               <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold text-xs">
                 Add at least {requiredCount} unique player{requiredCount > 1 ? 's' : ''} to create a {mode} matchup.
               </p>
-=======
-            {availablePlayers.length < 2 && (
-              <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold text-xs">Add at least 2 unique players to create a doubles pair.</p>
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
             )}
             {availablePlayers.map((name) => (
               <button
@@ -2609,34 +2495,19 @@ export default function App() {
 
           <div className="mt-auto pt-2 pb-5 lg:pb-0 border-t border-white/5 shrink-0">
             <button
-<<<<<<< HEAD
               disabled={doublesSelection.length !== requiredCount}
               onClick={() => confirmMatchup(teamIdx)}
               className={`w-full py-2 rounded-xl font-black uppercase tracking-widest transition-all text-xs sm:text-sm ${
                 doublesSelection.length === requiredCount 
-=======
-              disabled={doublesSelection.length !== 2}
-              onClick={() => confirmDoubles(teamIdx)}
-              className={`w-full py-2 rounded-xl font-black uppercase tracking-widest transition-all text-xs sm:text-sm ${
-                doublesSelection.length === 2 
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
                   ? 'opacity-100 scale-102 shadow-lg' 
                   : 'opacity-50 cursor-not-allowed grayscale'
               }`}
               style={{ 
-<<<<<<< HEAD
                 backgroundColor: doublesSelection.length === requiredCount ? (teamIdx === 1 ? player1.color : player2.color) : '#334155', 
                 color: '#000' 
               }}
             >
               {mode === 'doubles' ? 'Confirm Pair' : 'Confirm Player'}
-=======
-                backgroundColor: doublesSelection.length === 2 ? (teamIdx === 1 ? player1.color : player2.color) : '#334155', 
-                color: '#000' 
-              }}
-            >
-              Confirm Pair
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
             </button>
           </div>
         </motion.div>
@@ -4411,11 +4282,7 @@ export default function App() {
                           <button 
                             onClick={() => {
                               setSinglesSetup(prev => ({ ...prev, p1Name: '' }));
-<<<<<<< HEAD
                               setTeam1Players([]);
-=======
-                              setTeam1Players(['']);
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
                               setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
                             }}
                             className="p-1 sm:p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-colors rounded-lg"
@@ -4433,7 +4300,6 @@ export default function App() {
                           value={singlesSetup.p2Name} 
                           onChange={(e) => {
                             const val = e.target.value.toUpperCase();
-<<<<<<< HEAD
                             setSinglesSetup(prev => {
                               const next = { ...prev, p2Name: val };
                               if (activeSetupTab === 'singles') {
@@ -4450,13 +4316,6 @@ export default function App() {
                               }
                               return next;
                             });
-=======
-                            setSinglesSetup(prev => ({ ...prev, p2Name: val }));
-                            if (activeSetupTab === 'singles') {
-                              setTeam2Players([val]);
-                              setPlayer2(prev => ({ ...prev, name: val }));
-                            }
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
                           }}
                           onFocus={(e) => handleInputFocus(e, 'p2-singles')}
                           onBlur={() => {
@@ -4476,11 +4335,7 @@ export default function App() {
                           <button 
                             onClick={() => {
                               setSinglesSetup(prev => ({ ...prev, p2Name: '' }));
-<<<<<<< HEAD
                               setTeam2Players([]);
-=======
-                              setTeam2Players(['']);
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
                               setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
                             }}
                             className="p-1 sm:p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-colors rounded-lg"
