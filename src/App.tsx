@@ -28,17 +28,36 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Eraser,
   RefreshCw,
-  ArrowUpDown
+  GripVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Player, MatchHistoryEntry, MatchupSettings, FrameDetail } from './types';
 import { 
   THEME_COLORS, 
   BACKGROUND_COLORS, 
   POOL_BALLS, 
   CLOTH_COLORS, 
-  SPEED_CLOTH_COLORS 
+  SPEED_CLOTH_COLORS,
+  FULL_SCREEN_BACKDROPS
 } from './constants';
 import { ColorPicker } from './components/ColorPicker';
 import portraitBackdrop from './assets/portrait_mode_backdrop.png';
@@ -47,27 +66,73 @@ const SHOT_CLOCK_DEFAULT = 30;
 
 type SetupTab = 'singles' | 'group' | 'match';
 
+interface SortableRowProps {
+  id: string | number;
+  children: React.ReactNode;
+  onClick?: () => void;
+  className?: string;
+  key?: React.Key;
+}
+
+function SortableRow({ id, children, onClick, className }: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    position: 'relative' as const,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`${className} ${isDragging ? 'shadow-2xl ring-2 ring-emerald-500/50 bg-slate-900/90 z-50' : ''}`}
+      onClick={!isDragging ? onClick : undefined}
+    >
+      <div 
+        {...attributes} 
+        {...listeners} 
+        className="flex px-[1vw] py-[2vh] text-slate-700 hover:text-emerald-500 cursor-grab active:cursor-grabbing w-[6%] items-center justify-center shrink-0 transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 const SLOT1_DEFAULTS = {
   color: '#FFFF33',
-  bgColor: '#000000',
+  bgColor: '#800080',
   screenColor: '#000000',
-  bgStyle: 'default',
+  bgStyle: 'balls',
   screenStyle: 'default'
 };
 
 const SLOT2_DEFAULTS = {
   color: '#FF001C',
-  bgColor: '#000000',
+  bgColor: '#111111',
   screenColor: '#000000',
-  bgStyle: 'default',
+  bgStyle: 'balls',
   screenStyle: 'default'
 };
 
 export default function App() {
   // --- State ---
-  const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('match');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('singles');
   const [matchModeBreakSide, setMatchModeBreakSide] = useState<'1' | '2' | 'none'>('none');
-  const [showDoublesPicker, setShowDoublesPicker] = useState<{ team: 1 | 2, isOpen: boolean }>({ team: 1, isOpen: false });
+  const [showDoublesPicker, setShowDoublesPicker] = useState<{ team: 1 | 2, isOpen: boolean, mode: 'singles' | 'doubles' }>({ team: 1, isOpen: false, mode: 'doubles' });
   const [doublesSelection, setDoublesSelection] = useState<string[]>([]);
   const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
   const [player2, setPlayer2] = useState<Player>({ id: '2', name: '', score: 0, isTurn: false, ...SLOT2_DEFAULTS });
@@ -85,6 +150,8 @@ export default function App() {
     matchStartTime: null as string | null,
     score1: 0,
     score2: 0,
+    sessionScore1: 0,
+    sessionScore2: 0,
     currentBreakPlayerId: 'none' as '1' | '2' | 'none',
     breakBalls: [] as number[]
   });
@@ -164,12 +231,14 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
+  const [fullScreenBackdrop, setFullScreenBackdrop] = useState<string>('magma');
   const [deviceTimePosition, setDeviceTimePosition] = useState<{ x: number, y: number } | null>(null);
   const [matchClockPosition, setMatchClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [shotClockPosition, setShotClockPosition] = useState<{ x: number, y: number } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const frameStartTimeRef = useRef<number>(Date.now());
+  const isFinishingMatchRef = useRef(false);
   const isKeyboardOpenRef = useRef(false);
   const clockRef = useRef<HTMLDivElement>(null);
   const matchClockRef = useRef<HTMLDivElement>(null);
@@ -177,7 +246,80 @@ export default function App() {
   const emailInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = parseInt(active.id.toString());
+      const newIndex = parseInt(over.id.toString());
+
+      // 1. Move player arrays
+      const nextT1 = arrayMove(team1Players, oldIndex, newIndex) as string[];
+      const nextT2 = arrayMove(team2Players, oldIndex, newIndex) as string[];
+      updateTeamData(team1Name, nextT1, team2Name, nextT2);
+
+      // 2. Reorder matchupSettings keys correctly
+      setMatchupSettings(prev => {
+        const next: Record<number, MatchupSettings> = {};
+        const maxIdx = Math.max(nextT1.length, nextT2.length);
+        const indices = Array.from({ length: maxIdx }, (_, i) => i);
+        
+        // movedIndices[newIdx] = oldIdx
+        const movedIndices = arrayMove(indices, oldIndex, newIndex);
+        
+        // The arrayMove above actually gives us the NEW order of original values.
+        // If we move value 0 to position 2 in [0, 1, 2], we get [1, 2, 0].
+        // So newIdx 0 corresponds to oldIdx 1, etc.
+        movedIndices.forEach((oldIdx, newIdx) => {
+          if (prev[oldIdx]) {
+            next[newIdx] = prev[oldIdx];
+          }
+        });
+        
+        return next;
+      });
+
+      // 3. Update selectedMatchIndex if it was moved
+      if (selectedMatchIndex !== null) {
+        const maxIdx = Math.max(team1Players.length, team2Players.length);
+        const indices = Array.from({ length: maxIdx }, (_, i) => i);
+        const movedIndices = arrayMove(indices, oldIndex, newIndex);
+        // We want to find where the old selectedMatchIndex is now
+        const newSelectedIdx = movedIndices.indexOf(selectedMatchIndex);
+        if (newSelectedIdx !== -1) {
+          setSelectedMatchIndex(newSelectedIdx);
+        }
+      }
+    }
+  };
+
   useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Save the event for manual triggering in settings
+      setDeferredPrompt(e);
+      
+      // On Android/Mobile, avoid the automatic "Add to Home Screen" mini-infobar pop-up banner
+      // that users often find intrusive. We provide a cleaner button in settings.
+      // On Desktop, we allow the default behavior so the "Install" icon appears in the URL bar.
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
     const handleResize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
@@ -205,9 +347,19 @@ export default function App() {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       clearInterval(timeInterval);
     };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   // Robust device detection based on User-Agent and screen width
   const deviceInfo = useMemo(() => {
@@ -224,6 +376,11 @@ export default function App() {
     const shouldHideDeviceTime = isPortrait || isSquarish || !showDeviceTime;
 
     const isShort = windowSize.height < 500;
+    
+    // PWA Detection
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    const isAndroid = /android/.test(ua);
 
     // Unified title sizes based on device
     const titleSizes = {
@@ -234,12 +391,16 @@ export default function App() {
       tileDesc: isPhone ? '3.3vh' : (isTablet ? '2.6vh' : '2.0vh')
     };
 
-    return { isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, shouldHideDeviceTime, titleSizes };
+    return { 
+      isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, 
+      shouldHideDeviceTime, titleSizes,
+      isStandalone, isIOS, isAndroid
+    };
   }, [windowSize.width, windowSize.height, showDeviceTime]); 
 
   // Calculate shared font size for team names to occupy up to 95% of the gap below the top bar
   const sharedTeamNameFontSize = useMemo(() => {
-    const topBarHeightVal = deviceInfo.isPhone ? windowSize.height * 0.16 : windowSize.height * 0.1;
+    const topBarHeightVal = windowSize.height * (deviceInfo.isTablet ? 0.08 : 0.1);
     const topBarHeight = (deviceInfo.isPhone && !isNavVisible) ? 0 : topBarHeightVal;
     
     // The "gap" height is everything below the top bar
@@ -416,7 +577,8 @@ export default function App() {
     // Attempt scroll if we are in teams view, haven't scrolled yet in this session, 
     // there is data to scroll to, and the keyboard isn't blocking us.
     if (!hasScrolledTeamsRef.current && 
-        (team1Players.length > 0 || team2Players.length > 0) && 
+        (team1Players.some(p => p.trim() !== '') || team2Players.some(p => p.trim() !== '')) && 
+        !(activeSetupTab === 'singles' && (!player1.name || !player2.name)) &&
         !isKeyboardOpen) {
       
       const scrollHandler = () => {
@@ -479,41 +641,55 @@ export default function App() {
   const teamTotals = useMemo(() => {
     let t1 = 0;
     let t2 = 0;
-    const maxMatches = Math.max(team1Players.length, team2Players.length);
     
+    // In Singles mode, use the explicitly updated session total scores
+    if (activeSetupTab === 'singles') {
+      return { 
+        t1: Number(singlesSetup.sessionScore1) || 0, 
+        t2: Number(singlesSetup.sessionScore2) || 0 
+      };
+    }
+
+    // Default Match/Group mode matching logic
+    const maxMatches = Math.max(team1Players.length, team2Players.length);
     for (let i = 0; i < maxMatches; i++) {
-      const p1Name = team1Players[i] || `PLAYER ${i + 1}`;
-      const p2Name = team2Players[i] || `PLAYER ${i + 1}`;
+      const p1Name = team1Players[i] || '';
+      const p2Name = team2Players[i] || '';
       
+      let m1 = 0;
+      let m2 = 0;
+
       // 1. If it's the currently active match, use the live scores directly from player state
       if (selectedMatchIndex === i) {
-        t1 += player1.score;
-        t2 += player2.score;
+        m1 = Number(player1.score) || 0;
+        m2 = Number(player2.score) || 0;
       } else {
         const settings = matchupSettings[i];
         const match = getMatchResult(p1Name, p2Name);
         
         // 2. Use matchupSettings if available (which carries progress from the session)
-        let m1 = settings?.score1 ?? 0;
-        let m2 = settings?.score2 ?? 0;
+        m1 = Number(settings?.score1 ?? 0) || 0;
+        m2 = Number(settings?.score2 ?? 0) || 0;
         
         // 3. If no matchupSettings scores, use history (for completed matches)
         if (m1 === 0 && m2 === 0 && match) {
+          const s1 = Number(match.score1) || 0;
+          const s2 = Number(match.score2) || 0;
           if (match.player1 === p1Name) {
-            m1 = match.score1;
-            m2 = match.score2;
+            m1 = s1;
+            m2 = s2;
           } else {
-            m1 = match.score2;
-            m2 = match.score1;
+            m1 = s2;
+            m2 = s1;
           }
         }
-        
-        t1 += m1;
-        t2 += m2;
       }
+      
+      t1 += m1;
+      t2 += m2;
     }
     return { t1, t2 };
-  }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.score, player2.score, matchupSettings]);
+  }, [team1Players, team2Players, matchHistory, selectedMatchIndex, player1.name, player2.name, player1.score, player2.score, matchupSettings, singlesSetup, activeSetupTab]);
 
   // --- Preference Synchronization ---
   useEffect(() => {
@@ -552,6 +728,67 @@ export default function App() {
       player2.color, player2.bgColor, player2.screenColor, player2.bgStyle, player2.screenStyle,
       player1.name, player2.name, isLoaded]);
 
+  // --- Singles Session Totals Sync ---
+  useEffect(() => {
+    if (!isLoaded || activeSetupTab !== 'singles') return;
+
+    // Use current names from either player state (if in game) or setup buffer
+    const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
+    const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
+    
+    let h1 = 0;
+    let h2 = 0;
+
+    // Sum history for the current pair
+    matchHistory.forEach(m => {
+      if (m.mode === 'singles') {
+        const mP1 = (m.player1 || '').trim().toLowerCase();
+        const mP2 = (m.player2 || '').trim().toLowerCase();
+        
+        if (p1 && p2) {
+          if (mP1 === p1 && mP2 === p2) {
+            h1 += Number(m.score1) || 0;
+            h2 += Number(m.score2) || 0;
+          } else if (mP1 === p2 && mP2 === p1) {
+            h1 += Number(m.score2) || 0;
+            h2 += Number(m.score1) || 0;
+          }
+        } else {
+          // If no names specified yet, sum all singles history
+          h1 += Number(m.score1) || 0;
+          h2 += Number(m.score2) || 0;
+        }
+      }
+    });
+
+    // In Singles, the live score IS the total — always include it when names match.
+    // We do not gate on selectedMatchIndex because it can be null in valid playing states.
+    const currentP1 = (player1.name || '').trim().toLowerCase();
+    const currentP2 = (player2.name || '').trim().toLowerCase();
+
+    let live1 = 0;
+    let live2 = 0;
+
+    if (currentP1 === p1 && currentP2 === p2) {
+      live1 = Number(player1.score) || 0;
+      live2 = Number(player2.score) || 0;
+    } else if (currentP1 === p2 && currentP2 === p1) {
+      live1 = Number(player2.score) || 0;
+      live2 = Number(player1.score) || 0;
+    }
+
+    const total1 = h1 + live1;
+    const total2 = h2 + live2;
+
+    if (singlesSetup.sessionScore1 !== total1 || singlesSetup.sessionScore2 !== total2) {
+      setSinglesSetup(prev => ({
+        ...prev,
+        sessionScore1: total1,
+        sessionScore2: total2
+      }));
+    }
+  }, [matchHistory, player1.score, player2.score, player1.name, player2.name, singlesSetup.p1Name, singlesSetup.p2Name, activeSetupTab, isLoaded]);
+
   // --- Initialization ---
   useEffect(() => {
     try {
@@ -564,22 +801,40 @@ export default function App() {
       };
 
       // Load active tab
-      const loadedTab = state.activeSetupTab as SetupTab | undefined;
+      const loadedTab = (state.activeSetupTab as SetupTab | undefined) || 'singles';
       const t1Name = getVal('team1Name', state.teamData?.team1Name, 'pool_team1_name');
       const t2Name = getVal('team2Name', state.teamData?.team2Name, 'pool_team2_name');
-      const t1PlayersLoaded = state.teamData?.team1Players || JSON.parse(localStorage.getItem('pool_team1_players') || 'null') || [];
-      const t2PlayersLoaded = state.teamData?.team2Players || JSON.parse(localStorage.getItem('pool_team2_players') || 'null') || [];
+      const t1PlayersLoaded = (state.teamData?.team1Players || JSON.parse(localStorage.getItem('pool_team1_players') || 'null') || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER '));
+      const t2PlayersLoaded = (state.teamData?.team2Players || JSON.parse(localStorage.getItem('pool_team2_players') || 'null') || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER '));
 
-      if (loadedTab) setActiveSetupTab(loadedTab);
+      setActiveSetupTab(loadedTab);
 
       // Load isolated setup buffers
-      if (state.singlesSetup) setSinglesSetup(state.singlesSetup);
-      if (state.matchSetup) setMatchSetup(state.matchSetup);
-      if (state.groupSetup) setGroupSetup(state.groupSetup);
+      if (state.singlesSetup) {
+        setSinglesSetup({
+          ...state.singlesSetup,
+          p1Name: (state.singlesSetup.p1Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup.p1Name || ''),
+          p2Name: (state.singlesSetup.p2Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup.p2Name || ''),
+        });
+      }
+      if (state.matchSetup) {
+        setMatchSetup({
+          ...state.matchSetup,
+          t1Players: (state.matchSetup.t1Players || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER ')),
+          t2Players: (state.matchSetup.t2Players || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER '))
+        });
+      }
+      if (state.groupSetup) {
+        setGroupSetup({
+          ...state.groupSetup,
+          t1Players: (state.groupSetup.t1Players || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER ')),
+          t2Players: (state.groupSetup.t2Players || []).filter((p: string) => p && !p.toUpperCase().includes('PLAYER '))
+        });
+      }
 
       // Initialize defaults for active players
-      let p1Name = 'PLAYER 1';
-      let p2Name = 'PLAYER 2';
+      let p1Name = '';
+      let p2Name = '';
       let currentT1Name = t1Name || '';
       let currentT2Name = t2Name || '';
       let currentT1Players = t1PlayersLoaded;
@@ -601,8 +856,8 @@ export default function App() {
         }
         selIndex = state.matchSetup.selectedIndex;
         if (selIndex !== null) {
-          p1Name = currentT1Players[selIndex] || 'PLAYER 1';
-          p2Name = currentT2Players[selIndex] || 'PLAYER 2';
+          p1Name = currentT1Players[selIndex] || '';
+          p2Name = currentT2Players[selIndex] || '';
         }
       } else if (loadedTab === 'group' && state.groupSetup) {
         currentT1Name = '';
@@ -616,19 +871,27 @@ export default function App() {
         }
         selIndex = state.groupSetup.selectedIndex;
         if (selIndex !== null) {
-          p1Name = currentT1Players[selIndex] || 'PLAYER 1';
-          p2Name = currentT2Players[selIndex] || 'PLAYER 2';
+          p1Name = currentT1Players[selIndex] || '';
+          p2Name = currentT2Players[selIndex] || '';
         }
-      } else if (loadedTab === 'singles' && state.singlesSetup) {
+      } else if (loadedTab === 'singles') {
         currentT1Name = '';
         currentT2Name = '';
-        currentT1Players = [state.singlesSetup.p1Name || 'PLAYER 1'];
-        currentT2Players = [state.singlesSetup.p2Name || 'PLAYER 2'];
-        if (state.singlesSetup.history?.length > 0) history = state.singlesSetup.history;
-        if (state.singlesSetup.frameDetails?.length > 0) frameDetails = state.singlesSetup.frameDetails;
-        p1Name = state.singlesSetup.p1Name || 'PLAYER 1';
-        p2Name = state.singlesSetup.p2Name || 'PLAYER 2';
-        selIndex = 0;
+        const singlesP1 = (state.singlesSetup?.p1Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup?.p1Name || '');
+        const singlesP2 = (state.singlesSetup?.p2Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup?.p2Name || '');
+        if (singlesP1 && singlesP2) {
+          currentT1Players = [singlesP1];
+          currentT2Players = [singlesP2];
+          selIndex = 0;
+        } else {
+          currentT1Players = [];
+          currentT2Players = [];
+          selIndex = null;
+        }
+        if (state.singlesSetup?.history?.length > 0) history = state.singlesSetup.history;
+        if (state.singlesSetup?.frameDetails?.length > 0) frameDetails = state.singlesSetup.frameDetails;
+        p1Name = singlesP1;
+        p2Name = singlesP2;
       }
 
       // Apply states
@@ -716,6 +979,12 @@ export default function App() {
       setPlayer1(p1);
       setPlayer2(p2);
       
+      if (state.userPreferences?.fullScreenBackdrop !== undefined) {
+        setFullScreenBackdrop(state.userPreferences.fullScreenBackdrop);
+      } else if (state.gameData?.fullScreenBackdrop !== undefined) {
+        setFullScreenBackdrop(state.gameData.fullScreenBackdrop);
+      }
+      
       if (state.userPreferences?.view !== undefined) setView(state.userPreferences.view);
       if (state.userPreferences?.isNavVisible !== undefined) setIsNavVisible(state.userPreferences.isNavVisible);
       if (state.userPreferences?.showDeviceTime !== undefined) setShowDeviceTime(state.userPreferences.showDeviceTime);
@@ -790,6 +1059,7 @@ export default function App() {
         view,
         isNavVisible,
         showDeviceTime,
+        fullScreenBackdrop,
         deviceTimePosition,
         matchClockPosition,
         shotClockPosition
@@ -804,7 +1074,7 @@ export default function App() {
     player1.score, player2.score, player1.name, player2.name,
     currentBreakPlayerId, breakBalls, matchupSettings, selectedMatchIndex,
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
-    isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide,
+    isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide, fullScreenBackdrop,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
     playerPreferences, pairTrackerSettings, apiConfig
   ]);
@@ -1008,7 +1278,7 @@ export default function App() {
 
   // Load player preferences when names change (e.g. typed in scoreboard)
   useEffect(() => {
-    if (!isLoaded || !player1.name) return;
+    if (!isLoaded || !player1.name || focusedField) return;
     
     const pref = getPlayerPref(player1.name, 'p1');
     if (pref) {
@@ -1035,31 +1305,11 @@ export default function App() {
           };
         });
       }
-    } else {
-      const defaultColor = '#FFFF33';
-      const nameChanged = prevNamesRef.current.p1 !== player1.name;
-      const justLoaded = prevNamesRef.current.p1 === '';
-      
-      // Only reset to defaults if the name REALLY changed to something unknown
-      // and it wasn't just the initial app load (where names were populated by initialization)
-      if (nameChanged && !justLoaded && (player1.bgStyle !== 'default' || player1.screenStyle !== 'default')) {
-        setPlayer1(prev => {
-          if (prev.name !== player1.name) return prev;
-          return {
-            ...prev,
-            color: defaultColor,
-            bgColor: '#000000',
-            screenColor: '#000000',
-            bgStyle: 'default',
-            screenStyle: 'default'
-          };
-        });
-      }
     }
-  }, [player1.name, playerPreferences, isLoaded]); // Removed player1.id/others from deps to be focused
+  }, [player1.name, playerPreferences, isLoaded, focusedField]); // Removed player1.id/others from deps to be focused
 
   useEffect(() => {
-    if (!isLoaded || !player2.name) return;
+    if (!isLoaded || !player2.name || focusedField) return;
     
     const pref = getPlayerPref(player2.name, 'p2');
     if (pref) {
@@ -1083,32 +1333,14 @@ export default function App() {
           };
         });
       }
-    } else {
-      const defaultColor = '#FF001C';
-      const nameChanged = prevNamesRef.current.p2 !== player2.name;
-      const justLoaded = prevNamesRef.current.p2 === '';
-
-      if (nameChanged && !justLoaded && (player2.bgStyle !== 'default' || player2.screenStyle !== 'default')) {
-        setPlayer2(prev => {
-          if (prev.name !== player2.name) return prev;
-          return {
-            ...prev,
-            color: defaultColor,
-            bgColor: '#000000',
-            screenColor: '#000000',
-            bgStyle: 'default',
-            screenStyle: 'default'
-          };
-        });
-      }
     }
-  }, [player2.name, playerPreferences, isLoaded]);
+  }, [player2.name, playerPreferences, isLoaded, focusedField]);
 
   // Ensure player names are fresh whenever entering gameplay view
   useEffect(() => {
     if (view === 'gameplay' && selectedMatchIndex !== null) {
-      const p1 = team1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
-      const p2 = team2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      const p1 = team1Players[selectedMatchIndex] || '';
+      const p2 = team2Players[selectedMatchIndex] || '';
       
       setPlayer1(prev => {
         const pref = getPlayerPref(p1, 'p1');
@@ -1136,6 +1368,46 @@ export default function App() {
       });
     }
   }, [view, selectedMatchIndex, team1Players, team2Players]); // Removed playerPreferences to prevent feedback loop
+
+  // --- Sound Logic ---
+  const playBeep = useCallback((freq: number, volume = 0.012) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      
+      const audioCtx = new AudioCtx();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      
+      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch (e) {
+      // Audio context might be blocked by browser policy until interaction
+    }
+  }, []);
+
+  // Beeps for shot clock (Higher tone: 880Hz)
+  useEffect(() => {
+    if (isTimerRunning && isShotClockEnabled && shotClock <= 5 && shotClock > 0) {
+      playBeep(880);
+    }
+  }, [shotClock, isTimerRunning, isShotClockEnabled, playBeep]);
+
+  // Beeps for match clock (Lower tone: 440Hz)
+  useEffect(() => {
+    if (isTimerRunning && isMatchClockEnabled && matchClock <= 5 && matchClock > 0) {
+      playBeep(440);
+    }
+  }, [matchClock, isTimerRunning, isMatchClockEnabled, playBeep]);
 
   // --- Timer Logic ---
   const startTimer = useCallback(() => {
@@ -1189,8 +1461,8 @@ export default function App() {
     const now = Date.now();
     const duration = Math.round((now - frameStartTimeRef.current) / 1000);
     
-    const nextScore1 = playerId === '1' ? player1.score + 1 : player1.score;
-    const nextScore2 = playerId === '2' ? player2.score + 1 : player2.score;
+    const nextScore1 = playerId === '1' ? (Number(player1.score) || 0) + 1 : (Number(player1.score) || 0);
+    const nextScore2 = playerId === '2' ? (Number(player2.score) || 0) + 1 : (Number(player2.score) || 0);
     
     const breakerId = currentBreakPlayerId;
     const breakerName = breakerId === '1' ? player1.name : player2.name;
@@ -1219,7 +1491,12 @@ export default function App() {
     }
     
     if (isMatchMode && (nextScore1 >= 1 || nextScore2 >= 1)) {
-      finishMatch({ score1: nextScore1, score2: nextScore2 }, [...currentMatchFrameDetails, frameDetail]);
+      if (isFinishingMatchRef.current) return;
+      isFinishingMatchRef.current = true;
+      setTimeout(() => {
+        finishMatch({ score1: nextScore1, score2: nextScore2 }, [...currentMatchFrameDetails, frameDetail]);
+        isFinishingMatchRef.current = false;
+      }, 500);
       return;
     }
     
@@ -1354,23 +1631,42 @@ export default function App() {
   };
 
   const finishMatch = (overrideScores?: { score1: number, score2: number }, overrideFrameDetails?: FrameDetail[]) => {
-    const isMatchMode = activeSetupTab === 'singles' ? false : (activeSetupTab === 'match');
+    const isMatchMode = activeSetupTab === 'match' || activeSetupTab === 'singles';
     const isGroupMode = activeSetupTab === 'group';
     
     // Scores to use
-    const s1 = overrideScores ? overrideScores.score1 : player1.score;
-    const s2 = overrideScores ? overrideScores.score2 : player2.score;
+    const s1 = Number(overrideScores ? overrideScores.score1 : player1.score) || 0;
+    const s2 = Number(overrideScores ? overrideScores.score2 : player2.score) || 0;
     const frames = overrideFrameDetails || currentMatchFrameDetails;
 
-    // In match mode, enforce score of 1 requirement if someone has scored
-    if (isMatchMode && s1 === 0 && s2 === 0) {
+    // Save progress to matchup settings before proceeding
+    if (selectedMatchIndex !== null) {
+      setMatchupSettings(prev => ({
+        ...prev,
+        [selectedMatchIndex]: {
+          ...prev[selectedMatchIndex],
+          score1: s1,
+          score2: s2,
+          player1: { ...player1, score: s1 },
+          player2: { ...player2, score: s2 },
+          winner: s1 > s2 ? player1.name : (s2 > s1 ? player2.name : (s1 === s2 ? 'TIE' : undefined)),
+          frameDetails: frames,
+          isLive: false,
+          date: new Date().toISOString()
+        }
+      }));
+    }
+
+    // For singles, allow finishing even at 0-0. For match mode, keep the 1-score requirement.
+    if (activeSetupTab === 'match' && s1 === 0 && s2 === 0) {
       // Allow clearing/resetting instead of finishing if no data
       return;
     }
 
-    const winner = s1 > s2 ? player1.name : player2.name;
-    const winnerTeam = s1 > s2 ? team1Name : team2Name;
-    const winnerColor = s1 > s2 ? player1.color : player2.color;
+    const isTie = s1 === s2;
+    const winner = s1 > s2 ? player1.name : (s2 > s1 ? player2.name : "IT'S A DRAW");
+    const winnerTeam = s1 > s2 ? team1Name : (s2 > s1 ? team2Name : "");
+    const winnerColor = s1 > s2 ? player1.color : (s2 > s1 ? player2.color : "#94a3b8");
 
     const newEntry: MatchHistoryEntry = {
       id: Date.now().toString(),
@@ -1382,7 +1678,8 @@ export default function App() {
       team2: team2Name || undefined,
       score1: s1,
       score2: s2,
-      winner,
+      winner: isTie ? 'TIE' : winner,
+      mode: activeSetupTab,
       shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
       matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
       frameDetails: frames
@@ -1408,134 +1705,68 @@ export default function App() {
   };
 
   const clearAllTableData = () => {
-    // 1. Clear history completely for the current session's players
-    setMatchHistory(prev => {
-      const p1Names = team1Players.map((n, i) => (n || `PLAYER ${i + 1}`).trim().toLowerCase());
-      const p2Names = team2Players.map((n, i) => (n || `PLAYER ${i + 1}`).trim().toLowerCase());
-      
-      return prev.filter(m => {
-        const mhP1 = m.player1.trim().toLowerCase();
-        const mhP2 = m.player2.trim().toLowerCase();
-        return !p1Names.some((p1, i) => {
-          const p2 = p2Names[i];
-          return (mhP1 === p1 && mhP2 === p2) || (mhP1 === p2 && mhP2 === p1);
-        });
-      });
-    });
-
-    // 2. Reset session-wide matchup settings and break trackers
-    setMatchupSettings({});
-    setMatchModeBreakSide('none');
-    setSelectedMatchIndex(null);
-
-    // 3. Reset live match state
-    setPlayer1(prev => ({ ...prev, score: 0 }));
-    setPlayer2(prev => ({ ...prev, score: 0 }));
-    setCurrentBreakPlayerId('none');
-    setBreakBalls([]);
-    setCurrentMatchFrameDetails([]);
-    setMatchStartTime(null);
-    resetTimer();
-
-    // 4. Clear mode buffers and pair tracker to prevent stale data restoration
-    const emptyDetails: FrameDetail[] = [];
-    const emptyBalls: number[] = [];
-    
-    setPairTrackerSettings({});
-    
-    setSinglesSetup(prev => ({
-      ...prev,
-      score1: 0,
-      score2: 0,
-      currentBreakPlayerId: 'none',
-      breakBalls: emptyBalls,
-      frameDetails: emptyDetails,
-      matchStartTime: null,
-      history: []
-    }));
-
-    setMatchSetup(prev => ({
-      ...prev,
-      settings: {},
-      selectedIndex: null,
-      score1: 0,
-      score2: 0,
-      currentBreakPlayerId: 'none',
-      breakBalls: emptyBalls,
-      frameDetails: emptyDetails,
-      matchStartTime: null,
-      history: []
-    }));
-
-    setGroupSetup(prev => ({
-      ...prev,
-      settings: {},
-      selectedIndex: null,
-      score1: 0,
-      score2: 0,
-      currentBreakPlayerId: 'none',
-      breakBalls: emptyBalls,
-      frameDetails: emptyDetails,
-      matchStartTime: null,
-      history: []
-    }));
+    if (activeSetupTab === 'singles') {
+      clearSinglesData();
+    } else if (activeSetupTab === 'match') {
+      clearMatchData();
+    } else if (activeSetupTab === 'group') {
+      clearGroupData();
+    }
     
     // Close confirm
     setShowDeleteAllConfirm(false);
   };
 
   const completeMatchAndAdvance = () => {
-    const isMatchMode = activeSetupTab === 'match';
+    const isMatchMode = activeSetupTab === 'match' || activeSetupTab === 'singles';
     const isGroupMode = activeSetupTab === 'group';
 
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     frameStartTimeRef.current = Date.now();
     
-    // Reset live scores for this specific slot
-    if (selectedMatchIndex !== null) {
-      setMatchupSettings(prev => ({
-        ...prev,
-        [selectedMatchIndex]: {
-          ...prev[selectedMatchIndex],
-          score1: 0,
-          score2: 0,
-          currentBreakPlayerId: 'none',
-          frameDetails: []
-        }
-      }));
-    }
-    
-    // In Group/Match mode, advance to next pair
+    // Logic for Match, Group, or Singles
     if (isMatchMode || isGroupMode) {
       if (selectedMatchIndex !== null) {
         const maxMatches = Math.max(team1Players.length, team2Players.length);
         const nextIndex = selectedMatchIndex + 1;
         
-        if (nextIndex < maxMatches) {
+        // Advance only in multi-match modes
+        if (nextIndex < maxMatches && activeSetupTab !== 'singles') {
           selectTeamMatch(nextIndex);
         } else {
-          setShowTeamTotals(true);
+          // Finish session / match
+          if (activeSetupTab !== 'singles') {
+            setShowTeamTotals(true);
+          }
+          
           setPlayer1(prev => ({ ...prev, score: 0 }));
           setPlayer2(prev => ({ ...prev, score: 0 }));
           setCurrentBreakPlayerId('none');
           setBreakBalls([]);
           setSelectedMatchIndex(null);
           resetTimer();
-          // After finishing all matches, go to history table
           navigateToView('teams');
+          
+          // Auto-scroll to results table after transition
+          setTimeout(() => {
+            const table = document.getElementById('matchups-table');
+            if (table) {
+              table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 300);
         }
       } else {
         navigateToView('teams');
       }
     } else {
-      // Singles: just reset scores and go to Ready state
+      // Emergency fallback / Other modes
       setPlayer1(prev => ({ ...prev, score: 0 }));
       setPlayer2(prev => ({ ...prev, score: 0 }));
       setCurrentBreakPlayerId('none');
       setBreakBalls([]);
+      setSelectedMatchIndex(null);
       resetTimer();
-      // Go to history table
       navigateToView('teams');
     }
   };
@@ -1581,8 +1812,8 @@ export default function App() {
   };
 
   const selectTeamMatch = (index: number) => {
-    const p1Name = team1Players[index] || `PLAYER ${index + 1}`;
-    const p2Name = team2Players[index] || `PLAYER ${index + 1}`;
+    const p1Name = team1Players[index] || '';
+    const p2Name = team2Players[index] || '';
     
     // Load individual player preferences if they exist
     const p1Pref = getPlayerPref(p1Name, 'p1');
@@ -1608,24 +1839,20 @@ export default function App() {
     
     setPlayer1(prev => ({ 
       ...prev, 
+      ...SLOT1_DEFAULTS,
       name: p1Name, 
       score: p1Score,
-      color: p1Pref?.color || (settings?.player1.color) || '#FFFF33',
-      bgColor: p1Pref?.bgColor || (settings?.player1.bgColor) || '#000000',
-      screenColor: p1Pref?.screenColor || (settings?.player1.screenColor) || '#000000',
-      bgStyle: p1Pref?.bgStyle || (settings?.player1.bgStyle) || 'default',
-      screenStyle: p1Pref?.screenStyle || (settings?.player1.screenStyle) || 'default'
+      ...(settings?.player1 || {}),
+      ...(p1Pref || {})
     }));
     
     setPlayer2(prev => ({ 
       ...prev, 
+      ...SLOT2_DEFAULTS,
       name: p2Name, 
       score: p2Score,
-      color: p2Pref?.color || (settings?.player2.color) || '#FF001C',
-      bgColor: p2Pref?.bgColor || (settings?.player2.bgColor) || '#000000',
-      screenColor: p2Pref?.screenColor || (settings?.player2.screenColor) || '#000000',
-      bgStyle: p2Pref?.bgStyle || (settings?.player2.bgStyle) || 'default',
-      screenStyle: p2Pref?.screenStyle || (settings?.player2.screenStyle) || 'default'
+      ...(settings?.player2 || {}),
+      ...(p2Pref || {})
     }));
     
     setSelectedMatchIndex(index);
@@ -1773,110 +2000,128 @@ export default function App() {
     if (deviceInfo.isPhone) setIsNavVisible(true);
   };
 
-  const clearTeams = () => {
-    if (activeSetupTab === 'singles') {
-      // Clear Singles Data
-      setPlayer1({ 
-        id: '1', 
-        name: '', 
-        score: 0, 
-        isTurn: true, 
-        ...SLOT1_DEFAULTS 
-      });
-      setPlayer2({ 
-        id: '2', 
-        name: '', 
-        score: 0, 
-        isTurn: false, 
-        ...SLOT2_DEFAULTS 
-      });
-      
-      setSinglesSetup({ 
-        p1Name: '', 
-        p2Name: '', 
-        history: [], 
-        frameDetails: [], 
-        matchStartTime: null, 
-        score1: 0, 
-        score2: 0, 
-        currentBreakPlayerId: 'none', 
-        breakBalls: [] 
-      });
-      
-      // Clear persistent pair tracker for current match if any
-      const p1p2Key = `${player1.name}|${player2.name}`;
-      if (player1.name && player2.name) {
-        setPairTrackerSettings(prev => {
-          const next = { ...prev };
-          delete next[p1p2Key];
-          return next;
-        });
-      }
-    } else if (activeSetupTab === 'match') {
-      // Clear Match Mode Data
-      setTeam1Name('');
-      setTeam2Name('');
-      setTeam1Players([]);
-      setTeam2Players([]);
-      
-      setMatchSetup({ 
-        t1Name: '', 
-        t2Name: '', 
-        t1Players: [], 
-        t2Players: [], 
-        settings: {}, 
-        selectedIndex: null,
-        history: [], 
-        frameDetails: [], 
-        matchStartTime: null, 
-        score1: 0, 
-        score2: 0,
-        currentBreakPlayerId: 'none',
-        breakBalls: []
-      });
-      
-      setMatchupSettings({});
-      setSelectedMatchIndex(null);
-      setMatchModeBreakSide('none');
-      
-      // Reset scores and names in current view if active
-      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
-      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
-    } else if (activeSetupTab === 'group') {
-      // Clear Group/Best of Data
-      setGroupSetup({ 
-        t1Players: [], 
-        t2Players: [], 
-        settings: {}, 
-        selectedIndex: null,
-        history: [], 
-        frameDetails: [], 
-        matchStartTime: null, 
-        score1: 0, 
-        score2: 0,
-        currentBreakPlayerId: 'none',
-        breakBalls: []
-      });
-      
-      // Reset scores and names in current view if active
-      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
-      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
-    }
+  const clearSinglesData = () => {
+    // 1. Clear Singles Specific State
+    setPlayer1(prev => ({ 
+      ...prev,
+      score: 0, 
+      isTurn: true, 
+      ...SLOT1_DEFAULTS 
+    }));
+    setPlayer2(prev => ({ 
+      ...prev,
+      score: 0, 
+      isTurn: false, 
+      ...SLOT2_DEFAULTS 
+    }));
     
-    // Logic for global state cleanup that should only happen if relevant
-    if (activeSetupTab === 'singles') {
-      // For singles, we might want to keep the global match history but clear session-specific things?
-      // Actually, let's keep matchHistory as general history, 
-      // but maybe clear the local frame details if we reset.
-      setCurrentMatchFrameDetails([]);
-      setMatchStartTime(null);
-    } else {
-      // For multi-match modes, clear more session state
-      setCurrentMatchFrameDetails([]);
-      setMatchStartTime(null);
-      setMatchHistory([]); // User expects match history to be cleared based on modal text
+    setSinglesSetup(prev => ({ 
+      ...prev,
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0, 
+      currentBreakPlayerId: 'none', 
+      breakBalls: [] 
+    }));
+    
+    // Clear persistent pair tracker for current match if any
+    if (player1.name && player2.name) {
+      const p1p2Key = `${player1.name}|${player2.name}`;
+      setPairTrackerSettings(prev => {
+        const next = { ...prev };
+        delete next[p1p2Key];
+        return next;
+      });
     }
 
+    // 2. Clear history entries specifically for singles mode
+    setMatchHistory(prev => prev.filter(m => m.mode !== 'singles'));
+    
+    // 3. Clear transient frame info if we were in the middle of a singles match
+    if (activeSetupTab === 'singles') {
+      setCurrentMatchFrameDetails([]);
+      setMatchStartTime(null);
+    }
+  };
+
+  const clearMatchData = () => {
+    // 1. Clear Match Mode Specific State
+    setTeam1Name('');
+    setTeam2Name('');
+    setTeam1Players([]);
+    setTeam2Players([]);
+    
+    setMatchSetup({ 
+      t1Name: '', 
+      t2Name: '', 
+      t1Players: [], 
+      t2Players: [], 
+      settings: {}, 
+      selectedIndex: null,
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: []
+    });
+    
+    setMatchupSettings({});
+    setSelectedMatchIndex(null);
+    setMatchModeBreakSide('none');
+    
+    // Reset scores and names in current view if active
+    if (activeSetupTab === 'match') {
+      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+      setCurrentMatchFrameDetails([]);
+      setMatchStartTime(null);
+    }
+
+    // 2. Clear history entries specifically for match mode
+    setMatchHistory(prev => prev.filter(m => m.mode !== 'match'));
+  };
+
+  const clearGroupData = () => {
+    // 1. Clear Group Specific State
+    setGroupSetup({ 
+      t1Players: [], 
+      t2Players: [], 
+      settings: {}, 
+      selectedIndex: null,
+      history: [], 
+      frameDetails: [], 
+      matchStartTime: null, 
+      score1: 0, 
+      score2: 0,
+      currentBreakPlayerId: 'none',
+      breakBalls: []
+    });
+    
+    // Reset scores and names in current view if active
+    if (activeSetupTab === 'group') {
+      setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+      setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+      setCurrentMatchFrameDetails([]);
+      setMatchStartTime(null);
+    }
+
+    // 2. Clear history entries specifically for group mode
+    setMatchHistory(prev => prev.filter(m => m.mode !== 'group'));
+  };
+
+  const clearTeams = () => {
+    if (activeSetupTab === 'singles') {
+      clearSinglesData();
+    } else if (activeSetupTab === 'match') {
+      clearMatchData();
+    } else if (activeSetupTab === 'group') {
+      clearGroupData();
+    }
+    
     setShowClearTeamsConfirm(false);
   };
 
@@ -1928,39 +2173,36 @@ export default function App() {
 
     // Sync active player names if a match is selected
     if (selectedMatchIndex !== null) {
-      const p1 = t1Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
-      const p2 = t2Players[selectedMatchIndex] || `PLAYER ${selectedMatchIndex + 1}`;
+      const p1 = t1Players[selectedMatchIndex] || '';
+      const p2 = t2Players[selectedMatchIndex] || '';
+      const settings = matchupSettings[selectedMatchIndex];
       
       setPlayer1(prev => {
-        const pref = p1 ? playerPreferences[p1] : null;
+        const pref = getPlayerPref(p1, 'p1');
         return {
           ...prev,
+          ...SLOT1_DEFAULTS,
           name: p1,
-          color: pref?.color || '#FFFF33',
-          bgColor: pref?.bgColor || '#000000',
-          screenColor: pref?.screenColor || '#000000',
-          bgStyle: (pref?.bgStyle as any) || 'default',
-          screenStyle: (pref?.screenStyle as any) || 'default'
+          ...(settings?.player1 || {}),
+          ...(pref || {})
         };
       });
       setPlayer2(prev => {
-        const pref = p2 ? playerPreferences[p2] : null;
+        const pref = getPlayerPref(p2, 'p2');
         return {
           ...prev,
+          ...SLOT2_DEFAULTS,
           name: p2,
-          color: pref?.color || '#FF001C',
-          bgColor: pref?.bgColor || '#000000',
-          screenColor: pref?.screenColor || '#000000',
-          bgStyle: (pref?.bgStyle as any) || 'default',
-          screenStyle: (pref?.screenStyle as any) || 'default'
+          ...(settings?.player2 || {}),
+          ...(pref || {})
         };
       });
     }
   };
 
-  const handleAddDoubles = (team: 1 | 2) => {
+  const handleOpenPicker = (team: 1 | 2, mode: 'singles' | 'doubles') => {
     setDoublesSelection([]);
-    setShowDoublesPicker({ team, isOpen: true });
+    setShowDoublesPicker({ team, isOpen: true, mode });
   };
 
   const handleTabSwitch = (newTab: SetupTab) => {
@@ -2009,35 +2251,53 @@ export default function App() {
     }
 
     // 2. LOAD data for the new tab from its persist-buffer
-    let nextHistory: MatchHistoryEntry[] = [];
-    let nextFrameDetails: FrameDetail[] = [];
-    let nextStartTime: string | null = null;
-    let nextScore1 = 0;
-    let nextScore2 = 0;
-    let nextBreakPlayer: '1' | '2' | 'none' = 'none';
-    let nextBreakBalls: number[] = [];
-    let nextIdx: number | null = null;
-    let nextSettings: Record<number, MatchupSettings> = {};
+    let nextHistory: MatchHistoryEntry[] = activeSetupTab === newTab ? currentData.history : [];
+    let nextFrameDetails: FrameDetail[] = activeSetupTab === newTab ? currentData.frameDetails : [];
+    let nextStartTime: string | null = activeSetupTab === newTab ? currentData.matchStartTime : null;
+    let nextScore1 = activeSetupTab === newTab ? currentData.score1 : 0;
+    let nextScore2 = activeSetupTab === newTab ? currentData.score2 : 0;
+    let nextBreakPlayer: '1' | '2' | 'none' = activeSetupTab === newTab ? currentData.currentBreakPlayerId : 'none';
+    let nextBreakBalls: number[] = activeSetupTab === newTab ? currentData.breakBalls : [];
+    let nextIdx: number | null = activeSetupTab === newTab ? currentData.selectedIndex : null;
+    let nextSettings: Record<number, MatchupSettings> = activeSetupTab === newTab ? currentData.settings : {};
     let nextT1Name = '';
     let nextT2Name = '';
     let nextT1Players: string[] = [];
     let nextT2Players: string[] = [];
-    let nextP1Name = 'PLAYER 1';
-    let nextP2Name = 'PLAYER 2';
+    let nextP1Name = '';
+    let nextP2Name = '';
 
     if (newTab === 'singles') {
-      nextHistory = singlesSetup.history;
-      nextFrameDetails = singlesSetup.frameDetails;
-      nextStartTime = singlesSetup.matchStartTime;
-      nextScore1 = singlesSetup.score1;
-      nextScore2 = singlesSetup.score2;
-      nextBreakPlayer = singlesSetup.currentBreakPlayerId;
-      nextBreakBalls = singlesSetup.breakBalls;
-      nextT1Players = [singlesSetup.p1Name || 'PLAYER 1'];
-      nextT2Players = [singlesSetup.p2Name || 'PLAYER 2'];
-      nextP1Name = singlesSetup.p1Name || 'PLAYER 1';
-      nextP2Name = singlesSetup.p2Name || 'PLAYER 2';
-      nextIdx = 0;
+      if (activeSetupTab === 'singles') {
+        nextT1Players = [player1.name];
+        nextT2Players = [player2.name];
+        nextP1Name = player1.name;
+        nextP2Name = player2.name;
+      } else {
+        nextHistory = singlesSetup.history;
+        nextFrameDetails = singlesSetup.frameDetails;
+        nextStartTime = singlesSetup.matchStartTime;
+        nextScore1 = singlesSetup.score1;
+        nextScore2 = singlesSetup.score2;
+        nextBreakPlayer = singlesSetup.currentBreakPlayerId;
+        nextBreakBalls = singlesSetup.breakBalls;
+        const sanitP1 = (singlesSetup.p1Name || '').toUpperCase().includes('PLAYER ') ? '' : (singlesSetup.p1Name || '');
+        const sanitP2 = (singlesSetup.p2Name || '').toUpperCase().includes('PLAYER ') ? '' : (singlesSetup.p2Name || '');
+        
+        if (sanitP1 && sanitP2) {
+          nextT1Players = [sanitP1];
+          nextT2Players = [sanitP2];
+          nextIdx = 0;
+        } else {
+          nextT1Players = [];
+          nextT2Players = [];
+          nextIdx = null;
+        }
+        nextP1Name = sanitP1;
+        nextP2Name = sanitP2;
+      }
+      nextT1Name = '';
+      nextT2Name = '';
     } else if (newTab === 'match') {
       nextHistory = matchSetup.history;
       nextFrameDetails = matchSetup.frameDetails;
@@ -2053,8 +2313,8 @@ export default function App() {
       nextSettings = { ...matchSetup.settings };
       nextIdx = matchSetup.selectedIndex;
       if (nextIdx !== null) {
-        nextP1Name = nextT1Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
-        nextP2Name = nextT2Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
+        nextP1Name = nextT1Players[nextIdx] || '';
+        nextP2Name = nextT2Players[nextIdx] || '';
       }
     } else if (newTab === 'group') {
       nextHistory = groupSetup.history;
@@ -2069,8 +2329,8 @@ export default function App() {
       nextSettings = { ...groupSetup.settings };
       nextIdx = groupSetup.selectedIndex;
       if (nextIdx !== null) {
-        nextP1Name = nextT1Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
-        nextP2Name = nextT2Players[nextIdx] || `PLAYER ${nextIdx + 1}`;
+        nextP1Name = nextT1Players[nextIdx] || '';
+        nextP2Name = nextT2Players[nextIdx] || '';
       }
     }
 
@@ -2088,20 +2348,25 @@ export default function App() {
     setBreakBalls(nextBreakBalls);
 
     // Apply names and current scores with preferences or slot defaults
-    const p1Prefs = getPlayerPref(nextP1Name, 'p1') || SLOT1_DEFAULTS;
-    const p2Prefs = getPlayerPref(nextP2Name, 'p2') || SLOT2_DEFAULTS;
+    const p1Pref = getPlayerPref(nextP1Name, 'p1');
+    const p2Pref = getPlayerPref(nextP2Name, 'p2');
+    const settings = nextIdx !== null ? nextSettings[nextIdx] : null;
 
     setPlayer1(prev => ({ 
       ...prev, 
+      ...SLOT1_DEFAULTS,
       name: nextP1Name, 
       score: nextScore1,
-      ...p1Prefs
+      ...(settings?.player1 || {}),
+      ...(p1Pref || {})
     }));
     setPlayer2(prev => ({ 
       ...prev, 
+      ...SLOT2_DEFAULTS,
       name: nextP2Name, 
       score: nextScore2,
-      ...p2Prefs
+      ...(settings?.player2 || {}),
+      ...(p2Pref || {})
     }));
 
     setActiveSetupTab(newTab);
@@ -2111,33 +2376,38 @@ export default function App() {
     }, 100);
   };
 
-  const confirmDoubles = (team: 1 | 2) => {
-    if (doublesSelection.length !== 2) return;
+  const confirmMatchup = (team: 1 | 2) => {
+    const isDoubles = showDoublesPicker.mode === 'doubles';
+    if (isDoubles && doublesSelection.length !== 2) return;
+    if (!isDoubles && doublesSelection.length !== 1) return;
     
-    const doublesName = `${doublesSelection[0]} / ${doublesSelection[1]}`;
+    const matchupName = isDoubles 
+      ? `${doublesSelection[0]} / ${doublesSelection[1]}`
+      : doublesSelection[0];
+
     if (team === 1) {
-      const newPlayers = [...team1Players, doublesName];
+      const newPlayers = [...team1Players, matchupName];
       const newIndex = newPlayers.length - 1;
       setMatchupSettings(prev => ({
         ...prev,
         [newIndex]: {
           ...prev[newIndex],
-          isDoubles: true,
-          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+          isDoubles: isDoubles,
+          player1: { ...SLOT1_DEFAULTS },
+          player2: { ...SLOT2_DEFAULTS }
         }
       }));
       updateTeamData(team1Name, newPlayers, team2Name, team2Players);
     } else {
-      const newPlayers = [...team2Players, doublesName];
+      const newPlayers = [...team2Players, matchupName];
       const newIndex = newPlayers.length - 1;
        setMatchupSettings(prev => ({
         ...prev,
         [newIndex]: {
           ...prev[newIndex],
-          isDoubles: true,
-          player1: { color: player1.color, bgColor: player1.bgColor, screenColor: player1.screenColor, bgStyle: player1.bgStyle, screenStyle: player1.screenStyle },
-          player2: { color: player2.color, bgColor: player2.bgColor, screenColor: player2.screenColor, bgStyle: player2.bgStyle, screenStyle: player2.screenStyle }
+          isDoubles: isDoubles,
+          player1: { ...SLOT1_DEFAULTS },
+          player2: { ...SLOT2_DEFAULTS }
         }
       }));
       updateTeamData(team1Name, team1Players, team2Name, newPlayers);
@@ -2147,84 +2417,99 @@ export default function App() {
 
   // --- Rendering Helpers ---
   const renderSetupTabs = () => (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center w-[95vw] mx-auto bg-white/5 rounded-2xl p-1 mb-8 overflow-hidden">
       {(['singles', 'group', 'match'] as SetupTab[]).map(tab => (
         <button
           key={tab}
           onClick={() => handleTabSwitch(tab)}
-          className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest transition-all ${
+          className={`flex-1 py-2 rounded-xl font-black uppercase tracking-widest transition-all text-[1.6rem] sm:text-2xl ${
             activeSetupTab === tab 
-              ? 'bg-white text-slate-950 scale-105 shadow-lg' 
-              : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              ? 'text-slate-950 shadow-lg' 
+              : 'text-slate-400 hover:bg-white/5'
           }`}
           style={activeSetupTab === tab ? { backgroundColor: player1.color } : {}}
         >
-          {tab === 'group' ? 'Group Session' : tab}
+          {tab}
         </button>
       ))}
     </div>
   );
 
   const renderDoublesPicker = () => {
-    if (!showDoublesPicker.isOpen) return null;
-    const teamIdx = showDoublesPicker.team;
+    const { team: teamIdx, mode } = showDoublesPicker;
     const players = teamIdx === 1 ? team1Players : team2Players;
     const availablePlayers = players.filter(p => p && !p.includes('/')).filter((v, i, a) => a.indexOf(v) === i);
+    const requiredCount = mode === 'doubles' ? 2 : 1;
 
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div key="doubles-picker-overlay" className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-slate-900 border-2 border-white/10 rounded-[2rem] p-8 space-y-6 shadow-2xl"
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="w-full max-w-sm bg-slate-900 border-t-2 lg:border-2 border-x-2 lg:border-white/10 rounded-t-[2.5rem] lg:rounded-[2rem] px-5 pt-5 pb-0 lg:p-8 space-y-3 lg:space-y-6 shadow-2xl h-[92dvh] lg:h-auto lg:max-h-[85vh] flex flex-col relative z-[9999]"
           style={{ borderColor: teamIdx === 1 ? player1.color : player2.color }}
         >
-          <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-black uppercase tracking-tight text-white">Select Doubles Pair</h3>
-            <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false })} className="p-2 text-slate-400 hover:text-white">
+          <div className="flex items-center justify-between shrink-0">
+            <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-white leading-tight">
+              {mode === 'doubles' ? 'Select Doubles Pair' : 'Select Player'}
+            </h3>
+            <button onClick={() => setShowDoublesPicker({ ...showDoublesPicker, isOpen: false, mode: 'doubles' })} className="p-2 text-slate-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
-            {availablePlayers.length < 2 && (
-              <p className="text-slate-500 italic text-center py-4 uppercase font-bold">Add at least 2 unique players to create a doubles pair.</p>
+          <div className="grid grid-cols-2 gap-2 overflow-y-auto pb-2 flex-1 min-h-0 custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {availablePlayers.length < requiredCount && (
+              <p className="col-span-2 text-slate-500 italic text-center py-4 uppercase font-bold text-xs">
+                Add at least {requiredCount} unique player{requiredCount > 1 ? 's' : ''} to create a {mode} matchup.
+              </p>
             )}
             {availablePlayers.map((name) => (
               <button
                 key={name}
                 onClick={() => {
-                  if (doublesSelection.includes(name)) {
-                    setDoublesSelection(doublesSelection.filter(n => n !== name));
-                  } else if (doublesSelection.length < 2) {
-                    setDoublesSelection([...doublesSelection, name]);
+                  if (mode === 'singles') {
+                    setDoublesSelection([name]);
+                  } else {
+                    if (doublesSelection.includes(name)) {
+                      setDoublesSelection(doublesSelection.filter(n => n !== name));
+                    } else if (doublesSelection.length < 2) {
+                      setDoublesSelection([...doublesSelection, name]);
+                    }
                   }
                 }}
-                className={`w-full p-4 rounded-xl font-bold uppercase transition-all flex items-center justify-between ${
+                className={`p-2.5 sm:p-3 rounded-xl font-bold uppercase transition-all flex items-center justify-between gap-1 border-2 ${
                   doublesSelection.includes(name) 
-                    ? 'bg-white/20 border-2' 
-                    : 'bg-white/5 border border-white/5'
+                    ? 'bg-white/20' 
+                    : 'bg-white/5 border-transparent'
                 }`}
                 style={{ borderColor: doublesSelection.includes(name) ? (teamIdx === 1 ? player1.color : player2.color) : 'transparent' }}
               >
-                <span className={doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}>{name}</span>
-                {doublesSelection.includes(name) && <Check className="w-5 h-5 text-emerald-400" />}
+                <span className={`truncate text-[10px] sm:text-xs tracking-tight ${doublesSelection.includes(name) ? 'text-white' : 'text-slate-400'}`}>{name}</span>
+                {doublesSelection.includes(name) && <Check className="w-3 h-3 shrink-0 text-emerald-400" />}
               </button>
             ))}
           </div>
 
-          <button
-            disabled={doublesSelection.length !== 2}
-            onClick={() => confirmDoubles(teamIdx)}
-            className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all ${
-              doublesSelection.length === 2 
-                ? 'opacity-100 scale-105 shadow-xl' 
-                : 'opacity-50 cursor-not-allowed'
-            }`}
-            style={{ backgroundColor: teamIdx === 1 ? player1.color : player2.color, color: '#000' }}
-          >
-            Confirm Pair
-          </button>
+          <div className="mt-auto pt-2 pb-5 lg:pb-0 border-t border-white/5 shrink-0">
+            <button
+              disabled={doublesSelection.length !== requiredCount}
+              onClick={() => confirmMatchup(teamIdx)}
+              className={`w-full py-2 rounded-xl font-black uppercase tracking-widest transition-all text-xs sm:text-sm ${
+                doublesSelection.length === requiredCount 
+                  ? 'opacity-100 scale-102 shadow-lg' 
+                  : 'opacity-50 cursor-not-allowed grayscale'
+              }`}
+              style={{ 
+                backgroundColor: doublesSelection.length === requiredCount ? (teamIdx === 1 ? player1.color : player2.color) : '#334155', 
+                color: '#000' 
+              }}
+            >
+              {mode === 'doubles' ? 'Confirm Pair' : 'Confirm Player'}
+            </button>
+          </div>
         </motion.div>
       </div>
     );
@@ -2958,6 +3243,20 @@ export default function App() {
   if (deviceInfo.isPortrait) {
     return (
       <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center overflow-hidden">
+        {/* SVG Gradient Definitions for Portrait View */}
+        <svg width="0" height="0" className="absolute pointer-events-none">
+          <defs>
+            <linearGradient id="portrait-cup-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={player1.color} />
+              <stop offset="100%" stopColor={player2.color} />
+            </linearGradient>
+            <linearGradient id="portrait-logo-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={player1.color} />
+              <stop offset="100%" stopColor={player2.color} />
+            </linearGradient>
+          </defs>
+        </svg>
+
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -2969,6 +3268,30 @@ export default function App() {
             className="w-full h-full object-cover sm:object-contain"
             referrerPolicy="no-referrer"
           />
+
+          {/* Logo & Icon at top center */}
+          <div className="absolute top-[8vh] left-1/2 -translate-x-1/2 flex items-center justify-center gap-[0.5vw] z-20 whitespace-nowrap">
+            <Trophy 
+              className="transition-all duration-500 shrink-0" 
+              style={{ 
+                stroke: 'url(#portrait-cup-gradient)',
+                width: '6vh',
+                height: '6vh'
+              }}
+            />
+            <h1 
+              className="font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r"
+              style={{ 
+                fontSize: '6.5vh',
+                lineHeight: 1,
+                backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
+                fontFamily: 'Inter, sans-serif'
+              }}
+            >
+              Pool-Pro.uk
+            </h1>
+          </div>
+
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/20 backdrop-blur-[2px]">
              <div className="bg-black/60 p-8 rounded-[4vh] border border-white/10 backdrop-blur-xl flex flex-col items-center shadow-2xl">
                <RotateCcw className="w-[8vh] h-[8vh] text-emerald-400 animate-spin-reverse mb-[3vh]" />
@@ -2983,6 +3306,8 @@ export default function App() {
 
   return (
     <div className={`relative min-h-screen text-slate-100 font-sans selection:bg-emerald-500/30 overflow-x-hidden ${deviceInfo.isPhone ? 'is-phone' : (deviceInfo.isTablet ? 'is-tablet' : 'is-desktop')}`}>
+      {/* Base Background Layer */}
+      <div className="fixed inset-0 z-[-20] bg-black" />
       {/* SVG Gradient Definitions */}
       <svg width="0" height="0" className="absolute pointer-events-none">
         <defs>
@@ -2994,9 +3319,46 @@ export default function App() {
       </svg>
 
       {/* Background Layer */}
-      <div className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none">
+      <motion.div 
+        animate={{ 
+          top: (view === 'scoreboard' && isNavVisible) 
+            ? (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
+            : 0,
+          left: 0,
+          right: 0,
+          bottom: 0
+        }}
+        transition={{ duration: 0.4, ease: "easeInOut" }}
+        className="fixed inset-0 z-[-10] overflow-hidden pointer-events-none"
+      >
+        {/* Full Screen Backdrop */}
+        {(() => {
+          const activeBackItem = FULL_SCREEN_BACKDROPS.find(b => b.value === fullScreenBackdrop);
+          return activeBackItem && activeBackItem.image && fullScreenBackdrop !== 'none' ? (
+            <div className="absolute inset-0 z-0 flex items-center justify-center">
+              <img 
+                src={activeBackItem.image} 
+                className="w-full h-full object-fill" 
+                alt="" 
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          ) : null;
+        })()}
+
         {/* Split Screen (Scoreboard only) */}
-        <div className={`absolute inset-0 flex transition-opacity duration-700 ${isLoaded && view === 'scoreboard' ? 'opacity-100' : 'opacity-0'}`}>
+        <motion.div 
+          animate={{ 
+            top: (view === 'scoreboard' && isNavVisible) 
+              ? (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'))
+              : 0,
+            left: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+            right: (deviceInfo.isDesktop && view === 'scoreboard') ? 'var(--sidebar-width)' : 0,
+            bottom: 0
+          }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          className={`absolute flex transition-opacity duration-700 z-10 ${isLoaded && view === 'scoreboard' && (fullScreenBackdrop === 'none' || !fullScreenBackdrop) ? 'opacity-100' : 'opacity-0'}`}
+        >
           {[player1, player2].map((p, idx) => (
             <div 
               key={p.id} 
@@ -3004,10 +3366,17 @@ export default function App() {
               style={{ backgroundColor: p.screenColor }}
             >
               {(p.screenStyle === 'cloth' || p.screenStyle === 'speed') && (CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase()) || SPEED_CLOTH_COLORS.some(c => c.value.toLowerCase() === p.screenColor.toLowerCase())) && (
-                <div className="absolute inset-0 z-0 scale-[1.05]">
+                <div className="absolute inset-0 z-0 flex items-center justify-center">
                   <div 
-                    className={`w-full h-full border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_10vh_rgba(0,0,0,0.5)] ${idx === 0 ? 'border-r-0' : 'border-l-0'}`} 
-                    style={{ backgroundColor: p.screenColor }}
+                    className={`border-[1.5vw] border-[#3d2b1f] shadow-[inset_0_0_6vh_rgba(0,0,0,0.25)] ${idx === 0 ? 'border-r-0 ml-auto' : 'border-l-0 mr-auto'}`} 
+                    style={{ 
+                      backgroundColor: p.screenColor,
+                      width: '100%',
+                      height: '100%',
+                      aspectRatio: '1/1',
+                      maxHeight: '100%',
+                      maxWidth: '100%'
+                    }}
                   >
                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: p.screenStyle === 'speed' ? 'radial-gradient(#000 0.03rem, transparent 0.03rem)' : 'radial-gradient(#000 0.06rem, transparent 0.06rem)', backgroundSize: p.screenStyle === 'speed' ? '0.8vw 0.8vw' : '1.5vw 1.5vw' }} />
                     {/* Corner Pockets */}
@@ -3037,47 +3406,43 @@ export default function App() {
               )}
             </div>
           ))}
-        </div>
+        </motion.div>
         
         {/* Plain Background (Teams & Settings) */}
-        <div className={`absolute inset-0 bg-black transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
+        <div className={`absolute inset-0 bg-black transition-opacity duration-700 z-20 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
         
         {/* Subtle Gradient Overlay for Plain Background */}
-        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
-      </div>
+        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-from),_transparent_50%)] from-emerald-500/5 transition-opacity duration-700 z-[21] ${view !== 'scoreboard' ? 'opacity-100' : 'opacity-0'}`} />
+      </motion.div>
 
       {/* Navigation Bar */}
         <motion.nav 
           initial={false}
           animate={{ 
-            y: (!deviceInfo.isDesktop && (
-              (!isNavVisible && deviceInfo.isPhone) || 
-              (isKeyboardOpen && (deviceInfo.isPhone || (deviceInfo.isTablet && view === 'teams')))
-            )) ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
+            y: (view === 'scoreboard' && !isNavVisible && !deviceInfo.isDesktop) 
+              ? (deviceInfo.isPhone ? '-15vh' : (deviceInfo.isTablet ? '-8vh' : '-10vh')) 
+              : 0,
             opacity: 1
           }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
-          className="fixed top-0 left-0 right-0 bg-black/20 backdrop-blur-md z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw]"
+          className="fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-2xl z-50 flex items-center justify-between pl-[0.5vw] pr-[0.5vw] shadow-[0_4px_30px_rgba(0,0,0,0.5)] border-b border-white/5"
           style={{ 
-            borderBottom: '0.125rem solid',
-            borderImage: isLoaded ? `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` : 'none',
-            height: deviceInfo.isPhone ? '16vh' : '10vh',
-            borderColor: isLoaded ? 'transparent' : '#111'
+            height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')
           }}
         >
-          <div className="flex items-center gap-[1vw] shrink-0">
+          <div className="flex items-center gap-[0.5vw] shrink-0">
           <Trophy 
             className="transition-all duration-500" 
             style={{ 
               stroke: 'url(#cup-gradient)',
-              width: deviceInfo.isPhone ? '12vh' : '8vh',
-              height: deviceInfo.isPhone ? '12vh' : '8vh'
+              width: deviceInfo.isPhone ? '8.64vh' : (deviceInfo.isTablet ? '5.76vh' : '7.2vh'),
+              height: deviceInfo.isPhone ? '8.64vh' : (deviceInfo.isTablet ? '5.76vh' : '7.2vh')
             }}
           />
           <h1 
             className={`transition-all duration-500 ${(isShotClockEnabled || isMatchClockEnabled) && deviceInfo.isPhone ? 'hidden' : ''} flex items-center`}
             style={{ 
-              height: deviceInfo.isPhone ? '11vh' : '9vh',
+              height: deviceInfo.isPhone ? '13.5vh' : (deviceInfo.isTablet ? '7.2vh' : '9vh'),
             }}
           >
             <svg 
@@ -3087,7 +3452,7 @@ export default function App() {
               className="w-auto overflow-visible"
             >
               <defs>
-                <linearGradient id="logo-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id="selected-player-grad-svg" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor={isLoaded ? player1.color : '#334155'} />
                   <stop offset="100%" stopColor={isLoaded ? player2.color : '#475569'} />
                 </linearGradient>
@@ -3095,11 +3460,11 @@ export default function App() {
                 <text 
                   x="0" 
                   y="32" 
-                  fill="url(#logo-grad-svg)" 
+                  fill="url(#selected-player-grad-svg)" 
                   style={{ 
                     fontFamily: 'Inter, sans-serif', 
                     fontWeight: 900, 
-                    fontSize: '2rem', 
+                    fontSize: '2.2rem', 
                     letterSpacing: '-0.03em' 
                   }}
                 >
@@ -3113,16 +3478,16 @@ export default function App() {
         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 flex items-center pointer-events-none">
           {!deviceInfo.shouldHideDeviceTime && (
             <div 
-              className="flex items-center justify-center px-4 bg-black/20 border-2 border-white/5 backdrop-blur-md pointer-events-auto shadow-xl"
+              className="flex items-center justify-center px-4 bg-black/40 border border-white/10 backdrop-blur-md pointer-events-auto shadow-2xl"
               style={{ 
-                height: '9vh',
-                borderRadius: '1.5vh'
+                height: deviceInfo.isPhone ? '11.05vh' : (deviceInfo.isTablet ? '6.8vh' : '8.5vh'),
+                borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
               }}
             >
               <span 
                 className="font-mono font-black text-white tracking-wider tabular-nums leading-none"
                 style={{
-                  fontSize: '6vh'
+                  fontSize: deviceInfo.isPhone ? '7.15vh' : (deviceInfo.isTablet ? '4.4vh' : '5.5vh')
                 }}
               >
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -3131,89 +3496,93 @@ export default function App() {
           )}
         </div>
         
-        <div className="flex items-center gap-[1vw] shrink-0 ml-auto">
+        <div className="flex items-center gap-[1vw] shrink-0 ml-auto mr-[0.5vw]">
           <button 
             onClick={toggleFullscreen}
-            className="flex items-center justify-center transition-all duration-500 border border-slate-800 bg-black/50 hover:bg-slate-800/50 active:scale-95"
+            className="group flex items-center justify-center transition-all duration-300 border border-white/10 bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative"
             style={{
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              borderRadius: '1.5vh'
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
-            title="Toggle Fullscreen"
           >
+            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
             {isFullscreen ? 
               <Minimize 
+                className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                  height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
                 }} 
               /> : 
               <Maximize 
+                className="relative z-10 transition-transform group-hover:scale-110"
                 style={{ 
                   stroke: 'url(#cup-gradient)',
-                  width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                  height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                  width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                  height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
                 }} 
               />
             }
           </button>
           <button 
             onClick={navigateToScoreboard}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'scoreboard' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'scoreboard' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'scoreboard' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              borderRadius: '1.5vh'
+              backgroundColor: view === 'scoreboard' ? `${player1.color}22` : undefined,
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'scoreboard' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
             <Trophy 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
           <button 
-            onClick={() => {
-              navigateToView('teams');
-            }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'teams' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            onClick={() => navigateToView('teams')}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'teams' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'teams' ? `${player1.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              borderRadius: '1.5vh'
+              backgroundColor: view === 'teams' ? `${player1.color}22` : undefined,
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'teams' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player1.color }} />
             <Users 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
           <button 
-            onClick={() => {
-              navigateToView('settings');
-            }}
-            className={`flex items-center justify-center transition-all duration-500 border ${view === 'settings' ? 'border-white/20' : 'border-slate-800'} bg-black/50 hover:bg-slate-800/50 active:scale-95`}
+            onClick={() => navigateToView('settings')}
+            className={`group flex items-center justify-center transition-all duration-300 border ${view === 'settings' ? 'border-white/30' : 'border-white/10'} bg-slate-900/50 hover:bg-slate-800 active:scale-95 shadow-lg overflow-hidden relative`}
             style={{
-              backgroundColor: view === 'settings' ? `${player2.color}33` : undefined,
-              width: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              height: deviceInfo.isPhone ? '12.5vh' : '8vh',
-              borderRadius: '1.5vh'
+              backgroundColor: view === 'settings' ? `${player2.color}22` : undefined,
+              width: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              height: deviceInfo.isPhone ? '12vh' : (deviceInfo.isTablet ? '6.4vh' : '8vh'),
+              borderRadius: deviceInfo.isPhone ? '2.25vh' : '1.5vh'
             }}
           >
+            <div className={`absolute inset-0 transition-opacity ${view === 'settings' ? 'opacity-20' : 'opacity-0'} group-hover:opacity-10`} style={{ backgroundColor: player2.color }} />
             <Settings 
+              className="relative z-10 transition-transform group-hover:scale-110"
               style={{ 
                 stroke: 'url(#cup-gradient)',
-                width: deviceInfo.isPhone ? '9.5vh' : '7vh',
-                height: deviceInfo.isPhone ? '9.5vh' : '7vh'
+                width: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh'),
+                height: deviceInfo.isPhone ? '7.2vh' : (deviceInfo.isTablet ? '4.8vh' : '6vh')
               }} 
             />
           </button>
@@ -3229,12 +3598,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? '-15vh' : (deviceInfo.isTablet && !isNavVisible ? '-8vh' : (deviceInfo.isDesktop && !isNavVisible ? '-10vh' : 0))
               }}
               exit={{ opacity: 0, x: -50 }}
               className="fixed left-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap leading-none m-0" 
@@ -3252,12 +3621,12 @@ export default function App() {
               animate={{ 
                 opacity: 1, 
                 x: 0,
-                y: (deviceInfo.isPhone && !isNavVisible) ? '-16vh' : 0
+                y: (deviceInfo.isPhone && !isNavVisible) ? '-15vh' : (deviceInfo.isTablet && !isNavVisible ? '-8vh' : (deviceInfo.isDesktop && !isNavVisible ? '-10vh' : 0))
               }}
               exit={{ opacity: 0, x: 50 }}
               className="fixed right-0 top-0 bottom-0 w-[var(--sidebar-width)] flex flex-col pointer-events-none z-20"
             >
-              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '16vh' : '10vh') }} />
+              <div style={{ height: (deviceInfo.isPhone && !isNavVisible) ? '0vh' : (deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) }} />
               <div className="flex-1 flex items-center justify-center overflow-visible">
                 <h2 
                   className="vertical-text font-black uppercase tracking-widest select-none whitespace-nowrap rotate-180 leading-none m-0" 
@@ -3408,14 +3777,12 @@ export default function App() {
       <motion.main 
         initial={false}
         animate={{ 
-          paddingTop: (view === 'teams' || view === 'settings')
-            ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 4vh)`
-            : (view === 'match-details'
-                ? `calc(${deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + 1vh)`
-                : (view === 'scoreboard' 
-                    ? (deviceInfo.isPhone ? '16vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) 
-                    : 0)),
-          y: (deviceInfo.isPhone && !isNavVisible && view === 'scoreboard') ? (deviceInfo.isPhone ? '-16vh' : '-10vh') : 0,
+          paddingTop: (view === 'teams' || view === 'settings' || view === 'match-details')
+            ? `calc(${deviceInfo.isPhone ? '24vh' : (deviceInfo.isTablet ? '8vh' : '10vh')} + ${view === 'match-details' ? '1vh' : '4vh'})`
+            : (view === 'scoreboard' 
+                ? (isNavVisible ? (deviceInfo.isPhone ? '24vh' : (deviceInfo.isTablet ? '8vh' : '10vh')) : 0)
+                : 0),
+          y: 0,
           paddingBottom: 0 
         }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
@@ -3440,17 +3807,17 @@ export default function App() {
               <div 
                 className="fixed inset-x-0 flex justify-between px-[1vh] pointer-events-none z-50 transition-all duration-500"
                 style={{ 
-                  top: deviceInfo.isPhone 
-                    ? (isNavVisible ? '17vh' : '1vh') 
-                    : (deviceInfo.isTablet ? '9vh' : '11vh'),
+                  top: isNavVisible 
+                    ? (deviceInfo.isPhone ? '17vh' : (deviceInfo.isTablet ? '9vh' : '11vh'))
+                    : '1vh',
                 }}
               >
                 <button
                   onClick={goPrevMatch}
                   className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
-                    width: '10vh',
-                    height: '10vh',
+                    width: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
+                    height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
                     borderColor: `${player1.color}44`,
                     position: 'relative'
                   }}
@@ -3466,8 +3833,8 @@ export default function App() {
                   onClick={goNextMatch}
                   className="pointer-events-auto flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 rounded-full bg-slate-900 border-2 overflow-hidden group cursor-pointer"
                   style={{ 
-                    width: '10vh',
-                    height: '10vh',
+                    width: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
+                    height: deviceInfo.isPhone ? '15vh' : (deviceInfo.isTablet ? '8vh' : '10vh'),
                     borderColor: `${player2.color}44`,
                     position: 'relative'
                   }}
@@ -3515,7 +3882,7 @@ export default function App() {
                 </div>
 
                 {/* Score Cards Grid */}
-                <div className="relative flex items-center justify-center w-full py-2">
+                <div className="relative flex items-center justify-center w-full py-0" style={{ transform: 'translateY(-1vh)' }}>
 
                 <div 
                   className="flex items-center justify-center w-full"
@@ -3545,11 +3912,11 @@ export default function App() {
                             boxShadow: p.bgStyle === 'balls'
                               ? '0 1.5vh 3vh rgba(0,0,0,0.4)'
                               : `0 0 4vh -1.5vh ${p.color}66`,
-                            width: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '35vw',
+                            width: p.bgStyle === 'balls' ? 'min(38vw, 70vh)' : '38vw',
                             margin: '0 auto',
-                            height: p.bgStyle === 'balls' ? 'min(35vw, 65vh)' : '65vh',
-                            maxHeight: '65vh',
-                            maxWidth: '35vw'
+                            height: p.bgStyle === 'balls' ? 'min(38vw, 70vh)' : '70vh',
+                            maxHeight: '70vh',
+                            maxWidth: '38vw'
                           }}
                         >
                           {/* Pool Ball Visual Elements - Only if Ball mode */}
@@ -3628,24 +3995,26 @@ export default function App() {
                               onChange={(e) => {
                                 const newName = e.target.value.toUpperCase();
                                 if (idx === 0) {
-                                  const pref = getPlayerPref(newName, 'p1') || SLOT1_DEFAULTS;
-                                  const update = {
+                                  const pref = getPlayerPref(newName, 'p1');
+                                  setPlayer1(prev => ({ 
+                                    ...prev, 
+                                    ...SLOT1_DEFAULTS,
                                     name: newName,
-                                    ...pref
-                                  };
-                                  setPlayer1(prev => ({ ...prev, ...update }));
+                                    ...(pref || {}) 
+                                  }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team1Players];
                                     newPlayers[selectedMatchIndex] = newName;
                                     setTeam1Players(newPlayers);
                                   }
                                 } else {
-                                  const pref = getPlayerPref(newName, 'p2') || SLOT2_DEFAULTS;
-                                  const update = {
+                                  const pref = getPlayerPref(newName, 'p2');
+                                  setPlayer2(prev => ({ 
+                                    ...prev, 
+                                    ...SLOT2_DEFAULTS,
                                     name: newName,
-                                    ...pref
-                                  };
-                                  setPlayer2(prev => ({ ...prev, ...update }));
+                                    ...(pref || {})
+                                  }));
                                   if (selectedMatchIndex !== null) {
                                     const newPlayers = [...team2Players];
                                     newPlayers[selectedMatchIndex] = newName;
@@ -3809,6 +4178,13 @@ export default function App() {
                 {/* Score digit vertical center logic: the button is now moved to root level */}
               </div>
             </motion.div>
+
+            {/* Game Mode Indicator */}
+            <div className="fixed bottom-0 left-0 right-0 flex justify-center pointer-events-none opacity-80 z-[60]">
+              <p className="font-black uppercase tracking-[0.4em] text-black leading-none pb-0" style={{ fontSize: '2vh' }}>
+                {activeSetupTab === 'singles' ? 'Singles' : activeSetupTab === 'group' ? 'Group' : `Match #${(selectedMatchIndex ?? 0) + 1}`}
+              </p>
+            </div>
           </motion.div>
         )}
 
@@ -3860,69 +4236,132 @@ export default function App() {
               </div>
 
               {renderSetupTabs()}
-              {renderDoublesPicker()}
 
               {activeSetupTab === 'singles' ? (
                 <div className="space-y-12">
                   <div className="grid grid-cols-2 gap-4 sm:gap-10">
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player1.color }}>Player 1</label>
-                      <input 
-                        value={singlesSetup.p1Name} 
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setSinglesSetup(prev => ({ ...prev, p1Name: val }));
-                          if (activeSetupTab === 'singles') {
-                            setTeam1Players([val]);
-                            const prefs = getPlayerPref(val, 'p1') || SLOT1_DEFAULTS;
-                            setPlayer1(prev => ({ ...prev, name: val, ...prefs }));
-                          }
-                        }}
-                        onFocus={(e) => handleInputFocus(e, 'p1-singles')}
-                        onBlur={() => setFocusedField(null)}
-                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
-                        style={{ 
-                          ...teamEntryStyle, 
-                          borderColor: focusedField === 'p1-singles' ? player1.color : player1.color + '66',
-                          fontSize: '8vh'
-                        }}
-                        placeholder="NAME"
-                      />
+                      <div className="relative group">
+                        <input 
+                          value={singlesSetup.p1Name} 
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setSinglesSetup(prev => {
+                              const next = { ...prev, p1Name: val };
+                              if (activeSetupTab === 'singles') {
+                                if (val && next.p2Name) {
+                                  setTeam1Players([val]);
+                                  setTeam2Players([next.p2Name]);
+                                  setSelectedMatchIndex(0);
+                                } else {
+                                  setTeam1Players([]);
+                                  setTeam2Players([]);
+                                  setSelectedMatchIndex(null);
+                                }
+                                setPlayer1(prevP => ({ ...prevP, name: val }));
+                              }
+                              return next;
+                            });
+                          }}
+                          onFocus={(e) => handleInputFocus(e, 'p1-singles')}
+                          onBlur={() => {
+                            setFocusedField(null);
+                            const pref = getPlayerPref(singlesSetup.p1Name, 'p1');
+                            setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
+                          }}
+                          className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center pr-12 sm:pr-24" 
+                          style={{ 
+                            ...teamEntryStyle, 
+                            borderColor: focusedField === 'p1-singles' ? player1.color : player1.color + '66',
+                            fontSize: '8vh'
+                          }}
+                          placeholder="NAME"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pr-2">
+                          <button 
+                            onClick={() => {
+                              setSinglesSetup(prev => ({ ...prev, p1Name: '' }));
+                              setTeam1Players([]);
+                              setPlayer1(prev => ({ ...prev, name: '', score: 0 }));
+                            }}
+                            className="p-1 sm:p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-colors rounded-lg"
+                            title="Clear Player"
+                          >
+                            <Trash2 className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-4">
                       <label className="font-black uppercase tracking-widest text-center block" style={{ fontSize: labelFontSize, color: player2.color }}>Player 2</label>
-                      <input 
-                        value={singlesSetup.p2Name} 
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setSinglesSetup(prev => ({ ...prev, p2Name: val }));
-                          if (activeSetupTab === 'singles') {
-                            setTeam2Players([val]);
-                            const prefs = getPlayerPref(val, 'p2') || SLOT2_DEFAULTS;
-                            setPlayer2(prev => ({ ...prev, name: val, ...prefs }));
-                          }
-                        }}
-                        onFocus={(e) => handleInputFocus(e, 'p2-singles')}
-                        onBlur={() => setFocusedField(null)}
-                        className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center" 
-                        style={{ 
-                          ...teamEntryStyle, 
-                          borderColor: focusedField === 'p2-singles' ? player2.color : player2.color + '66',
-                          fontSize: '8vh'
-                        }}
-                        placeholder="NAME"
-                      />
+                      <div className="relative group">
+                        <input 
+                          value={singlesSetup.p2Name} 
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            setSinglesSetup(prev => {
+                              const next = { ...prev, p2Name: val };
+                              if (activeSetupTab === 'singles') {
+                                if (next.p1Name && val) {
+                                  setTeam1Players([next.p1Name]);
+                                  setTeam2Players([val]);
+                                  setSelectedMatchIndex(0);
+                                } else {
+                                  setTeam1Players([]);
+                                  setTeam2Players([]);
+                                  setSelectedMatchIndex(null);
+                                }
+                                setPlayer2(prevP => ({ ...prevP, name: val }));
+                              }
+                              return next;
+                            });
+                          }}
+                          onFocus={(e) => handleInputFocus(e, 'p2-singles')}
+                          onBlur={() => {
+                            setFocusedField(null);
+                            const pref = getPlayerPref(singlesSetup.p2Name, 'p2');
+                            setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
+                          }}
+                          className="w-full bg-black border-2 rounded-[2rem] font-black text-slate-100 focus:outline-none uppercase transition-all shadow-xl text-center pr-12 sm:pr-24" 
+                          style={{ 
+                            ...teamEntryStyle, 
+                            borderColor: focusedField === 'p2-singles' ? player2.color : player2.color + '66',
+                            fontSize: '8vh'
+                          }}
+                          placeholder="NAME"
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pr-2">
+                          <button 
+                            onClick={() => {
+                              setSinglesSetup(prev => ({ ...prev, p2Name: '' }));
+                              setTeam2Players([]);
+                              setPlayer2(prev => ({ ...prev, name: '', score: 0 }));
+                            }}
+                            className="p-1 sm:p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-colors rounded-lg"
+                            title="Clear Player"
+                          >
+                            <Trash2 className="w-5 h-5 sm:w-8 sm:h-8" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-center">
                     <button 
                       onClick={() => {
-                        const p1Prefs = getPlayerPref(singlesSetup.p1Name || 'PLAYER 1', 'p1') || SLOT1_DEFAULTS;
-                        const p2Prefs = getPlayerPref(singlesSetup.p2Name || 'PLAYER 2', 'p2') || SLOT2_DEFAULTS;
-                        const p1Update = { name: singlesSetup.p1Name || 'PLAYER 1', score: 0, ...p1Prefs };
-                        const p2Update = { name: singlesSetup.p2Name || 'PLAYER 2', score: 0, ...p2Prefs };
+                        const p1Name = singlesSetup.p1Name;
+                        const p2Name = singlesSetup.p2Name;
+                        if (!p1Name || !p2Name) return;
+                        
+                        const p1Prefs = getPlayerPref(p1Name, 'p1') || SLOT1_DEFAULTS;
+                        const p2Prefs = getPlayerPref(p2Name, 'p2') || SLOT2_DEFAULTS;
+                        const p1Update = { name: p1Name, score: 0, ...p1Prefs };
+                        const p2Update = { name: p2Name, score: 0, ...p2Prefs };
                         setPlayer1(prev => ({ ...prev, ...p1Update }));
                         setPlayer2(prev => ({ ...prev, ...p2Update }));
+                        setTeam1Players([p1Name]);
+                        setTeam2Players([p2Name]);
                         setSelectedMatchIndex(0);
                         // Initialize matchup settings for singles slot 0
                         setMatchupSettings(prev => ({
@@ -3937,7 +4376,7 @@ export default function App() {
                         }));
                         setView('scoreboard');
                       }}
-                      className="px-12 py-6 rounded-3xl font-black uppercase tracking-[0.3em] text-2xl transition-all hover:scale-105 active:scale-95 shadow-2xl"
+                      className="px-5 py-3 sm:px-12 sm:py-6 rounded-2xl sm:rounded-3xl font-black uppercase tracking-[0.3em] text-xs sm:text-2xl transition-all hover:scale-105 active:scale-95 shadow-2xl"
                       style={{ backgroundColor: player1.color, color: '#000' }}
                     >
                       Start Game
@@ -3994,8 +4433,14 @@ export default function App() {
                                   updateTeamData(team1Name, newPlayers, team2Name, team2Players);
                                 }}
                                 onFocus={(e) => handleInputFocus(e, `p1-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
-                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                onBlur={() => {
+                                  setFocusedField(null);
+                                  const pref = getPlayerPref(player, 'p1');
+                                  // Normally we don't force load team members immediately to avoid confusion, 
+                                  // but we sync them to the card IF this is the active match
+                                  if (selectedMatchIndex === idx) setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS, ...(pref || {}) }));
+                                }}
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-12 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
                                   borderColor: focusedField === `p1-${idx}` ? player1.color : player1.color + '66' 
@@ -4003,24 +4448,27 @@ export default function App() {
                                 placeholder={`P${idx + 1}`}
                                 readOnly={player.includes('/')}
                               />
-                              <button 
-                                onClick={() => {
-                                  const newPlayers = team1Players.filter((_, i) => i !== idx);
-                                  updateTeamData(team1Name, newPlayers, team2Name, team2Players);
-                                }}
-                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all active:scale-90"
-                              >
-                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                              </button>
+                              <div className="absolute right-0 top-0 h-full flex items-center pr-2 sm:pr-4">
+                                <button 
+                                  onClick={() => {
+                                    const newPlayers = team1Players.filter((_, i) => i !== idx);
+                                    updateTeamData(team1Name, newPlayers, team2Name, team2Players);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90"
+                                  title="Clear Player"
+                                >
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
                         
                         {activeSetupTab === 'match' || activeSetupTab === 'group' ? (
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
                              <button 
                               onClick={() => updateTeamData(team1Name, [...team1Players, ''], team2Name, team2Players)}
-                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              className="w-full py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
                               style={{ 
                                 borderColor: player1.color + '44', 
                                 color: player1.color,
@@ -4031,19 +4479,32 @@ export default function App() {
                               <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
                               Add Player
                             </button>
-                            <button 
-                              onClick={() => handleAddDoubles(1)}
-                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
-                              style={{ 
-                                borderColor: player1.color + '44', 
-                                color: player1.color,
-                                backgroundColor: 'rgba(0,0,0,0.2)'
-                              }}
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
-                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
-                              Add Doubles
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleOpenPicker(1, 'singles')}
+                                className="flex-1 py-3 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] sm:text-xs font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                                style={{ 
+                                  borderColor: player1.color + '44', 
+                                  color: player1.color,
+                                  backgroundColor: 'rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                                Create Singles
+                              </button>
+                              <button 
+                                onClick={() => handleOpenPicker(1, 'doubles')}
+                                className="flex-1 py-3 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] sm:text-xs font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                                style={{ 
+                                  borderColor: player1.color + '44', 
+                                  color: player1.color,
+                                  backgroundColor: 'rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                                Create Doubles
+                              </button>
+                            </div>
                           </div>
                         ) : (
                             <button 
@@ -4112,8 +4573,12 @@ export default function App() {
                                   updateTeamData(team1Name, team1Players, team2Name, newPlayers);
                                 }}
                                 onFocus={(e) => handleInputFocus(e, `p2-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
-                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-14 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
+                                onBlur={() => {
+                                  setFocusedField(null);
+                                  const pref = getPlayerPref(player, 'p2');
+                                  if (selectedMatchIndex === idx) setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS, ...(pref || {}) }));
+                                }}
+                                className="w-full bg-black/50 border-2 rounded-xl sm:rounded-2xl pr-12 sm:pr-20 text-slate-100 focus:outline-none uppercase font-bold transition-all shadow-lg"
                                 style={{ 
                                   ...playerEntryStyle, 
                                   borderColor: focusedField === `p2-${idx}` ? player2.color : player2.color + '66' 
@@ -4121,24 +4586,27 @@ export default function App() {
                                 placeholder={`P${idx + 1}`}
                                 readOnly={player.includes('/')}
                               />
-                              <button 
-                                onClick={() => {
-                                  const newPlayers = team2Players.filter((_, i) => i !== idx);
-                                  updateTeamData(team1Name, team1Players, team2Name, newPlayers);
-                                }}
-                                className="absolute right-0 top-0 h-full px-2 sm:px-4 text-red-500 hover:bg-red-500/10 rounded-r-lg sm:rounded-r-xl transition-all"
-                              >
-                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                              </button>
+                              <div className="absolute right-0 top-0 h-full flex items-center pr-2 sm:pr-4">
+                                <button 
+                                  onClick={() => {
+                                    const newPlayers = team2Players.filter((_, i) => i !== idx);
+                                    updateTeamData(team1Name, team1Players, team2Name, newPlayers);
+                                  }}
+                                  className="h-full px-1.5 sm:px-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                                  title="Clear Player"
+                                >
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
 
                         {activeSetupTab === 'match' || activeSetupTab === 'group' ? (
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
                              <button 
                               onClick={() => updateTeamData(team1Name, team1Players, team2Name, [...team2Players, ''])}
-                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                              className="w-full py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
                               style={{ 
                                 borderColor: player2.color + '44', 
                                 color: player2.color,
@@ -4149,19 +4617,32 @@ export default function App() {
                               <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
                               Add Player
                             </button>
-                            <button 
-                              onClick={() => handleAddDoubles(2)}
-                              className="flex-1 py-4 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
-                              style={{ 
-                                borderColor: player2.color + '44', 
-                                color: player2.color,
-                                backgroundColor: 'rgba(0,0,0,0.2)'
-                              }}
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
-                              <Plus className="w-5 h-5 transition-transform group-hover:rotate-90" />
-                              Add Doubles
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleOpenPicker(2, 'singles')}
+                                className="flex-1 py-3 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] sm:text-xs font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                                style={{ 
+                                  borderColor: player2.color + '44', 
+                                  color: player2.color,
+                                  backgroundColor: 'rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                                Create Singles
+                              </button>
+                              <button 
+                                onClick={() => handleOpenPicker(2, 'doubles')}
+                                className="flex-1 py-3 border-2 border-dashed rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-[10px] sm:text-xs font-black uppercase tracking-widest relative overflow-hidden group shadow-lg"
+                                style={{ 
+                                  borderColor: player2.color + '44', 
+                                  color: player2.color,
+                                  backgroundColor: 'rgba(0,0,0,0.2)'
+                                }}
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none group-hover:animate-shimmer" />
+                                Create Doubles
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <button 
@@ -4202,50 +4683,50 @@ export default function App() {
                     <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[300px]">
                       {/* Header Row */}
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
+                        <div className="flex px-[1vw] py-[2vh] text-slate-400 w-[6%] items-center justify-center">
+                          <GripVertical className="w-3 h-3 opacity-20" />
+                        </div>
+                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
                         <div 
-                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
-                          onClick={() => {
-                            if (activeSetupTab === 'match') {
-                              setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
-                            }
-                          }}
+                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[24%] sm:w-[20%] items-center truncate text-white"
                         >
                           <span>{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
-                          {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
-                        <div className="flex px-[0.5vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[8%] items-center">VS</div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[7%] items-center">VS</div>
                         <div 
-                          className={`flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest w-[27%] sm:w-[22%] items-center truncate transition-colors ${activeSetupTab === 'match' ? 'cursor-pointer hover:text-emerald-400 group' : 'text-white'}`}
-                          onClick={() => {
-                            if (activeSetupTab === 'match') {
-                              setMatchModeBreakSide(matchModeBreakSide === '1' ? '2' : (matchModeBreakSide === '2' ? '1' : '2'));
-                            }
-                          }}
+                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[24%] sm:w-[20%] items-center truncate text-white"
                         >
                           <span>{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
-                          {activeSetupTab === 'match' && <ArrowUpDown className="ml-2 w-3 h-3 text-slate-500 group-hover:text-emerald-400" />}
                         </div>
-                        <div className="flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[24%] sm:w-[17%] items-center">Result</div>
-                        <div className="flex px-[1vw] py-[2vh] text-[1.8vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[8%] items-center">Clear</div>
-                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[1.4vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[15%] items-center">TIMERS</div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[21%] sm:w-[15%] items-center">Result</div>
+                        <div className="flex px-[1vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[13%] sm:w-[10%] items-center">Clear</div>
+                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[14%] items-center">TIMERS</div>
                       </div>
 
                       {/* Body */}
                       <div className="flex flex-col">
                         {Math.max(team1Players.length, team2Players.length) === 0 ? (
-                          <div className="px-6 py-12 text-center text-slate-500 italic uppercase tracking-widest font-bold text-[2vw] sm:text-sm">Add players to generate matchups.</div>
+                          <div className="px-6 py-12 text-center text-slate-500 italic uppercase tracking-widest font-bold text-[3vw] sm:text-sm">Add players to generate matchups.</div>
                         ) : (
                           <>
-                            {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
+                            <DndContext 
+                              sensors={sensors}
+                              collisionDetection={closestCenter}
+                              onDragEnd={handleDragEnd}
+                            >
+                              <SortableContext 
+                                items={Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, i) => i)} 
+                                strategy={verticalListSortingStrategy}
+                              >
+                                {Array.from({ length: Math.max(team1Players.length, team2Players.length) }).map((_, idx) => {
                               // In singles mode, only show the active selection
                               if (activeSetupTab === 'singles' && selectedMatchIndex !== null && selectedMatchIndex !== idx) return null;
                               
                               const p1 = team1Players[idx];
                               const p2 = team2Players[idx];
                               
-                              const p1Name = p1 || `PLAYER ${idx + 1}`;
-                              const p2Name = p2 || `PLAYER ${idx + 1}`;
+                              const p1Name = p1 || '';
+                              const p2Name = p2 || '';
                               const matchup = matchupSettings[idx];
                               const lastMatch = getMatchResult(p1Name, p2Name);
                               
@@ -4260,11 +4741,16 @@ export default function App() {
                                 };
                               } 
                               // Priority 2: Session progress in matchups (includes live sync)
-                              else if (matchup && (matchup.score1 > 0 || matchup.score2 > 0)) {
+                              else if (matchup && (
+                                (matchup.score1 !== undefined && matchup.score1 > 0) || 
+                                (matchup.score2 !== undefined && matchup.score2 > 0) || 
+                                (matchup.frameDetails && matchup.frameDetails.length > 0) ||
+                                (matchup.isLive === false)
+                              )) {
                                 displayScore = { 
-                                  score1: matchup.score1, 
-                                  score2: matchup.score2, 
-                                  isLive: true 
+                                  score1: matchup.score1 || 0, 
+                                  score2: matchup.score2 || 0, 
+                                  isLive: matchup.isLive || false 
                                 };
                               } 
                               // Priority 3: Historical data for this pair
@@ -4291,123 +4777,126 @@ export default function App() {
                               const matchSessionStart = matchModeBreakSide === 'none' ? '1' : matchModeBreakSide;
                               const rowBreaker = (idx % 2 === 0) ? matchSessionStart : (matchSessionStart === '1' ? '2' : '1');
                               
-                              return (
-                                <div 
-                                  key={idx} 
-                                  onClick={() => selectTeamMatch(idx)}
-                                  className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
-                                >
-                                  <div className="hidden sm:flex px-[1vw] py-[2vh] text-[1.4vw] sm:text-xs font-black text-slate-600 w-[8%] items-center">#{idx + 1}</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                    {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
-                                      <div className="mr-2 shrink-0">
-                                        <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                return (
+                                  <SortableRow 
+                                    key={idx} 
+                                    id={idx}
+                                    onClick={() => selectTeamMatch(idx)}
+                                    className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
+                                  >
+                                    <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs font-black text-slate-600 w-[8%] items-center whitespace-nowrap">#{idx + 1}</div>
+                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[24%] sm:w-[20%] items-center overflow-hidden">
+                                      {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
+                                        <div className="mr-2 shrink-0">
+                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                        </div>
+                                      )}
+                                      <div className="flex flex-col">
+                                        {p1 && p1.includes('/') ? (
+                                          <>
+                                            <span className="truncate leading-none text-[2.5vw] sm:text-xs">{p1.split('/')[0].trim()}</span>
+                                            <span className="truncate leading-none text-[2.5vw] sm:text-xs mt-1 opacity-80">{p1.split('/')[1].trim()}</span>
+                                          </>
+                                        ) : (
+                                          <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        )}
                                       </div>
-                                    )}
-                                    <div className="flex flex-col">
-                                      {matchup?.isDoubles && p1 && p1.includes('/') ? (
-                                        <>
-                                          <span className="truncate leading-none">{p1.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1">{p1.split('/')[1].trim()}</span>
-                                        </>
+                                    </div>
+                                    <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[2vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[7%] items-center">VS</div>
+                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[24%] sm:w-[20%] items-center overflow-hidden">
+                                      <div className="flex flex-col">
+                                        {p2 && p2.includes('/') ? (
+                                          <>
+                                            <span className="truncate leading-none text-[2.5vw] sm:text-xs">{p2.split('/')[0].trim()}</span>
+                                            <span className="truncate leading-none text-[2.5vw] sm:text-xs mt-1 opacity-80">{p2.split('/')[1].trim()}</span>
+                                          </>
+                                        ) : (
+                                          <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        )}
+                                      </div>
+                                      {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '2' && (
+                                        <div className="ml-2 shrink-0">
+                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex px-[1.5vw] py-[2vh] w-[21%] sm:w-[15%] items-center">
+                                      {displayScore ? (
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
+                                          <span className={`text-[2.5vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
+                                            displayScore.isLive 
+                                              ? 'bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]' 
+                                              : displayScore.winner === p1Name 
+                                                ? 'bg-emerald-500/20 text-emerald-400' 
+                                                : displayScore.winner === p2Name
+                                                  ? 'bg-rose-500/20 text-rose-400'
+                                                  : 'bg-slate-800 text-slate-400'
+                                          }`}>
+                                            {displayScore.score1}-{displayScore.score2}
+                                            {displayScore.isLive && selectedMatchIndex === idx && (
+                                              <span className="ml-1 text-[0.4rem] bg-blue-500/30 text-blue-300 px-1 rounded animate-pulse align-middle">LIVE</span>
+                                            )}
+                                          </span>
+                                          <span className="text-[2vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'ACTIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
+                                        </div>
                                       ) : (
-                                        <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p1 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        <span className="text-[2.5vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest whitespace-nowrap">READY</span>
                                       )}
                                     </div>
-                                  </div>
-                                  <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
-                                  <div className="flex px-[1.5vw] py-[2vh] text-[2.2vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                    <div className="flex flex-col">
-                                      {matchup?.isDoubles && p2 && p2.includes('/') ? (
-                                        <>
-                                          <span className="truncate leading-none">{p2.split('/')[0].trim()}</span>
-                                          <span className="truncate leading-none mt-1">{p2.split('/')[1].trim()}</span>
-                                        </>
+                                    <div className="flex px-[1vw] py-[2vh] justify-end w-[13%] sm:w-[10%] items-center">
+                                      <div className="flex items-center justify-end gap-1 sm:gap-2">
+                                        {/* Only show row button in non-match modes */}
+                                        {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || selectedMatchIndex === idx) && (
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              viewMatchDetails(lastMatch ? lastMatch.id : `live-${idx}`);
+                                            }}
+                                            className="p-3 sm:p-5 2xl:p-1 flex items-center justify-center text-blue-500 hover:bg-blue-500/10 rounded-xl transition-all active:scale-95 shadow-lg bg-blue-500/5 sm:bg-transparent"
+                                            title="View Details"
+                                          >
+                                            <FileText className="w-5 h-5 sm:w-8 sm:h-8 2xl:w-3 2xl:h-3" />
+                                          </button>
+                                        )}
+                                        {/* Clear match button - now always visible for consistency as requested */}
+                                        {(lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx)) && (
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              clearMatchResult(p1Name, p2Name, idx);
+                                            }}
+                                            className="p-2 min-h-[38px] min-w-[38px] flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-lg border border-white/20 shadow-lg transition-all active:scale-90"
+                                            title="Clear Match"
+                                          >
+                                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3.5 lg:h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[14%] items-center overflow-hidden">
+                                      {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
+                                        <div className="flex flex-col gap-0.5">
+                                          {lastMatch.shotClockSetting && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">SHOT: {lastMatch.shotClockSetting}S</span>}
+                                          {lastMatch.matchClockRemaining !== undefined && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
+                                        </div>
                                       ) : (
-                                        <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
+                                        <span className="text-[0.625rem] text-slate-600 font-bold uppercase">-</span>
                                       )}
                                     </div>
-                                    {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '2' && (
-                                      <div className="ml-2 shrink-0">
-                                        <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center">
-                                    {displayScore ? (
-                                      <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
-                                        <span className={`text-[1.8vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
-                                          displayScore.isLive 
-                                            ? 'bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]' 
-                                            : displayScore.winner === p1Name 
-                                              ? 'bg-emerald-500/20 text-emerald-400' 
-                                              : displayScore.winner === p2Name
-                                                ? 'bg-rose-500/20 text-rose-400'
-                                                : 'bg-slate-800 text-slate-400'
-                                        }`}>
-                                          {displayScore.score1}-{displayScore.score2}
-                                          {displayScore.isLive && selectedMatchIndex === idx && (
-                                            <span className="ml-1 text-[0.4rem] bg-blue-500/30 text-blue-300 px-1 rounded animate-pulse align-middle">LIVE</span>
-                                          )}
-                                        </span>
-                                        <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-600 font-bold uppercase whitespace-nowrap truncate">{displayScore.isLive ? 'ACTIVE' : (displayScore.date ? new Date(displayScore.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '')}</span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-[1.8vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest">READY</span>
-                                    )}
-                                  </div>
-                                  <div className="flex px-[1vw] py-[2vh] justify-end w-[10%] sm:w-[8%] items-center">
-                                    <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                      {/* Only show row button in non-match modes */}
-                                      {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || selectedMatchIndex === idx) && (
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            viewMatchDetails(lastMatch ? lastMatch.id : `live-${idx}`);
-                                          }}
-                                          className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                          title="View Details"
-                                        >
-                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
-                                        </button>
-                                      )}
-                                      {/* Hide individual delete buttons in Match mode - use the main Session Reset instead */}
-                                      {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx && (player1.score > 0 || player2.score > 0))) && (
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            clearMatchResult(p1Name, p2Name, idx);
-                                          }}
-                                          className="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
-                                          title="Clear Match"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[15%] items-center overflow-hidden">
-                                    {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
-                                      <div className="flex flex-col gap-0.5">
-                                        {lastMatch.shotClockSetting && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">SHOT: {lastMatch.shotClockSetting}S</span>}
-                                        {lastMatch.matchClockRemaining !== undefined && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">MATCH: {formatTime(lastMatch.matchClockRemaining)}</span>}
-                                      </div>
-                                    ) : (
-                                      <span className="text-[0.625rem] text-slate-600 font-bold uppercase">-</span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
+                                  </SortableRow>
+                                );
                             })}
+                          </SortableContext>
+                        </DndContext>
                             
-                            {/* Match Session Details Button - Only for Match Mode */}
-                            {activeSetupTab === 'match' && (team1Players.length > 0 || team2Players.length > 0) && (
+                            {/* Match Session Details Button - For Match & Singles Mode */}
+                            {(activeSetupTab === 'match' || activeSetupTab === 'singles') && (team1Players.length > 0 || team2Players.length > 0) && (
                               <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                                 <button 
                                   onClick={() => viewMatchDetails('session')}
-                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                  className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px]"
                                 >
-                                  <FileText className="w-4 h-4" />
+                                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3 lg:h-3 transition-transform group-hover:scale-110" />
                                   View Detailed Match Progress
                                 </button>
                                 <button 
@@ -4415,9 +4904,9 @@ export default function App() {
                                     e.stopPropagation();
                                     setShowDeleteAllConfirm(true);
                                   }}
-                                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all font-black uppercase tracking-widest text-xs"
+                                  className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white border-2 border-white/30 shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px] active:scale-95"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3 lg:h-3 transition-transform group-hover:scale-110" />
                                   Delete Match Data
                                 </button>
                               </div>
@@ -4429,8 +4918,8 @@ export default function App() {
                               const p2 = team2Players[selectedMatchIndex];
                               if (!p1 && !p2) return null;
                               
-                              const p1Name = p1 || `PLAYER ${selectedMatchIndex + 1}`;
-                              const p2Name = p2 || `PLAYER ${selectedMatchIndex + 1}`;
+                              const p1Name = p1 || '';
+                              const p2Name = p2 || '';
                               
                               // Filter history for this pair, excluding the latest one which is already shown above in the slot row
                               const historyForPair = matchHistory.filter(m => (
@@ -4450,11 +4939,29 @@ export default function App() {
                                     >
                                       <div className="hidden sm:flex px-[1vw] py-3 text-xs font-black text-slate-700 w-[8%] items-center opacity-50">HIST</div>
                                       <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                        <span className="truncate">{m.player1}</span>
+                                        <div className="flex flex-col">
+                                          {m.player1 && m.player1.includes('/') ? (
+                                            <>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs">{m.player1.split('/')[0].trim()}</span>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs mt-1 opacity-70">{m.player1.split('/')[1].trim()}</span>
+                                            </>
+                                          ) : (
+                                            <span className="truncate">{m.player1}</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="flex px-[0.5vw] py-3 text-center text-slate-800 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">VS</div>
                                       <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
-                                        <span className="truncate">{m.player2}</span>
+                                        <div className="flex flex-col">
+                                          {m.player2 && m.player2.includes('/') ? (
+                                            <>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs">{m.player2.split('/')[0].trim()}</span>
+                                              <span className="truncate leading-none text-[2.2vw] sm:text-xs mt-1 opacity-70">{m.player2.split('/')[1].trim()}</span>
+                                            </>
+                                          ) : (
+                                            <span className="truncate">{m.player2}</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="flex px-[1.5vw] py-3 w-[24%] sm:w-[17%] items-center">
                                         <div className="flex items-center gap-2">
@@ -4470,10 +4977,10 @@ export default function App() {
                                             e.stopPropagation();
                                             viewMatchDetails(m.id);
                                           }}
-                                          className="p-1 text-slate-500 hover:bg-slate-700 rounded transition-colors"
+                                          className="p-2 sm:p-4 2xl:p-1 flex items-center justify-center text-slate-500 hover:bg-slate-700 rounded-xl transition-all active:scale-95 bg-slate-800/20 sm:bg-transparent"
                                           title="View Details"
                                         >
-                                          <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                                          <FileText className="w-4 h-4 sm:w-7 sm:h-7 2xl:w-2.5 2xl:h-2.5 px-0.5" />
                                         </button>
                                       </div>
                                       <div className="hidden sm:flex px-[1.5vw] py-3 w-[15%] items-center" />
@@ -4495,7 +5002,9 @@ export default function App() {
                                       0 0.4vh 1vh rgba(0,0,0,0.8)
                                     ` 
                                   }}>{teamTotals.t1}</span>
-                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">
+                                    {activeSetupTab === 'group' ? 'SIDE A' : (activeSetupTab === 'singles' ? (player1.name || team1Players[0] || 'PLAYER 1') : (team1Name || 'TEAM A'))}
+                                  </span>
                                 </div>
                               </div>
                               <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[1.6vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[8%] items-center">SUM</div>
@@ -4508,7 +5017,9 @@ export default function App() {
                                       0 0.4vh 1vh rgba(0,0,0,0.8)
                                     ` 
                                   }}>{teamTotals.t2}</span>
-                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
+                                  <span className="text-[1.4vw] sm:text-[0.625rem] text-slate-500 uppercase tracking-tighter truncate max-w-full mt-1.5">
+                                    {activeSetupTab === 'group' ? 'SIDE B' : (activeSetupTab === 'singles' ? (player2.name || team2Players[0] || 'PLAYER 2') : (team2Name || 'TEAM B'))}
+                                  </span>
                                 </div>
                               </div>
                               <div className="flex px-[1.5vw] py-[2vh] w-[24%] sm:w-[17%] items-center justify-end">
@@ -4516,8 +5027,9 @@ export default function App() {
                                   <span className="text-[1.6vw] sm:text-[0.75rem] text-slate-600 uppercase font-bold whitespace-nowrap">Overall Lead</span>
                                   <span className="text-[1.8vw] sm:text-sm font-black text-slate-100 truncate max-w-full block text-right">
                                     {teamTotals.t1 === teamTotals.t2 ? 'TIED' : 
-                                     teamTotals.t1 > teamTotals.t2 ? `${team1Name} (+${teamTotals.t1 - teamTotals.t2})` : 
-                                     `${team2Name} (+${teamTotals.t2 - teamTotals.t1})`}
+                                     teamTotals.t1 > teamTotals.t2 ? 
+                                       `${activeSetupTab === 'singles' ? (player1.name || team1Players[0] || 'PLAYER 1') : (team1Name || 'TEAM A')} (+${teamTotals.t1 - teamTotals.t2})` : 
+                                       `${activeSetupTab === 'singles' ? (player2.name || team2Players[0] || 'PLAYER 2') : (team2Name || 'TEAM B')} (+${teamTotals.t2 - teamTotals.t1})`}
                                   </span>
                                 </div>
                               </div>
@@ -4587,7 +5099,59 @@ export default function App() {
                   >
                     Colour Preferences
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+
+                  {/* Full Screen Backdrops Tile */}
+                  <div 
+                    className={`bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative transition-all duration-300 ${activePicker === 'fs-backdrop' ? 'z-[40] ring-4 ring-white/10' : 'z-10'}`} 
+                    style={{ borderColor: player1.color }}
+                  >
+                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Full Screen Backdrops</p>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between gap-[4vw]">
+                        <div className="flex-1">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Note: Individual background options are disabled when full screen background is enabled</p>
+                        </div>
+                        <div className="shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextValue = fullScreenBackdrop === 'none' ? 'black' : 'none';
+                              setFullScreenBackdrop(nextValue);
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative active:scale-95`}
+                            style={{ backgroundColor: fullScreenBackdrop !== 'none' ? player1.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${fullScreenBackdrop !== 'none' ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {fullScreenBackdrop !== 'none' && (
+                        <div className="flex justify-center pt-4 border-t border-white/5">
+                            <div className="w-full max-w-[500px] landscape:max-w-[700px] mx-auto">
+                               <p className="font-black uppercase tracking-[0.4em] text-slate-500 text-xs sm:text-[1.5vh] pb-[2vh] text-center w-full">SELECT BACKDROP</p>
+                              <ColorPicker
+                                label="Backdrop"
+                                value={fullScreenBackdrop}
+                                onChange={(val) => setFullScreenBackdrop(val)}
+                                colors={FULL_SCREEN_BACKDROPS.filter(b => b.value !== 'none')}
+                                icon={<Layout className="w-4 h-4" />}
+                                isOpen={activePicker === 'fs-backdrop'}
+                                onToggle={(isOpen) => setActivePicker(isOpen ? 'fs-backdrop' : null)}
+                                themeColor={player1.color}
+                                pickerStyle="backdrop"
+                                allowedStyles={['backdrop']}
+                              />
+                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 landscape:grid-cols-2 md:grid-cols-2 gap-4 landscape:gap-10 sm:gap-10">
                     {[player1, player2].map((p, idx) => (
                       <div 
                         key={p.id} 
@@ -4603,7 +5167,7 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <label 
                           className="font-black uppercase tracking-widest text-slate-500" 
-                          style={{ fontSize: playerPrefLabelFontSize }}
+                          style={{ fontSize: deviceInfo.isPhone ? '12px' : playerPrefLabelFontSize }}
                         >
                           Player {idx + 1} Name
                         </label>
@@ -4612,13 +5176,29 @@ export default function App() {
                         <input
                           type="text"
                           value={p.name}
+                          onChange={(e) => {
+                            const val = e.target.value.toUpperCase();
+                            const pref = getPlayerPref(val, idx === 0 ? 'p1' : 'p2');
+                            if (idx === 0) {
+                              setPlayer1(prev => ({...prev, name: val, ...(pref || {})}));
+                              setSinglesSetup(prev => ({...prev, p1Name: val}));
+                            } else {
+                              setPlayer2(prev => ({...prev, name: val, ...(pref || {})}));
+                              setSinglesSetup(prev => ({...prev, p2Name: val}));
+                            }
+                          }}
+                          onBlur={() => {
+                            const pref = getPlayerPref(p.name, idx === 0 ? 'p1' : 'p2');
+                            if (pref) {
+                              if (idx === 0) setPlayer1(prev => ({...prev, ...pref}));
+                              else setPlayer2(prev => ({...prev, ...pref}));
+                            }
+                          }}
                           placeholder={`PLAYER ${idx + 1} NAME`}
-                          readOnly
-                          className="w-full bg-slate-950/30 border border-white/10 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all cursor-not-allowed opacity-70"
+                          className="w-full bg-slate-950/30 border-2 rounded-2xl px-6 py-3 text-2xl font-black focus:outline-none uppercase transition-all shadow-inner"
                           style={{ 
-                            borderColor: 'transparent',
-                            outline: 'none',
-                            boxShadow: 'none'
+                            borderColor: p.color + '33',
+                            color: 'white'
                           }}
                         />
                         <div className="space-y-6">
@@ -4637,7 +5217,7 @@ export default function App() {
                            />
 
                           <ColorPicker
-                            label="Card Background"
+                            label="Card Style / Border"
                             value={p.bgColor}
                             onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, bgColor: color})) : setPlayer2(prev => ({...prev, bgColor: color}))}
                             colors={p.bgStyle === 'balls' ? POOL_BALLS : BACKGROUND_COLORS}
@@ -4663,6 +5243,7 @@ export default function App() {
                               pickerStyle={p.screenStyle || 'default'}
                               allowedStyles={['default', 'cloth', 'speed']}
                               onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, screenStyle: style})) : setPlayer2(prev => ({...prev, screenStyle: style}))}
+                              disabled={false}
                             />
                             {/* Screen Color Indicator Circle - 3rem (w-12 h-12) - Attached to Card Edge */}
                             <div 
@@ -4683,311 +5264,362 @@ export default function App() {
                   </div>
                 </section>
 
-                {/* 2. Break Tracker */}
-                <section className="space-y-6">
-                  <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: 'white',
-                      fontSize: deviceInfo.titleSizes.section
-                    }}
-                  >
-                    Break Tracker
-                  </h3>
-                  <div 
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative" 
-                    style={{ borderColor: player1.color }}
-                  >
-                    {/* Title Box - Top */}
-                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Break Tracking</p>
-                    </div>
-
-                    {/* Content Box - Description & Toggle */}
-                    <div className="flex items-center justify-between gap-[4vw]">
-                      <div className="flex-1">
-                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-4">
-                        {isBreakTrackingEnabled && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setBreakBalls([]);
-                              setCurrentBreakPlayerId('none');
-                            }}
-                            className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95 flex items-center gap-2"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            Reset
-                          </button>
-                        )}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const nextValue = !isBreakTrackingEnabled;
-                            setIsBreakTrackingEnabled(nextValue);
-                            if (!nextValue) {
-                              setBreakBalls([]);
-                              setCurrentBreakPlayerId('none');
-                            }
-                          }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
-                          style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
-                        >
-                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* 3. Device Time */}
-                <section className="space-y-6">
-                  <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: 'white',
-                      fontSize: deviceInfo.titleSizes.section
-                    }}
-                  >
-                    Device Time
-                  </h3>
-                  <div 
-                    onClick={() => setShowDeviceTime(!showDeviceTime)}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative"
-                    style={{ borderColor: player1.color }}
-                  >
-                    {/* Title Box - Top */}
-                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Show Device Time</p>
-                    </div>
-
-                    {/* Content Box - Description & Toggle */}
-                    <div className="flex items-center justify-between gap-[4vw]">
-                      <div className="flex-1">
-                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
-                      </div>
-                      <div className="shrink-0">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowDeviceTime(!showDeviceTime);
-                          }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
-                          style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
-                        >
-                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* 4. Shot Clock */}
-                <section className="space-y-6">
-                  <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: 'white',
-                      fontSize: deviceInfo.titleSizes.section
-                    }}
-                  >
-                    Shot Clock
-                  </h3>
-                  <div 
-                    onClick={() => {
-                      setIsShotClockEnabled(!isShotClockEnabled);
-                      if (isShotClockEnabled) pauseTimer();
-                    }}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
-                    style={{ borderColor: player2.color }}
-                  >
-                    {/* Title Box - Top */}
-                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Shot Clock</p>
-                    </div>
-
-                    {/* Content Box - Description & Toggle */}
-                    <div className="flex items-center justify-between gap-[4vw]">
-                      <div className="flex-1 text-left">
-                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
-                      </div>
-                      <div className="shrink-0">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsShotClockEnabled(!isShotClockEnabled);
-                            if (isShotClockEnabled) pauseTimer();
-                          }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
-                          style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
-                        >
-                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {isShotClockEnabled && (
-                      <div 
-                        className="space-y-6 pt-8 border-t-2" 
-                        style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-between">
-                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Timer Duration</label>
-                          <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="10" 
-                          max="120" 
-                          step="5"
-                          value={shotClockDuration}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setShotClockDuration(val);
-                            setShotClock(val);
-                          }}
-                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-                          style={{ accentColor: player2.color }}
-                        />
-                        <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
-                          <span>10s</span>
-                          <span>60s</span>
-                          <span>120s</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                {/* 5. Match Clock */}
-                <section className="space-y-6">
-                  <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: 'white',
-                      fontSize: deviceInfo.titleSizes.section
-                    }}
-                  >
-                    Match Clock
-                  </h3>
-                  <div 
-                    onClick={() => {
-                      setIsMatchClockEnabled(!isMatchClockEnabled);
-                      if (isMatchClockEnabled) pauseTimer();
-                    }}
-                    className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative" 
-                    style={{ borderColor: player1.color }}
-                  >
-                    {/* Title Box - Top */}
-                    <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                      <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Match Clock</p>
-                    </div>
-
-                    {/* Content Box - Description & Toggle */}
-                    <div className="flex items-center justify-between gap-[4vw]">
-                      <div className="flex-1 text-left">
-                        <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>A master countdown for the entire match.</p>
-                      </div>
-                      <div className="shrink-0">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsMatchClockEnabled(!isMatchClockEnabled);
-                            if (isMatchClockEnabled) pauseTimer();
-                          }}
-                          className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
-                          style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
-                        >
-                          <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {isMatchClockEnabled && (
-                      <div className="space-y-6 pt-8 border-t border-slate-800" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                          <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Match Duration</label>
-                          <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
-                        </div>
-                        <input 
-                          type="range" 
-                          min="300" 
-                          max="3600" 
-                          step="300"
-                          value={matchClockDuration}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setMatchClockDuration(val);
-                            setMatchClock(val);
-                          }}
-                          className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-                          style={{ accentColor: player1.color }}
-                        />
-                        <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
-                          <span>5m</span>
-                          <span>30m</span>
-                          <span>60m</span>
-                        </div>
-                        <button 
-                          onClick={resetMatchClock}
-                          className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border border-slate-700"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                          Reset Match Clock
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                {/* 6. Restore Defaults */}
-                <section className="space-y-6">
-                  <h3 
-                    className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                    style={{ 
-                      borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                      color: 'white',
-                      fontSize: deviceInfo.titleSizes.section
-                    }}
-                  >
-                    Restore Defaults
-                  </h3>
-                  <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 landscape:grid-cols-2 md:grid-cols-2 gap-8 landscape:gap-12 sm:gap-12 items-start">
+                  {/* 2. Break Tracker */}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      Break Tracker
+                    </h3>
                     <div 
-                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[20vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative"
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative h-full flex flex-col" 
                       style={{ borderColor: player1.color }}
                     >
                       {/* Title Box - Top */}
                       <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Restore Defaults</p>
+                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Break Tracking</p>
                       </div>
 
-                      {/* Content Box - Description */}
-                      <div className="w-full text-left">
-                        <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Resets colors and clock settings to default.</p>
+                      {/* Content Box - Description & Toggle */}
+                      <div className="flex items-center justify-between gap-[4vw] flex-1">
+                        <div className="flex-1">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a "white ball" break indicator that alternates with scores.</p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-4">
+                          {isBreakTrackingEnabled && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBreakBalls([]);
+                                setCurrentBreakPlayerId('none');
+                              }}
+                              className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-3 py-1.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              Reset
+                            </button>
+                          )}
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextValue = !isBreakTrackingEnabled;
+                              setIsBreakTrackingEnabled(nextValue);
+                              if (!nextValue) {
+                                setBreakBalls([]);
+                                setCurrentBreakPlayerId('none');
+                              }
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-colors relative`}
+                            style={{ backgroundColor: isBreakTrackingEnabled ? player1.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isBreakTrackingEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Restore Button - Absolute corner */}
-                      <button 
-                        onClick={() => {
-                          setShowRestoreDefaultsConfirm(true);
-                          setDeviceTimePosition(null);
-                        }}
-                        className="absolute bottom-[2vw] right-[2vw] px-[4vw] sm:px-8 py-[2vw] sm:py-4 bg-slate-800 hover:bg-slate-700 rounded-xl sm:rounded-2xl text-[2.5vw] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
-                      >
-                        <RotateCcw className="w-[3vw] sm:w-4 h-[3vw] sm:h-4" />
-                        Restore Defaults
-                      </button>
                     </div>
-                  </div>
-                </section>
+                  </section>
+
+                  {/* 3. Device Time */}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      Device Time
+                    </h3>
+                    <div 
+                      onClick={() => setShowDeviceTime(!showDeviceTime)}
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative h-full flex flex-col"
+                      style={{ borderColor: player1.color }}
+                    >
+                      {/* Title Box - Top */}
+                      <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Show Device Time</p>
+                      </div>
+
+                      {/* Content Box - Description & Toggle */}
+                      <div className="flex items-center justify-between gap-[4vw] flex-1">
+                        <div className="flex-1">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
+                        </div>
+                        <div className="shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeviceTime(!showDeviceTime);
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
+                            style={{ backgroundColor: showDeviceTime ? player1.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${showDeviceTime ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 4. Shot Clock */}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      Shot Clock
+                    </h3>
+                    <div 
+                      onClick={() => {
+                        setIsShotClockEnabled(!isShotClockEnabled);
+                        if (isShotClockEnabled) pauseTimer();
+                      }}
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative h-full flex flex-col" 
+                      style={{ borderColor: player2.color }}
+                    >
+                      {/* Title Box - Top */}
+                      <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Shot Clock</p>
+                      </div>
+
+                      {/* Content Box - Description & Toggle */}
+                      <div className="flex items-center justify-between gap-[4vw]">
+                        <div className="flex-1 text-left">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
+                        </div>
+                        <div className="shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsShotClockEnabled(!isShotClockEnabled);
+                              if (isShotClockEnabled) pauseTimer();
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
+                            style={{ backgroundColor: isShotClockEnabled ? player2.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isShotClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isShotClockEnabled && (
+                        <div 
+                          className="space-y-6 pt-8 border-t-2 mt-auto" 
+                          style={{ borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1` }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-between">
+                            <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Timer Duration</label>
+                            <span className="text-3xl font-mono font-black" style={{ color: player2.color }}>{shotClockDuration}s</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="10" 
+                            max="120" 
+                            step="5"
+                            value={shotClockDuration}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setShotClockDuration(val);
+                              setShotClock(val);
+                            }}
+                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                            style={{ accentColor: player2.color }}
+                          />
+                          <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
+                            <span>10s</span>
+                            <span>60s</span>
+                            <span>120s</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* 5. Match Clock */}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      Match Clock
+                    </h3>
+                    <div 
+                      onClick={() => {
+                        setIsMatchClockEnabled(!isMatchClockEnabled);
+                        if (isMatchClockEnabled) pauseTimer();
+                      }}
+                      className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl cursor-pointer relative h-full flex flex-col" 
+                      style={{ borderColor: player1.color }}
+                    >
+                      {/* Title Box - Top */}
+                      <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                        <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Enable Match Clock</p>
+                      </div>
+
+                      {/* Content Box - Description & Toggle */}
+                      <div className="flex items-center justify-between gap-[4vw]">
+                        <div className="flex-1 text-left">
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>A master countdown for the entire match.</p>
+                        </div>
+                        <div className="shrink-0">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsMatchClockEnabled(!isMatchClockEnabled);
+                              if (isMatchClockEnabled) pauseTimer();
+                            }}
+                            className={`w-[14vw] sm:w-14 h-[7vw] sm:h-7 rounded-full transition-all active:scale-95 relative`}
+                            style={{ backgroundColor: isMatchClockEnabled ? player1.color : '#334155' }}
+                          >
+                            <div className={`absolute top-[0.5vw] sm:top-[0.25rem] w-[2vw] sm:w-[1.25rem] h-[2vw] sm:h-[1.25rem] bg-white rounded-full transition-all ${isMatchClockEnabled ? 'left-[10vw] sm:left-[2rem]' : 'left-[1vw] sm:left-[0.25rem]'}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isMatchClockEnabled && (
+                        <div className="space-y-6 pt-8 border-t border-slate-800 mt-auto" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-between">
+                            <label className="font-black text-slate-400 uppercase tracking-widest" style={{ fontSize: settingsLabelFontSize }}>Match Duration</label>
+                            <span className="text-3xl font-mono font-black" style={{ color: player1.color }}>{Math.floor(matchClockDuration / 60)}m</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="300" 
+                            max="3600" 
+                            step="300"
+                            value={matchClockDuration}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setMatchClockDuration(val);
+                              setMatchClock(val);
+                            }}
+                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                            style={{ accentColor: player1.color }}
+                          />
+                          <div className="flex justify-between text-[0.625rem] font-black text-slate-600 uppercase tracking-[0.2em]">
+                            <span>5m</span>
+                            <span>30m</span>
+                            <span>60m</span>
+                          </div>
+                          <button 
+                            onClick={resetMatchClock}
+                            className="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border border-slate-700"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Reset Match Clock
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* 6. Restore Defaults */}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      Restore Defaults
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 h-full">
+                      <div 
+                        className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] landscape:pb-[3vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative h-full flex flex-col"
+                        style={{ borderColor: player1.color }}
+                      >
+                        {/* Title Box - Top */}
+                        <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                          <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Restore Defaults</p>
+                        </div>
+
+                        {/* Content Box - Description */}
+                        <div className="w-full text-left flex-1">
+                          <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Resets colors and clock settings to default.</p>
+                        </div>
+
+                        {/* Restore Button - Absolute corner */}
+                        <button 
+                          onClick={() => {
+                            setShowRestoreDefaultsConfirm(true);
+                            setDeviceTimePosition(null);
+                          }}
+                          className="absolute bottom-[2vw] right-[2vw] px-[4vw] sm:px-8 py-[2vw] sm:py-4 bg-slate-800 hover:bg-slate-700 rounded-xl sm:rounded-2xl text-[2.5vw] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-700"
+                        >
+                          <RotateCcw className="w-[3vw] sm:w-4 h-[3vw] sm:h-4" />
+                          Restore Defaults
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 7. App Installation */}
+                  {!deviceInfo.isStandalone && (
+                    <section className="space-y-6 self-stretch">
+                      <h3 
+                        className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                        style={{ 
+                          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                          color: 'white',
+                          fontSize: deviceInfo.titleSizes.section
+                        }}
+                      >
+                        App Installation
+                      </h3>
+                      <div 
+                        className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] sm:pb-[3vw] pt-[1vw] shadow-xl relative h-full flex flex-col" 
+                        style={{ borderColor: player2.color }}
+                      >
+                        <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                          <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>
+                            {deviceInfo.isIOS ? 'Add to Home Screen' : 'Install to Device'}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-[4vw] flex-1">
+                          <div className="flex-1">
+                            <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>
+                              {deferredPrompt 
+                                ? 'Install Pool-Pro as a fast, offline-capable app on your home screen.'
+                                : deviceInfo.isIOS 
+                                  ? 'Tap the "Share" icon in Safari and select "Add to Home Screen" to install.'
+                                  : 'Open your browser menu (⋮) and select "Install app" to add Pool-Pro to your device.'
+                              }
+                            </p>
+                          </div>
+                          {deferredPrompt && (
+                            <div className="shrink-0">
+                              <button 
+                                onClick={handleInstallClick}
+                                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border border-blue-400/50"
+                              >
+                                <Download className="w-4 h-4" />
+                                Install Now
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  )}
+                </div>
 
                 {/* 8. API Configuration */}
                 <section className="space-y-6">
@@ -5171,10 +5803,10 @@ export default function App() {
                   borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`
                 }}
               >
-                <div className="absolute left-0 bottom-[1vh]">
+                <div className="absolute left-0 bottom-[1vh] sm:bottom-[1vh]">
                   <button 
                     onClick={navigateBack}
-                    className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all"
+                    className="group relative h-[calc(3rem+1vh)] sm:h-[calc(4rem+1vh)] active:scale-95 transition-all mt-[1vh] sm:mt-0"
                     style={{ 
                         filter: `drop-shadow(0 0 1rem ${player1.color}22)`,
                         width: deviceInfo.isPhone ? '27vw' : '13vw'
@@ -5220,16 +5852,29 @@ export default function App() {
                 const match = isSession ? {
                   id: 'session',
                   date: new Date().toISOString(),
-                  player1: team1Name || 'Team 1',
-                  player2: team2Name || 'Team 2',
+                  player1: activeSetupTab === 'singles' ? (team1Players[0] || 'Player 1') : (team1Name || 'Team 1'),
+                  player2: activeSetupTab === 'singles' ? (team2Players[0] || 'Player 2') : (team2Name || 'Team 2'),
                   team1: team1Name,
                   team2: team2Name,
                   score1: teamTotals.t1,
                   score2: teamTotals.t2,
-                  winner: teamTotals.t1 > teamTotals.t2 ? team1Name : team2Name,
+                  winner: teamTotals.t1 > teamTotals.t2 ? (activeSetupTab === 'singles' ? (team1Players[0] || 'Player 1') : (team1Name || 'Team 1')) : (teamTotals.t2 > teamTotals.t1 ? (activeSetupTab === 'singles' ? (team2Players[0] || 'Player 2') : (team2Name || 'Team 2')) : 'TIE'),
                   frameDetails: [
                     ...matchHistory
-                      .filter(m => (m.team1 === team1Name && m.team2 === team2Name))
+                      .filter(m => {
+                        if (activeSetupTab === 'singles') {
+                          const p1 = (player1.name || team1Players[0] || singlesSetup.p1Name || '').trim().toLowerCase();
+                          const p2 = (player2.name || team2Players[0] || singlesSetup.p2Name || '').trim().toLowerCase();
+                          const mP1 = (m.player1 || '').trim().toLowerCase();
+                          const mP2 = (m.player2 || '').trim().toLowerCase();
+                          
+                          if (p1 && p2) {
+                            return (mP1 === p1 && mP2 === p2) || (mP1 === p2 && mP2 === p1);
+                          }
+                          return true; // Count all in history if names not set in Singles
+                        }
+                        return (m.team1 || '') === (team1Name || '') && (m.team2 || '') === (team2Name || '');
+                      })
                       .reverse() // Oldest matches first for logic
                       .flatMap(m => m.frameDetails),
                     ...currentMatchFrameDetails
@@ -5266,10 +5911,24 @@ export default function App() {
                           <p className="text-[0.5625rem] sm:text-xs uppercase font-black text-slate-500 mb-2 tracking-[0.2em]">
                             {match.isLive ? (isSession ? 'Session Progress' : 'Live Match Tracker') : 'Detailed Frame Analysis'}
                           </p>
-                          <div className="flex flex-col sm:flex-row sm:items-baseline gap-1">
-                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
+                          <div className="flex flex-col items-center gap-0.5">
+                            {match.player1 && match.player1.includes('/') ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm sm:text-xl font-black text-white uppercase leading-none">{match.player1.split('/')[0].trim()}</span>
+                                <span className="text-[0.625rem] sm:text-xs font-black text-white/60 uppercase leading-none mt-1">{match.player1.split('/')[1].trim()}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player1}</span>
+                            )}
                             <span className="text-[1vh] sm:text-[1.2vh] text-slate-600 font-black px-1">VS</span>
-                            <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
+                            {match.player2 && match.player2.includes('/') ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm sm:text-xl font-black text-white uppercase leading-none">{match.player2.split('/')[0].trim()}</span>
+                                <span className="text-[0.625rem] sm:text-xs font-black text-white/60 uppercase leading-none mt-1">{match.player2.split('/')[1].trim()}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm sm:text-xl font-black text-white uppercase">{match.player2}</span>
+                            )}
                           </div>
                           {match.team1 && !isSession && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
                        </div>
@@ -5288,13 +5947,13 @@ export default function App() {
                       <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[400px]">
                         {/* Header Row */}
                         <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800/50">
-                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.6vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[1.8vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
+                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.2vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
                         </div>
 
                         {/* Body */}
@@ -5303,12 +5962,26 @@ export default function App() {
                             <div key={fidx} className="flex items-center hover:bg-emerald-500/5 transition-colors group">
                               <div className="flex pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap w-[8%] items-center">#{frame.frameNumber}</div>
                               <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
-                                <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
+                                {frame.breakerName && frame.breakerName.includes('/') ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-[2vw] sm:text-xs font-bold text-slate-300 uppercase tracking-tight truncate block leading-none">{frame.breakerName.split('/')[0].trim()}</span>
+                                    <span className="text-[2vw] sm:text-xs font-bold text-slate-500 uppercase tracking-tight truncate block leading-none mt-1">{frame.breakerName.split('/')[1].trim()}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
+                                )}
                               </div>
                               <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
                                 <div className="flex items-center gap-[0.5vw] sm:gap-2 truncate">
                                   <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                                  <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
+                                  {frame.winnerName && frame.winnerName.includes('/') ? (
+                                    <div className="flex flex-col">
+                                      <span className="text-[2vw] sm:text-xs font-black text-emerald-400 uppercase tracking-tight truncate leading-none">{frame.winnerName.split('/')[0].trim()}</span>
+                                      <span className="text-[2vw] sm:text-xs font-black text-emerald-600 uppercase tracking-tight truncate leading-none mt-1">{frame.winnerName.split('/')[1].trim()}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[2.2vw] sm:text-sm font-black text-emerald-400 uppercase tracking-tight truncate">{frame.winnerName}</span>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap justify-center w-[12%] items-center">
@@ -5600,32 +6273,29 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => {
-                      // Restore User Preferences Only (Colors and Clocks)
-                      setPlayer1({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
-                      setPlayer2({ id: '2', name: '', score: 0, isTurn: false, ...SLOT2_DEFAULTS });
-                      setSinglesSetup(prev => ({ ...prev, p1Name: '', p2Name: '' }));
-                      setMatchSetup(prev => ({ ...prev, t1Name: '', t2Name: '', t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
-                      setGroupSetup(prev => ({ ...prev, t1Players: [], t2Players: [], settings: {}, selectedIndex: null }));
-                      setTeam1Name('');
-                      setTeam2Name('');
-                      setTeam1Players([]);
-                      setTeam2Players([]);
+                      // Restore Selected players colour prefs
+                      setPlayer1(prev => ({ ...prev, ...SLOT1_DEFAULTS }));
+                      setPlayer2(prev => ({ ...prev, ...SLOT2_DEFAULTS }));
+                      
+                      // Restore Shot clock settings
                       setShotClockDuration(SHOT_CLOCK_DEFAULT);
+                      setShotClock(SHOT_CLOCK_DEFAULT);
                       setIsShotClockEnabled(false);
+                      
+                      // Restore Match clock settings
                       setMatchClockDuration(600);
+                      setMatchClock(600);
                       setIsMatchClockEnabled(false);
-                      setPlayerPreferences({});
-                      setMatchupSettings({});
-                      setPairTrackerSettings({});
-                      setSelectedMatchIndex(null);
-                      setCurrentMatchFrameDetails([]);
-                      setMatchStartTime(null);
+                      
+                      // Restore Device Time and Clock positions
                       setShowDeviceTime(true);
                       setDeviceTimePosition(null);
                       setMatchClockPosition(null);
                       setShotClockPosition(null);
-                      setCurrentBreakPlayerId('none');
-                      setBreakBalls([]);
+                      
+                      // Restore Backdrop
+                      setFullScreenBackdrop('magma');
+                      
                       setShowRestoreDefaultsConfirm(false);
                     }}
                     className="flex-1 h-12 bg-blue-500 hover:bg-blue-400 text-slate-950 rounded-xl font-bold transition-all active:scale-95"
@@ -5722,6 +6392,7 @@ export default function App() {
               </motion.div>
             </div>
           )}
+          {showDoublesPicker.isOpen && renderDoublesPicker()}
           {showDeleteAllConfirm && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 
@@ -5782,13 +6453,13 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4 sm:gap-8 items-center">
                   <div className="space-y-2 sm:space-y-4">
-                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player1.color }}>{team1Name || 'TEAM 1'}</p>
+                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player1.color }}>{activeSetupTab === 'group' ? 'SIDE A' : (activeSetupTab === 'singles' ? (player1.name || team1Players[0] || 'PLAYER 1') : (team1Name || 'TEAM 1'))}</p>
                     <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
                       {teamTotals.t1}
                     </p>
                   </div>
                   <div className="space-y-2 sm:space-y-4">
-                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player2.color }}>{team2Name || 'TEAM 2'}</p>
+                    <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player2.color }}>{activeSetupTab === 'group' ? 'SIDE B' : (activeSetupTab === 'singles' ? (player2.name || team2Players[0] || 'PLAYER 2') : (team2Name || 'TEAM 2'))}</p>
                     <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
                       {teamTotals.t2}
                     </p>

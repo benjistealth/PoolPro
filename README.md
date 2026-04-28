@@ -22,6 +22,7 @@ Pool-Pro.uk is a feature rich web application for pool scoring for teams and sin
 - API - send data to server
 - epic auto sizing of long names to fit space
 - Retracting top bar when keyboard is active
+- Game Modes : Match : Singles : Group Practise
 
 ## Screenshot of Gameplay Page
 
