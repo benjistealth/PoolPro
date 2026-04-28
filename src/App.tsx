@@ -4376,7 +4376,6 @@ export default function App() {
                           value={singlesSetup.p1Name} 
                           onChange={(e) => {
                             const val = e.target.value.toUpperCase();
-<<<<<<< HEAD
                             setSinglesSetup(prev => {
                               const next = { ...prev, p1Name: val };
                               if (activeSetupTab === 'singles') {
@@ -4393,15 +4392,6 @@ export default function App() {
                               }
                               return next;
                             });
-=======
-                            setSinglesSetup(prev => ({ ...prev, p1Name: val }));
-                            if (activeSetupTab === 'singles') {
-                              setTeam1Players([val]);
-                              // Only load preferences if not empty and name is full (simple heuristic: don't load while typing short names unless explicitly desired)
-                              // Better: Only sync name, let preferences load on blur or focus gain if stable
-                              setPlayer1(prev => ({ ...prev, name: val }));
-                            }
->>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
                           }}
                           onFocus={(e) => handleInputFocus(e, 'p1-singles')}
                           onBlur={() => {
