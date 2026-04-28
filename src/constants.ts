@@ -102,6 +102,7 @@ export const SPEED_CLOTH_COLORS = [
 ];
 
 export const FULL_SCREEN_BACKDROPS = [
+<<<<<<< HEAD
   { name: 'None', value: 'none', image: '', thumbnail: '' },
   { name: 'Magma', value: 'magma', image: new URL('./assets/tables/magma_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/magma_pool_table_thumb.png', import.meta.url).href },
   { name: 'Black', value: 'black', image: new URL('./assets/tables/black_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/black_pool_table_thumb.png', import.meta.url).href },
@@ -124,4 +125,28 @@ export const FULL_SCREEN_BACKDROPS = [
   { name: 'Germany', value: 'germany', image: new URL('./assets/tables/german_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/german_pool_table_thumb.png', import.meta.url).href },
   { name: 'France', value: 'france', image: new URL('./assets/tables/frnce_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/frnce_pool_table_thumb.png', import.meta.url).href },
   { name: 'Japan', value: 'japan', image: new URL('./assets/tables/japan_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/japan_pool_table_thumb.png', import.meta.url).href },
+=======
+  { name: 'Disabled', value: 'none', image: null, thumbnail: null },
+  { name: 'Black Pool Table', value: 'black', image: new URL('./assets/tables/black_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/black_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Blue Light', value: 'blue_light', image: new URL('./assets/tables/blue_light_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/blue_light_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Blue', value: 'blue', image: new URL('./assets/tables/blue_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/blue_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Chequer', value: 'chequer', image: new URL('./assets/tables/chequer_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/chequer_pool_table_thumb.png', import.meta.url).href },
+  { name: 'England', value: 'england', image: new URL('./assets/tables/england_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/england_pool_table_thumb.png', import.meta.url).href },
+  { name: 'France', value: 'france', image: new URL('./assets/tables/frnce_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/frnce_pool_table_thumb.png', import.meta.url).href },
+  { name: 'German', value: 'german', image: new URL('./assets/tables/german_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/german_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Green', value: 'green', image: new URL('./assets/tables/green_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/green_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Grey Light', value: 'grey_light', image: new URL('./assets/tables/grey_light_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/grey_light_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Ireland', value: 'ireland', image: new URL('./assets/tables/ireland_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/ireland_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Japan', value: 'japan', image: new URL('./assets/tables/japan_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/japan_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Kernow', value: 'kernow', image: new URL('./assets/tables/kernow_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/kernow_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Magma', value: 'magma', image: new URL('./assets/tables/magma_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/magma_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Northern Ireland', value: 'northern_ireland', image: new URL('./assets/tables/northern_ireland_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/northern_ireland_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Pink', value: 'pink', image: new URL('./assets/tables/pink_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/pink_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Purple', value: 'purple', image: new URL('./assets/tables/purple_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/purple_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Red', value: 'red', image: new URL('./assets/tables/red_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/red_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Scotland', value: 'scotland', image: new URL('./assets/tables/scot_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/scot_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Union', value: 'union', image: new URL('./assets/tables/union_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/union_pool_table_thumb.png', import.meta.url).href },
+  { name: 'USA', value: 'usa', image: new URL('./assets/tables/usa_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/usa_pool_table_thumb.png', import.meta.url).href },
+  { name: 'Wales', value: 'wales', image: new URL('./assets/tables/wales_pool_table.png', import.meta.url).href, thumbnail: new URL('./assets/tables/mini_tables/wales_pool_table_thumb.png', import.meta.url).href },
+>>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
 ];

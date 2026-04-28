@@ -6,10 +6,23 @@
     <title>Pool-Pro.uk</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
+<<<<<<< HEAD
     <link rel="manifest" href="/site.webmanifest" />
+=======
+    <link rel="manifest" href="/manifest.json" />
+>>>>>>> ce5d2ae31a67c168e3fa15818731551aed9a8972
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#000000" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('Service worker registration failed: ', err);
+          });
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
