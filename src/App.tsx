@@ -313,13 +313,9 @@ export default function App() {
       // Save the event for manual triggering in settings
       setDeferredPrompt(e);
       
-      // On Android/Mobile, avoid the automatic "Add to Home Screen" mini-infobar pop-up banner
-      // that users often find intrusive. We provide a cleaner button in settings.
-      // On Desktop, we allow the default behavior so the "Install" icon appears in the URL bar.
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile) {
-        e.preventDefault();
-      }
+      // Prevent the automatic browser popup globally (Desktop and Mobile)
+      // This lets the user trigger it manually from settings if they wish.
+      e.preventDefault();
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -887,8 +883,13 @@ export default function App() {
       } else if (loadedTab === 'singles') {
         currentT1Name = '';
         currentT2Name = '';
-        const singlesP1 = (state.singlesSetup?.p1Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup?.p1Name || '');
-        const singlesP2 = (state.singlesSetup?.p2Name || '').toUpperCase().includes('PLAYER ') ? '' : (state.singlesSetup?.p2Name || '');
+        const rawP1 = (state.singlesSetup?.p1Name || '');
+        const rawP2 = (state.singlesSetup?.p2Name || '');
+        
+        // Only clear if it's EXACTLY the placeholder string, not just containing "PLAYER"
+        const singlesP1 = (rawP1 === 'PLAYER 1' || rawP1 === 'PLAYER') ? '' : rawP1;
+        const singlesP2 = (rawP2 === 'PLAYER 2' || rawP2 === 'PLAYER') ? '' : rawP2;
+
         if (singlesP1 && singlesP2) {
           currentT1Players = [singlesP1];
           currentT2Players = [singlesP2];
@@ -983,9 +984,29 @@ export default function App() {
       const p2Pref = (p1Name === p2Name && p2Name !== 'PLAYER 2') ? loadedPrefs[`p2:${p2Name}`] : loadedPrefs[p2Name];
       if (p2Pref) p2 = { ...p2, ...p2Pref };
 
-      // Add scores from gameData
-      if (state.gameData?.player1Score !== undefined) p1.score = state.gameData.player1Score;
-      if (state.gameData?.player2Score !== undefined) p2.score = state.gameData.player2Score;
+      // Add scores from setup buffers (modern) or legacy gameData
+      let s1 = 0;
+      let s2 = 0;
+
+      if (loadedTab === 'singles' && state.singlesSetup) {
+        s1 = state.singlesSetup.score1 !== undefined ? state.singlesSetup.score1 : (state.gameData?.player1Score || 0);
+        s2 = state.singlesSetup.score2 !== undefined ? state.singlesSetup.score2 : (state.gameData?.player2Score || 0);
+      } else if (selIndex !== null) {
+        const activeSettings = tabSettings?.[selIndex] || state.matchupSettings?.[selIndex];
+        if (activeSettings) {
+          s1 = activeSettings.score1 !== undefined ? activeSettings.score1 : (state.gameData?.player1Score || 0);
+          s2 = activeSettings.score2 !== undefined ? activeSettings.score2 : (state.gameData?.player2Score || 0);
+        } else {
+          s1 = state.gameData?.player1Score || 0;
+          s2 = state.gameData?.player2Score || 0;
+        }
+      } else {
+        s1 = state.gameData?.player1Score || 0;
+        s2 = state.gameData?.player2Score || 0;
+      }
+
+      p1.score = s1;
+      p2.score = s2;
 
       // Update state once
       setPlayer1(p1);
@@ -1026,7 +1047,7 @@ export default function App() {
     if (!isLoaded || isSwitchingTab) return;
 
     // Capture current data for the ACTIVE tab
-    const currentActiveData = {
+    const currentActiveData: any = {
       history: matchHistory,
       frameDetails: currentMatchFrameDetails,
       matchStartTime: matchStartTime,
@@ -1037,6 +1058,21 @@ export default function App() {
       settings: { ...matchupSettings },
       selectedIndex: selectedMatchIndex
     };
+
+    // Atomic Score Sync: Force current live scores into the settings buffer for the active slot
+    // This prevents race conditions where matchupSettings state update lags behind saveState.
+    if (selectedMatchIndex !== null) {
+      currentActiveData.settings[selectedMatchIndex] = {
+        ...(matchupSettings[selectedMatchIndex] || {}),
+        score1: player1.score,
+        score2: player2.score,
+        player1: { ...player1 },
+        player2: { ...player2 },
+        currentBreakPlayerId,
+        breakBalls: [...breakBalls],
+        frameDetails: currentMatchFrameDetails
+      };
+    }
 
     const stateToSave = {
       activeSetupTab,
@@ -1705,8 +1741,8 @@ export default function App() {
       setSinglesSetup(prev => ({
         ...prev,
         history: updatedHistory,
-        p1Score: s1,
-        p2Score: s2
+        score1: s1,
+        score2: s2
       }));
     }
     
@@ -2207,15 +2243,31 @@ export default function App() {
     setTeam2Name(t2Name);
     setTeam2Players([...t2Players]);
 
-    const currentData = {
+    const currentData: any = {
       history: matchHistory,
       frameDetails: currentMatchFrameDetails,
       matchStartTime: matchStartTime,
       score1: player1.score,
       score2: player2.score,
+      currentBreakPlayerId: currentBreakPlayerId,
+      breakBalls: [...breakBalls],
       settings: { ...matchupSettings },
       selectedIndex: selectedMatchIndex
     };
+
+    // Atomic Sync: merge current live player state into the settings for this slot
+    if (selectedMatchIndex !== null) {
+      currentData.settings[selectedMatchIndex] = {
+        ...(matchupSettings[selectedMatchIndex] || {}),
+        score1: player1.score,
+        score2: player2.score,
+        player1: { ...player1 },
+        player2: { ...player2 },
+        currentBreakPlayerId,
+        breakBalls: [...breakBalls],
+        frameDetails: currentMatchFrameDetails
+      };
+    }
 
     // Sync buffers
     if (activeSetupTab === 'match' && !isSwitchingTab) {
@@ -2294,7 +2346,7 @@ export default function App() {
     setIsSwitchingTab(true);
     
     // 1. Capture current data for the tab we are LEAVING
-    const currentData = {
+    const currentData: any = {
       history: [...matchHistory],
       frameDetails: [...currentMatchFrameDetails],
       matchStartTime: matchStartTime,
@@ -2305,6 +2357,20 @@ export default function App() {
       settings: { ...matchupSettings },
       selectedIndex: selectedMatchIndex
     };
+
+    // Ensure the current live score is merged into the settings buffer before switching out
+    if (selectedMatchIndex !== null) {
+      currentData.settings[selectedMatchIndex] = {
+        ...(matchupSettings[selectedMatchIndex] || {}),
+        score1: player1.score,
+        score2: player2.score,
+        player1: { ...player1 },
+        player2: { ...player2 },
+        currentBreakPlayerId,
+        breakBalls: [...breakBalls],
+        frameDetails: currentMatchFrameDetails
+      };
+    }
 
     // Save LEAVING tab back into its persist-buffer
     if (activeSetupTab === 'match') {
