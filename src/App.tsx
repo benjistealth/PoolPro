@@ -647,12 +647,8 @@ export default function App() {
       const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
       const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
 
-      // Track IDs of matches we've already counted to avoid any duplicates
-      const countedIds = new Set<string>();
-
       matchHistory.forEach(m => {
         // Filter for matches in this mode OR matches with no mode that look like singles
-        // (Legacy entries might not have mode)
         const isSinglesEntry = m.mode === 'singles' || (!m.mode && !m.isDoubles && !m.team1);
 
         if (isSinglesEntry) {
@@ -662,37 +658,32 @@ export default function App() {
           const mP2 = (m.player2 || '').trim().toLowerCase();
 
           // If names are specified, attempt to match them (handling swaps)
-          // We allow fallback to matching EVERYTHING if no names are set or matching placeholders
-          const p1Valid = p1 && !p1.toLowerCase().includes('player 1') && !p1.toLowerCase().includes('name');
-          const p2Valid = p2 && !p2.toLowerCase().includes('player 2') && !p2.toLowerCase().includes('name');
+          const p1Valid = p1 && !p1.includes('player 1') && !p1.includes('name');
+          const p2Valid = p2 && !p2.includes('player 2') && !p2.includes('name');
 
           if (p1Valid && p2Valid) {
             if (mP1 === p1 && mP2 === p2) {
               t1 += mScore1;
               t2 += mScore2;
-              countedIds.add(m.id);
             } else if (mP1 === p2 && mP2 === p1) {
               t1 += mScore2;
               t2 += mScore1;
-              countedIds.add(m.id);
             }
           } else {
-            // Fallback: sum all singles matches if names aren't properly set or are placeholders
+            // Fallback: sum all singles matches since names are placeholders or missing
             t1 += mScore1;
             t2 += mScore2;
-            countedIds.add(m.id);
           }
         }
       });
 
-      // Also add live score if we have any progress in the current frame
-      // In Singles mode, matchupSettings[0] usually mirrors player1.score, but we check both for robustness
+      // Also add live score if we have any progress in the current matchup
       const live1 = Number(player1.score) || (matchupSettings[0]?.score1) || 0;
       const live2 = Number(player2.score) || (matchupSettings[0]?.score2) || 0;
       const hasLiveScore = (live1 > 0 || live2 > 0);
       
       if (hasLiveScore) {
-        // We only add live score if it represents a match NOT yet in history.
+        // Double check against history to avoid duplicating a match that was JUST added
         const mostRecentMatch = matchHistory.length > 0 ? matchHistory[0] : null;
         const wasJustFinished = mostRecentMatch && 
                                (Date.now() - Number(mostRecentMatch.id) < 5000) &&
@@ -1062,16 +1053,21 @@ export default function App() {
     // Atomic Score Sync: Force current live scores into the settings buffer for the active slot
     // This prevents race conditions where matchupSettings state update lags behind saveState.
     if (selectedMatchIndex !== null) {
-      currentActiveData.settings[selectedMatchIndex] = {
-        ...(matchupSettings[selectedMatchIndex] || {}),
-        score1: player1.score,
-        score2: player2.score,
-        player1: { ...player1 },
-        player2: { ...player2 },
-        currentBreakPlayerId,
-        breakBalls: [...breakBalls],
-        frameDetails: currentMatchFrameDetails
-      };
+      const currentLiveSettings = matchupSettings[selectedMatchIndex] || {};
+      // ONLY sync if it was already marked as live, to avoid overwriting finished matches
+      if (currentLiveSettings.isLive !== false) {
+        currentActiveData.settings[selectedMatchIndex] = {
+          ...currentLiveSettings,
+          score1: player1.score,
+          score2: player2.score,
+          player1: { ...player1 },
+          player2: { ...player2 },
+          currentBreakPlayerId,
+          breakBalls: [...breakBalls],
+          frameDetails: currentMatchFrameDetails,
+          isLive: true
+        };
+      }
     }
 
     const stateToSave = {
@@ -1542,7 +1538,7 @@ export default function App() {
       if (isFinishingMatchRef.current) return;
       isFinishingMatchRef.current = true;
       setTimeout(() => {
-        finishMatch({ score1: nextScore1, score2: nextScore2 }, [...currentMatchFrameDetails, frameDetail]);
+        finishMatch();
         isFinishingMatchRef.current = false;
       }, 500);
       return;
@@ -1678,89 +1674,8 @@ export default function App() {
     }
   };
 
-  const finishMatch = (overrideScores?: { score1: number, score2: number }, overrideFrameDetails?: FrameDetail[]) => {
-    const isMatchMode = activeSetupTab === 'match' || activeSetupTab === 'singles';
-    const isGroupMode = activeSetupTab === 'group';
-    
-    // Scores to use
-    const s1 = Number(overrideScores ? overrideScores.score1 : player1.score) || 0;
-    const s2 = Number(overrideScores ? overrideScores.score2 : player2.score) || 0;
-    const frames = overrideFrameDetails || currentMatchFrameDetails;
-
-    // Save progress to matchup settings before proceeding
-    if (selectedMatchIndex !== null) {
-      setMatchupSettings(prev => ({
-        ...prev,
-        [selectedMatchIndex]: {
-          ...prev[selectedMatchIndex],
-          score1: s1,
-          score2: s2,
-          player1: { ...player1, score: s1 },
-          player2: { ...player2, score: s2 },
-          winner: s1 > s2 ? player1.name : (s2 > s1 ? player2.name : (s1 === s2 ? 'TIE' : undefined)),
-          frameDetails: frames,
-          isLive: false,
-          date: new Date().toISOString()
-        }
-      }));
-    }
-
-    // For singles, allow finishing even at 0-0. For match mode, keep the 1-score requirement.
-    if (activeSetupTab === 'match' && s1 === 0 && s2 === 0) {
-      // Allow clearing/resetting instead of finishing if no data
-      return;
-    }
-
-    const isTie = s1 === s2;
-    const winner = s1 > s2 ? player1.name : (s2 > s1 ? player2.name : "IT'S A DRAW");
-    const winnerTeam = s1 > s2 ? team1Name : (s2 > s1 ? team2Name : "");
-    const winnerColor = s1 > s2 ? player1.color : (s2 > s1 ? player2.color : "#94a3b8");
-
-    const newEntry: MatchHistoryEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      startTime: matchStartTime || undefined,
-      player1: player1.name,
-      player2: player2.name,
-      team1: team1Name || undefined,
-      team2: team2Name || undefined,
-      score1: s1,
-      score2: s2,
-      winner: isTie ? 'TIE' : winner,
-      mode: activeSetupTab,
-      shotClockSetting: isShotClockEnabled ? shotClockDuration : undefined,
-      matchClockRemaining: isMatchClockEnabled ? matchClock : undefined,
-      frameDetails: frames
-    };
-
-    const updatedHistory = [newEntry, ...matchHistory];
-    setMatchHistory(updatedHistory);
-    
-    // Explicitly update setup buffer to prevent data loss or stale totals
-    if (activeSetupTab === 'singles') {
-      setSinglesSetup(prev => ({
-        ...prev,
-        history: updatedHistory,
-        score1: s1,
-        score2: s2
-      }));
-    }
-    
-    if (isMatchMode) {
-      setMatchWinner({
-        name: winner,
-        team: winnerTeam,
-        color: winnerColor,
-        score1: s1,
-        score2: s2
-      });
-      setPendingMatchAdvance(true);
-      setShowTeamTotals(true);
-      return; // Stop here, continue logic is in the banner
-    }
-
-    // Default flow for other modes
-    completeMatchAndAdvance();
+  const finishMatch = () => {
+    navigateToView('teams');
   };
 
   const clearAllTableData = () => {
@@ -1797,10 +1712,11 @@ export default function App() {
           // Finish session / match
           if (activeSetupTab !== 'singles') {
             setShowTeamTotals(true);
+            // Only reset scores in non-singles modes if needed, 
+            // but for better persistence we'll avoid the hard reset to 0-0 here too
+            // as matchups table should show the final session state.
           }
           
-          setPlayer1(prev => ({ ...prev, score: 0 }));
-          setPlayer2(prev => ({ ...prev, score: 0 }));
           setCurrentBreakPlayerId('none');
           setBreakBalls([]);
           setSelectedMatchIndex(null);
@@ -1820,8 +1736,6 @@ export default function App() {
       }
     } else {
       // Emergency fallback / Other modes
-      setPlayer1(prev => ({ ...prev, score: 0 }));
-      setPlayer2(prev => ({ ...prev, score: 0 }));
       setCurrentBreakPlayerId('none');
       setBreakBalls([]);
       setSelectedMatchIndex(null);
@@ -2360,16 +2274,21 @@ export default function App() {
 
     // Ensure the current live score is merged into the settings buffer before switching out
     if (selectedMatchIndex !== null) {
-      currentData.settings[selectedMatchIndex] = {
-        ...(matchupSettings[selectedMatchIndex] || {}),
-        score1: player1.score,
-        score2: player2.score,
-        player1: { ...player1 },
-        player2: { ...player2 },
-        currentBreakPlayerId,
-        breakBalls: [...breakBalls],
-        frameDetails: currentMatchFrameDetails
-      };
+      const currentLiveSettings = matchupSettings[selectedMatchIndex] || {};
+      // ONLY sync if it was already marked as live, to avoid overwriting finished matches
+      if (currentLiveSettings.isLive !== false) {
+        currentData.settings[selectedMatchIndex] = {
+          ...currentLiveSettings,
+          score1: player1.score,
+          score2: player2.score,
+          player1: { ...player1 },
+          player2: { ...player2 },
+          currentBreakPlayerId,
+          breakBalls: [...breakBalls],
+          frameDetails: currentMatchFrameDetails,
+          isLive: true
+        };
+      }
     }
 
     // Save LEAVING tab back into its persist-buffer
@@ -6029,21 +5948,39 @@ export default function App() {
                   frameDetails: [
                     ...matchHistory
                       .filter(m => {
+                        if (m.isSession || m.id === 'session') return false; // Prevent recursion
+                        
                         if (activeSetupTab === 'singles') {
-                          const p1 = (player1.name || team1Players[0] || singlesSetup.p1Name || '').trim().toLowerCase();
-                          const p2 = (player2.name || team2Players[0] || singlesSetup.p2Name || '').trim().toLowerCase();
+                          // In singles, current names determine the session
+                          const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
+                          const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
                           const mP1 = (m.player1 || '').trim().toLowerCase();
                           const mP2 = (m.player2 || '').trim().toLowerCase();
                           
-                          if (p1 && p2 && !p1.includes('player ') && !p2.includes('player ')) {
+                          const isSinglesEntry = m.mode === 'singles' || (!m.mode && !m.isDoubles && !m.team1);
+                          if (!isSinglesEntry) return false;
+
+                          if (p1 && p2 && !p1.includes('player') && !p2.includes('player')) {
                             return (mP1 === p1 && mP2 === p2) || (mP1 === p2 && mP2 === p1);
                           }
-                          return true; // Count all in history if names not set in Singles or are placeholders
+                          return true; // Sum all if no names specified
                         }
-                        return (m.team1 || '') === (team1Name || '') && (m.team2 || '') === (team2Name || '');
+                        
+                        // For Match/Group, filter by team names if set, otherwise try to match any team-based entry
+                        const t1 = (team1Name || '').trim().toLowerCase();
+                        const t2 = (team2Name || '').trim().toLowerCase();
+                        const mT1 = (m.team1 || '').trim().toLowerCase();
+                        const mT2 = (m.team2 || '').trim().toLowerCase();
+
+                        if (t1 && t2) {
+                          return (mT1 === t1 && mT2 === t2) || (mT1 === t2 && mT2 === t1);
+                        }
+                        
+                        // Fallback: exclude singles matches
+                        return m.mode !== 'singles';
                       })
-                      .reverse() // Oldest matches first for logic
-                      .flatMap(m => m.frameDetails),
+                      .reverse()
+                      .flatMap(m => m.frameDetails || []),
                     ...currentMatchFrameDetails
                   ].map((f, idx) => ({ ...f, frameNumber: idx + 1 })),
                   isLive: true,
@@ -6589,10 +6526,10 @@ export default function App() {
                     if (pendingMatchAdvance) {
                       setPendingMatchAdvance(false);
                       completeMatchAndAdvance();
-                    } else {
-                      navigateToView('teams');
                     }
+                    navigateToView('teams');
                   }}
+                  id="totals-continue-button"
                   className="w-full h-14 sm:h-20 text-slate-950 rounded-2xl sm:rounded-3xl font-black text-lg sm:text-2xl uppercase tracking-widest transition-all active:scale-95"
                   style={{ 
                     backgroundImage: `linear-gradient(to right, ${player1.color}, ${player2.color})`,
