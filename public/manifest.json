@@ -1,28 +1,29 @@
 {
   "name": "Pool-Pro.uk",
   "short_name": "Pool-Pro",
-  "start_url": "./",
-  "scope": "./",
+  "id": "/pool-pro-uk",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "description": "Professional Pool Scoreboard",
+  "description": "Professional Pool Scoreboard and Match Tracker",
   "orientation": "any",
   "icons": [
     {
-      "src": "icon.svg",
+      "src": "/icon.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "icon.svg",
+      "src": "/icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
     },
     {
-      "src": "favicon.svg",
+      "src": "/favicon.svg",
       "sizes": "32x32 48x48",
       "type": "image/svg+xml",
       "purpose": "any"
@@ -30,14 +31,14 @@
   ],
   "screenshots": [
     {
-      "src": "icon.svg",
+      "src": "/icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "form_factor": "narrow",
       "label": "Pool-Pro Scoreboard Mobile"
     },
     {
-      "src": "icon.svg",
+      "src": "/icon.svg",
       "sizes": "1024x1024",
       "type": "image/svg+xml",
       "form_factor": "wide",

@@ -5736,8 +5736,15 @@ export default function App() {
                           </div>
 
                           {/* Content Box - Description */}
-                          <div className="w-full text-left flex-1">
-                            <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Add Pool-Pro to your home screen for a full-screen app experience.</p>
+                          <div className="w-full text-left flex-1 space-y-4">
+                            <p className="text-white font-bold uppercase tracking-widest leading-relaxed" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>
+                              Add Pool-Pro to your home screen for a full-screen app experience.
+                            </p>
+                            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                              <p className="text-emerald-400 text-[1.8vh] font-bold uppercase tracking-wider">
+                                Note: If you are viewing this in the editor preview, you must click the 'Open in New Tab' icon (top right) to enable installation.
+                              </p>
+                            </div>
                           </div>
 
                           {/* Install Button - Absolute corner */}
