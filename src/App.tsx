@@ -5273,7 +5273,7 @@ export default function App() {
                       {fullScreenBackdrop !== 'none' && (
                         <div className="flex justify-center pt-4 border-t border-white/5">
                             <div className="w-full max-w-[500px] landscape:max-w-[700px] mx-auto">
-                               <p className="font-black uppercase tracking-[0.4em] text-slate-500 text-xs sm:text-[1.5vh] pb-[2vh] text-center w-full">SELECT BACKDROP</p>
+                               <p className="font-black uppercase tracking-[0.4em] text-slate-500 text-[1.1rem] sm:text-[2.1vh] pb-[2vh] text-center w-full">SELECT BACKDROP</p>
                               <ColorPicker
                                 label="Backdrop"
                                 value={fullScreenBackdrop}
@@ -5491,7 +5491,7 @@ export default function App() {
                       {/* Content Box - Description & Toggle */}
                       <div className="flex items-center justify-between gap-[4vw] flex-1">
                         <div className="flex-1">
-                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable clock on the gameplay screen.</p>
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display live device time in the top bar centre</p>
                         </div>
                         <div className="shrink-0">
                           <button 
@@ -5537,7 +5537,7 @@ export default function App() {
                       {/* Content Box - Description & Toggle */}
                       <div className="flex items-center justify-between gap-[4vw]">
                         <div className="flex-1 text-left">
-                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Toggle the visibility and timer on the scoreboard.</p>
+                          <p className="text-white font-bold uppercase tracking-widest text-left" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Display a draggable shot clock on the Gameplay screen</p>
                         </div>
                         <div className="shrink-0">
                           <button 
@@ -5713,52 +5713,66 @@ export default function App() {
                   </section>
 
                   {/* 7. App Installation */}
-                  {isInstallable && (
-                    <section className="space-y-6 self-stretch">
-                      <h3 
-                        className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
-                        style={{ 
-                          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
-                          color: 'white',
-                          fontSize: deviceInfo.titleSizes.section
-                        }}
+                  <section className="space-y-6 self-stretch">
+                    <h3 
+                      className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                      style={{ 
+                        borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                        color: 'white',
+                        fontSize: deviceInfo.titleSizes.section
+                      }}
+                    >
+                      App Installation
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6 h-full">
+                      <div 
+                        className="bg-black border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] landscape:pb-[3vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative h-full flex flex-col"
+                        style={{ borderColor: player1.color }}
                       >
-                        App Installation
-                      </h3>
-                      <div className="grid grid-cols-1 gap-6 h-full">
-                        <div 
-                          className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] landscape:pb-[3vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative h-full flex flex-col"
-                          style={{ borderColor: player1.color }}
-                        >
-                          {/* Title Box - Top */}
-                          <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
-                            <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Install to Device</p>
-                          </div>
+                        {/* Title Box - Top */}
+                        <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw] flex items-center justify-center gap-3">
+                          <Trophy className="w-[4vw] sm:w-6 h-[4vw] sm:h-6 text-yellow-500" />
+                          <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Add to Device</p>
+                        </div>
 
-                          {/* Content Box - Description */}
-                          <div className="w-full text-left flex-1 space-y-4">
-                            <p className="text-white font-bold uppercase tracking-widest leading-relaxed" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>
-                              Add Pool-Pro to your home screen for a full-screen app experience.
-                            </p>
+                        {/* Content Box - Description */}
+                        <div className="w-full text-left flex-1 space-y-4">
+                          <p className="text-white font-bold uppercase tracking-widest leading-relaxed" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>
+                            Install Pool-Pro as a full-screen app for the best match tracking experience.
+                          </p>
+                          
+                          {isInstallable ? (
                             <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
                               <p className="text-emerald-400 text-[1.8vh] font-bold uppercase tracking-wider">
-                                Note: If you are viewing this in the editor preview, you must click the 'Open in New Tab' icon (top right) to enable installation.
+                                Click the button below to install directly to your device.
                               </p>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                              <p className="text-blue-400 text-[1.8vh] font-bold uppercase tracking-wider">
+                                To install: Use "Add to Home Screen" in your browser menu (Safari Share button or Chrome's three dots).
+                              </p>
+                            </div>
+                          )}
+                        </div>
 
-                          {/* Install Button - Absolute corner */}
+                        {/* Install Button or Info */}
+                        {isInstallable ? (
                           <button 
                             onClick={handleInstallClick}
                             className="absolute bottom-[2vw] right-[2vw] px-[4vw] sm:px-8 py-[2vw] sm:py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl sm:rounded-2xl text-[2.5vw] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                           >
-                            <Download className="w-[3vw] sm:w-4 h-[3vw] sm:h-4" />
-                            Install App
+                            <Trophy className="w-[3vw] sm:w-4 h-[3vw] sm:h-4 text-white" />
+                            Install Now
                           </button>
-                        </div>
+                        ) : (
+                          <div className="absolute bottom-[2vw] right-[2vw]">
+                             <Trophy className="w-[6vw] sm:w-10 h-[6vw] sm:h-10 text-white/10" />
+                          </div>
+                        )}
                       </div>
-                    </section>
-                  )}
+                    </div>
+                  </section>
                 </div>
 
                 {/* 8. API Configuration */}
