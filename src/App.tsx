@@ -218,6 +218,7 @@ export default function App() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTeamTotals, setShowTeamTotals] = useState(false);
   const [pendingMatchAdvance, setPendingMatchAdvance] = useState(false);
+  const [shouldFlashBreaker, setShouldFlashBreaker] = useState(false);
   const [matchWinner, setMatchWinner] = useState<{name: string, team?: string, color: string, score1: number, score2: number} | null>(null);
   const [isBreakTrackingEnabled, setIsBreakTrackingEnabled] = useState(true);
   const [currentBreakPlayerId, setCurrentBreakPlayerId] = useState<'1' | '2' | 'none'>('none');
@@ -229,6 +230,8 @@ export default function App() {
   const [isApiLocked, setIsApiLocked] = useState(true);
   const [pinInput, setPinInput] = useState('');
   const [isApiSending, setIsApiSending] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [breakBalls, setBreakBalls] = useState<number[]>([]);
   const [pairTrackerSettings, setPairTrackerSettings] = useState<Record<string, { breakBalls: number[], currentBreakPlayerId: '1' | '2' | 'none' }>>({});
@@ -1113,6 +1116,39 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [saveState]);
 
+  // PWA Install Logic
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      // Prevent browser's automatic behavior (like the mini-infobar on mobile)
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+      // Update UI notify the user they can install the PWA
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    // Show the install prompt
+    deferredPrompt.prompt();
+    
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    }
+  };
+
   // Handle scrolling to top when switching to match details
   useEffect(() => {
     if (view === 'match-details') {
@@ -1475,9 +1511,15 @@ export default function App() {
   const incrementScore = (playerId: string) => {
     const isMatchMode = activeSetupTab === 'match';
     
-    // In "Match" mode, limit score to 1 (Best of 1)
+    // Enforce break tracking if enabled
+    if (isBreakTrackingEnabled && currentBreakPlayerId === 'none') {
+      setShouldFlashBreaker(true);
+      setTimeout(() => setShouldFlashBreaker(false), 1000);
+      return;
+    }
+
+    // In "Match" mode, limit score to 1 (Best of 1) and do not auto-advance
     if (isMatchMode && (player1.score >= 1 || player2.score >= 1)) {
-      finishMatch();
       return; 
     }
 
@@ -4231,7 +4273,7 @@ export default function App() {
                               ${currentBreakPlayerId === p.id 
                                 ? 'scale-110 z-50' 
                                 : (currentBreakPlayerId === 'none' 
-                                    ? 'scale-100 opacity-60' 
+                                    ? `scale-100 opacity-100` 
                                     : 'scale-90 opacity-20')}`}
                             style={{
                               width: '15vh',
@@ -4244,13 +4286,12 @@ export default function App() {
                             title={currentBreakPlayerId === 'none' ? "Select Starting Breaker" : "Break Indicator"}
                           >
                              <div 
-                               className={`rounded-full border-solid transition-all duration-500 flex items-center justify-center
+                               className={`rounded-full border-solid transition-all duration-300 flex items-center justify-center
                                  ${currentBreakPlayerId === p.id 
                                    ? 'bg-white border-white shadow-[0_0_1.5rem_rgba(255,255,255,1)]' 
-                                   : (currentBreakPlayerId === 'none' && activeSetupTab === 'match' && 
-                                      (matchModeBreakSide !== 'none' && ((selectedMatchIndex ?? 0) % 2 === 0 ? matchModeBreakSide : (matchModeBreakSide === '1' ? '2' : '1')) === p.id))
-                                      ? 'bg-white/20 border-white/40 border-dashed animate-pulse'
-                                      : 'bg-white/40 border-white/20'}`}
+                                   : (currentBreakPlayerId === 'none')
+                                     ? `bg-white/10 border-white/60 border-2 shadow-[0_0_2.5vh_rgba(255,255,255,0.4)] ${shouldFlashBreaker ? 'bg-red-500 border-red-400 border-4 scale-150 shadow-[0_0_5vh_rgba(239,68,68,1)] !opacity-100' : 'animate-pulse'}`
+                                     : 'bg-white/40 border-white/20'}`}
                                style={{
                                  width: '6vh',
                                  height: '6vh',
@@ -5671,7 +5712,46 @@ export default function App() {
                     </div>
                   </section>
 
-                       {/* 7. App Installation PIN - Removed as requested */}
+                  {/* 7. App Installation */}
+                  {isInstallable && (
+                    <section className="space-y-6 self-stretch">
+                      <h3 
+                        className="font-black uppercase tracking-widest pb-4 border-b-2 text-left w-full"
+                        style={{ 
+                          borderImage: `linear-gradient(to right, ${player1.color} 50%, ${player2.color} 50%) 1`, 
+                          color: 'white',
+                          fontSize: deviceInfo.titleSizes.section
+                        }}
+                      >
+                        App Installation
+                      </h3>
+                      <div className="grid grid-cols-1 gap-6 h-full">
+                        <div 
+                          className="bg-black/80 backdrop-blur-md border-2 rounded-2xl sm:rounded-[2rem] px-[3vw] pb-[6vw] landscape:pb-[3vw] sm:pb-[6vw] pt-[1vw] shadow-xl relative h-full flex flex-col"
+                          style={{ borderColor: player1.color }}
+                        >
+                          {/* Title Box - Top */}
+                          <div className="w-full text-center border-b border-white/5 pb-[1vw] mb-[3vw]">
+                            <p className="font-black text-slate-200 uppercase tracking-tight leading-none" style={{ fontSize: deviceInfo.titleSizes.tile }}>Install to Device</p>
+                          </div>
+
+                          {/* Content Box - Description */}
+                          <div className="w-full text-left flex-1">
+                            <p className="text-white font-bold uppercase tracking-widest" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>Add Pool-Pro to your home screen for a full-screen app experience.</p>
+                          </div>
+
+                          {/* Install Button - Absolute corner */}
+                          <button 
+                            onClick={handleInstallClick}
+                            className="absolute bottom-[2vw] right-[2vw] px-[4vw] sm:px-8 py-[2vw] sm:py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl sm:rounded-2xl text-[2.5vw] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                          >
+                            <Download className="w-[3vw] sm:w-4 h-[3vw] sm:h-4" />
+                            Install App
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  )}
                 </div>
 
                 {/* 8. API Configuration */}

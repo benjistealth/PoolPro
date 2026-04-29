@@ -1,11 +1,11 @@
-const CACHE_NAME = 'pool-pro-v2';
+const CACHE_NAME = 'pool-pro-v3';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.svg',
-  '/icon.svg',
-  '/sw.js'
+  './',
+  'index.html',
+  'manifest.json',
+  'favicon.svg',
+  'icon.svg',
+  'sw.js'
 ];
 
 self.addEventListener('install', (event) => {
