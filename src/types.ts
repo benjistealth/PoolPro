@@ -34,6 +34,7 @@ export interface MatchupSettings {
   isShotClockEnabled?: boolean;
   frameDetails?: FrameDetail[];
   referee?: { name: string, team: '1' | '2' };
+  isLive?: boolean;
 }
 
 export interface FrameDetail {
@@ -48,6 +49,7 @@ export interface FrameDetail {
   winnerName?: string;
   duration?: number; // in seconds
   breakBalls?: number[];
+  referee?: { name: string, team: '1' | '2' };
 }
 
 export interface MatchHistoryEntry {
@@ -66,4 +68,5 @@ export interface MatchHistoryEntry {
   shotClockSetting?: number;
   matchClockRemaining?: number;
   frameDetails?: FrameDetail[];
+  referee?: { name: string, team: '1' | '2' };
 }

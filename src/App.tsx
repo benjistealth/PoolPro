@@ -197,6 +197,7 @@ export default function App() {
   const [currentMatchFrameDetails, setCurrentMatchFrameDetails] = useState<FrameDetail[]>([]);
   const [viewingMatchDetailsId, setViewingMatchDetailsId] = useState<string | null>(null);
   const [selectedMatchIndex, setSelectedMatchIndex] = useState<number | null>(null);
+  const [selectedHistoryEntryId, setSelectedHistoryEntryId] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [view, setView] = useState<'scoreboard' | 'history' | 'settings' | 'teams' | 'match-details'>('scoreboard');
   const [navigationHistory, setNavigationHistory] = useState<('scoreboard' | 'history' | 'settings' | 'teams' | 'match-details')[]>(['scoreboard']);
@@ -241,6 +242,7 @@ export default function App() {
   const [apiTestStatus, setApiTestStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
   const [breakBalls, setBreakBalls] = useState<number[]>([]);
   const [pairTrackerSettings, setPairTrackerSettings] = useState<Record<string, { breakBalls: number[], currentBreakPlayerId: '1' | '2' | 'none' }>>({});
+  const [persistentRefereeRegistry, setPersistentRefereeRegistry] = useState<Record<string, { name: string, team: '1' | '2' }>>({});
   const [isLoaded, setIsLoaded] = useState(false);
   const [matchStartTime, setMatchStartTime] = useState<string | null>(null);
   const [showDeviceTime, setShowDeviceTime] = useState(true);
@@ -901,6 +903,7 @@ export default function App() {
       if (state.gameData?.breakBalls !== undefined) setBreakBalls(state.gameData.breakBalls);
       if (state.gameData?.matchModeBreakSide !== undefined) setMatchModeBreakSide(state.gameData.matchModeBreakSide);
       if (state.pairTrackerSettings) setPairTrackerSettings(state.pairTrackerSettings);
+      if (state.persistentRefereeRegistry) setPersistentRefereeRegistry(state.persistentRefereeRegistry);
 
       // Load Other Data (Load preferences early so they can be applied to player objects)
       const loadedPrefs = state.playerPreferences || {};
@@ -1066,6 +1069,7 @@ export default function App() {
       },
       playerPreferences,
       pairTrackerSettings,
+      persistentRefereeRegistry,
       apiConfig,
       matchModeBreakSide,
       
@@ -1108,7 +1112,7 @@ export default function App() {
     shotClockDuration, isShotClockEnabled, matchClockDuration, isMatchClockEnabled,
     isBreakTrackingEnabled, view, isNavVisible, matchModeBreakSide, fullScreenBackdrop,
     showDeviceTime, deviceTimePosition, matchClockPosition, shotClockPosition,
-    playerPreferences, pairTrackerSettings, apiConfig
+    playerPreferences, pairTrackerSettings, persistentRefereeRegistry, apiConfig
   ]);
 
   useEffect(() => {
@@ -1538,6 +1542,13 @@ export default function App() {
     const breakerId = currentBreakPlayerId;
     const breakerName = breakerId === '1' ? player1.name : player2.name;
     
+    const p1NameValue = player1.name || '';
+    const p2NameValue = player2.name || '';
+    const lastMatch = getMatchResult(p1NameValue, p2NameValue);
+    const regKey = [p1NameValue.trim().toUpperCase(), p2NameValue.trim().toUpperCase()].sort().join(' VS ');
+    const autoRef = persistentRefereeRegistry[regKey];
+    const effectiveReferee = (selectedMatchIndex !== null ? matchupSettings[selectedMatchIndex]?.referee : undefined) || (lastMatch && lastMatch.referee ? lastMatch.referee : autoRef);
+
     const frameDetail: FrameDetail = {
       frameNumber: (player1.score + player2.score) + 1,
       startTime: new Date(frameStartTimeRef.current).toISOString(),
@@ -1549,7 +1560,8 @@ export default function App() {
       winnerId: playerId,
       winnerName: playerId === '1' ? player1.name : player2.name,
       duration,
-      breakBalls: [...breakBalls]
+      breakBalls: [...breakBalls],
+      referee: effectiveReferee
     };
     
     setCurrentMatchFrameDetails(prev => [...prev, frameDetail]);
@@ -1697,7 +1709,7 @@ export default function App() {
   };
 
   const finishMatch = () => {
-    if (activeSetupTab === 'match' || activeSetupTab === 'group') {
+    if (activeSetupTab === 'match' || activeSetupTab === 'group' || activeSetupTab === 'singles') {
       completeMatchAndAdvance();
     } else {
       navigateToView('teams');
@@ -1718,21 +1730,63 @@ export default function App() {
   };
 
   const completeMatchAndAdvance = () => {
-    const isMatchMode = activeSetupTab === 'match' || activeSetupTab === 'singles';
+    const isMatchMode = activeSetupTab === 'match';
+    const isSinglesMode = activeSetupTab === 'singles';
     const isGroupMode = activeSetupTab === 'group';
+
+    // Commit to persistent match history if there's any data
+    const p1NameValue = isSinglesMode ? player1.name : (selectedMatchIndex !== null ? (team1Players[selectedMatchIndex] || '') : '');
+    const p2NameValue = isSinglesMode ? player2.name : (selectedMatchIndex !== null ? (team2Players[selectedMatchIndex] || '') : '');
+
+    if (p1NameValue && p2NameValue && (player1.score > 0 || player2.score > 0 || currentMatchFrameDetails.length > 0)) {
+      const lastMatch = getMatchResult(p1NameValue, p2NameValue);
+      const regKey = [p1NameValue.trim().toUpperCase(), p2NameValue.trim().toUpperCase()].sort().join(' VS ');
+      const autoRef = persistentRefereeRegistry[regKey];
+      const effectiveReferee = (selectedMatchIndex !== null ? matchupSettings[selectedMatchIndex]?.referee : undefined) || (lastMatch && lastMatch.referee ? lastMatch.referee : autoRef);
+
+      const historyEntry: MatchHistoryEntry = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        player1: p1NameValue,
+        player2: p2NameValue,
+        team1: (isMatchMode || isGroupMode) ? team1Name : undefined,
+        team2: (isMatchMode || isGroupMode) ? team2Name : undefined,
+        score1: player1.score,
+        score2: player2.score,
+        winner: player1.score > player2.score ? p1NameValue : (player2.score > player1.score ? p2NameValue : 'TIE'),
+        mode: activeSetupTab as any,
+        frameDetails: [...currentMatchFrameDetails],
+        referee: effectiveReferee
+      };
+      setMatchHistory(prev => [historyEntry, ...prev]);
+    }
 
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     frameStartTimeRef.current = Date.now();
     
     // Logic for Match, Group, or Singles
-    if (isMatchMode || isGroupMode) {
+    if (isMatchMode || isSinglesMode || isGroupMode) {
       if (selectedMatchIndex !== null) {
+        // Mark match as finalized in matchups
+        setMatchupSettings(prev => ({
+          ...prev,
+          [selectedMatchIndex]: {
+            ...prev[selectedMatchIndex],
+            isLive: false,
+            score1: player1.score,
+            score2: player2.score,
+            player1: { ...player1 },
+            player2: { ...player2 },
+            frameDetails: [...currentMatchFrameDetails]
+          }
+        }));
+
         const maxMatches = Math.max(team1Players.length, team2Players.length);
         const nextIndex = selectedMatchIndex + 1;
         
         // Advance only in multi-match modes
-        if (nextIndex < maxMatches && activeSetupTab !== 'singles') {
+        if (nextIndex < maxMatches && !isSinglesMode) {
           selectTeamMatch(nextIndex);
         } else {
           // Finish session / match
@@ -1751,6 +1805,11 @@ export default function App() {
           }, 300);
         }
       } else {
+        // Singles mode or null index cleanup
+        setCurrentBreakPlayerId('none');
+        setBreakBalls([]);
+        setSelectedMatchIndex(null);
+        resetTimer();
         navigateToView('teams');
       }
     } else {
@@ -1811,7 +1870,8 @@ export default function App() {
           score2: 0,
           currentBreakPlayerId: 'none',
           breakBalls: [],
-          frameDetails: []
+          frameDetails: [],
+          referee: existing?.referee
         };
         return next;
       });
@@ -1872,7 +1932,36 @@ export default function App() {
       ...(p2Pref || {})
     }));
     
+    // Auto-persist referee from registry if missing in settings
+    if (!settings?.referee) {
+      const p1 = team1Players[index];
+      const p2 = team2Players[index];
+      if (p1 && p2) {
+        const regKey = [p1.trim().toUpperCase(), p2.trim().toUpperCase()].sort().join(' VS ');
+        const autoRef = persistentRefereeRegistry[regKey];
+        const lastMatch = getMatchResult(p1, p2);
+        const effectiveRef = autoRef || (lastMatch && lastMatch.referee ? lastMatch.referee : undefined);
+        
+        if (effectiveRef) {
+          setMatchupSettings(prev => ({
+            ...prev,
+            [index]: {
+              ...(prev[index] || {
+                score1: 0,
+                score2: 0,
+                player1: { name: p1 },
+                player2: { name: p2 },
+                currentBreakPlayerId: 'none'
+              }),
+              referee: effectiveRef
+            }
+          }));
+        }
+      }
+    }
+
     setSelectedMatchIndex(index);
+    setSelectedHistoryEntryId(null);
     
     // Match Mode Deterministic Break Logic: Use the session's starting side and alternate by index
     if (activeSetupTab === 'match') {
@@ -2019,6 +2108,9 @@ export default function App() {
 
   const clearSinglesData = (clearNames = false) => {
     // 1. Clear Singles Specific State
+    const p1Name = player1.name;
+    const p2Name = player2.name;
+
     setPlayer1(prev => ({ 
       ...prev,
       name: clearNames ? '' : prev.name,
@@ -2050,6 +2142,8 @@ export default function App() {
     if (clearNames) {
       setTeam1Players([]);
       setTeam2Players([]);
+      setTeam1Roster([]);
+      setTeam2Roster([]);
       setSelectedMatchIndex(null);
     } else {
       setSelectedMatchIndex(0);
@@ -2065,22 +2159,63 @@ export default function App() {
       });
     }
 
-    // 2. Clear history entries specifically for singles mode
-    setMatchHistory(prev => prev.filter(m => m.mode !== 'singles'));
+    // 2. Clear history entries specifically for this pair to prevent "reappearing scores"
+    setMatchHistory(prev => prev.filter(m => {
+      // If we have names, also remove history that matches this pair
+      if (p1Name && p2Name) {
+        const mP1 = (m.player1 || '').trim().toLowerCase();
+        const mP2 = (m.player2 || '').trim().toLowerCase();
+        const p1 = p1Name.trim().toLowerCase();
+        const p2 = p2Name.trim().toLowerCase();
+        
+        const isMatch = (mP1 === p1 && mP2 === p2) || (mP1 === p2 && mP2 === p1);
+        if (isMatch) return false;
+      }
+
+      // If we are clearing everything, also remove generic singles
+      if (clearNames && m.mode === 'singles') return false;
+
+      return true;
+    }));
     
     // 3. Clear transient frame info
     setCurrentMatchFrameDetails([]);
     setMatchStartTime(null);
     setMatchClock(matchClockDuration);
+    setSelectedHistoryEntryId(null);
   };
 
   const clearMatchData = (clearNames = false) => {
     // 1. Clear Match Mode Specific State
+    const currentT1 = (team1Name || '').trim().toLowerCase();
+    const currentT2 = (team2Name || '').trim().toLowerCase();
+
     if (clearNames) {
       setTeam1Name('');
       setTeam2Name('');
       setTeam1Players([]);
       setTeam2Players([]);
+      setTeam1Roster([]);
+      setTeam2Roster([]);
+      setMatchupSettings({});
+      setMatchHistory([]); // Also clear history if we are clearing "Team Data" (the whole session)
+    } else {
+      // Preserve the matchups (slots/referees) but clear scores and frames
+      setMatchupSettings(prev => {
+        const reset: Record<number, any> = {};
+        Object.entries(prev).forEach(([idx, settings]) => {
+          reset[parseInt(idx)] = {
+            ...(settings as any),
+            score1: 0,
+            score2: 0,
+            frameDetails: [],
+            isLive: false,
+            matchStartTime: undefined,
+            currentBreakPlayerId: 'none'
+          };
+        });
+        return reset;
+      });
     }
     
     setMatchSetup(prev => ({ 
@@ -2089,10 +2224,24 @@ export default function App() {
       t2Name: clearNames ? '' : prev.t2Name, 
       t1Players: clearNames ? [] : prev.t1Players, 
       t2Players: clearNames ? [] : prev.t2Players, 
-      settings: {}, 
+      t1Roster: clearNames ? [] : (prev as any).t1Roster,
+      t2Roster: clearNames ? [] : (prev as any).t2Roster,
+      settings: clearNames ? {} : (() => {
+        const reset: Record<number, any> = {};
+        Object.entries(prev.settings || {}).forEach(([idx, settings]) => {
+          reset[parseInt(idx)] = {
+            ...(settings as any),
+            score1: 0,
+            score2: 0,
+            frameDetails: [],
+            isLive: false
+          };
+        });
+        return reset;
+      })(), 
       selectedIndex: null,
-      history: [], 
-      frameDetails: [], 
+      history: clearNames ? [] : prev.history, 
+      frameDetails: clearNames ? [] : prev.frameDetails, 
       matchStartTime: null, 
       score1: 0, 
       score2: 0,
@@ -2100,8 +2249,8 @@ export default function App() {
       breakBalls: []
     }));
     
-    setMatchupSettings({});
     setSelectedMatchIndex(null);
+    setSelectedHistoryEntryId(null);
     setMatchModeBreakSide('none');
     
     // Reset scores and names in current view if active
@@ -2112,21 +2261,45 @@ export default function App() {
       setMatchStartTime(null);
     }
 
-    // 2. Clear history entries specifically for match mode
-    setMatchHistory(prev => prev.filter(m => m.mode !== 'match'));
+    // 2. Clear history entries specifically for this session to prevent "reappearing scores"
+    // ONLY clear history entries if they match the current teams or players to avoid wiping other unrelated matches
+    setMatchHistory(prev => prev.filter(m => {
+      // If we have team names, remove history that matches these teams to ensure a fresh session
+      if (currentT1 && currentT2) {
+        const mT1 = (m.team1 || m.player1 || '').trim().toLowerCase();
+        const mT2 = (m.team2 || m.player2 || '').trim().toLowerCase();
+        
+        const isExactMatch = (mT1 === currentT1 && mT2 === currentT2) || (mT1 === currentT2 && mT2 === currentT1);
+        if (isExactMatch) return false;
+      }
+      
+      // If no team names, we only clear it if it was explicitly a 'match' mode entry AND we are clearing everything
+      if (clearNames && m.mode === 'match') return false;
+
+      return true;
+    }));
   };
 
   const clearGroupData = (clearNames = false) => {
     // 1. Clear Group Specific State
+    const currentT1 = (team1Name || '').trim().toLowerCase();
+    const currentT2 = (team2Name || '').trim().toLowerCase();
+
     if (clearNames) {
+      setTeam1Name('');
+      setTeam2Name('');
       setTeam1Players([]);
       setTeam2Players([]);
+      setTeam1Roster([]);
+      setTeam2Roster([]);
     }
 
     setGroupSetup(prev => ({ 
       ...prev,
       t1Players: clearNames ? [] : prev.t1Players, 
       t2Players: clearNames ? [] : prev.t2Players, 
+      t1Roster: clearNames ? [] : (prev as any).t1Roster,
+      t2Roster: clearNames ? [] : (prev as any).t2Roster,
       settings: {}, 
       selectedIndex: null,
       history: [], 
@@ -2144,10 +2317,25 @@ export default function App() {
       setPlayer2(prev => ({ ...prev, name: clearNames ? '' : prev.name, score: 0 }));
       setCurrentMatchFrameDetails([]);
       setMatchStartTime(null);
+      setSelectedHistoryEntryId(null);
     }
 
-    // 2. Clear history entries specifically for group mode
-    setMatchHistory(prev => prev.filter(m => m.mode !== 'group'));
+    // 2. Clear history entries specifically for this session to prevent "reappearing scores"
+    setMatchHistory(prev => prev.filter(m => {
+      // If we have team names, remove history that matches these teams to ensure a fresh session
+      if (currentT1 && currentT2) {
+        const mT1 = (m.team1 || m.player1 || '').trim().toLowerCase();
+        const mT2 = (m.team2 || m.player2 || '').trim().toLowerCase();
+        
+        const isExactMatch = (mT1 === currentT1 && mT2 === currentT2) || (mT1 === currentT2 && mT2 === currentT1);
+        if (isExactMatch) return false;
+      }
+
+      // If clearing everything, remove group entries
+      if (clearNames && m.mode === 'group') return false;
+      
+      return true;
+    }));
   };
 
   const clearTeams = () => {
@@ -2487,13 +2675,18 @@ export default function App() {
     const newPlayers2 = [...team2Players, name2];
     const newIndex = newPlayers1.length - 1;
 
+    // Check registry for reassociation
+    const regKey = [name1.trim().toUpperCase(), name2.trim().toUpperCase()].sort().join(' VS ');
+    const autoRef = persistentRefereeRegistry[regKey];
+
     setMatchupSettings(prev => ({
       ...prev,
       [newIndex]: {
         ...prev[newIndex],
         isDoubles: isDoubles,
         player1: { ...SLOT1_DEFAULTS },
-        player2: { ...SLOT2_DEFAULTS }
+        player2: { ...SLOT2_DEFAULTS },
+        referee: autoRef
       }
     }));
     
@@ -2501,18 +2694,33 @@ export default function App() {
     setShowDoublesPicker({ ...showDoublesPicker, isOpen: false });
   };
 
-  const updateReferee = (idx: number, player: string, team: '1' | '2') => {
+  const updateReferee = (idx: number, player: string | null, team: '1' | '2') => {
     setMatchupSettings(prev => {
-      return {
-        ...prev,
-        [idx]: {
-          ...(prev[idx] || {
-            player1: { ...SLOT1_DEFAULTS },
-            player2: { ...SLOT2_DEFAULTS }
-          }),
-          referee: { name: player, team }
+      const next = { ...prev };
+      if (!next[idx]) {
+        next[idx] = {
+          score1: 0,
+          score2: 0,
+          player1: { name: team1Players[idx] || 'Player 1' },
+          player2: { name: team2Players[idx] || 'Player 2' },
+          currentBreakPlayerId: 'none'
+        };
+      }
+      
+      if (!player) {
+        delete next[idx].referee;
+      } else {
+        next[idx].referee = { name: player, team };
+        
+        // Matchup reference for reassociation
+        const p1 = team1Players[idx];
+        const p2 = team2Players[idx];
+        if (p1 && p2) {
+          const key = [p1.trim().toUpperCase(), p2.trim().toUpperCase()].sort().join(' VS ');
+          setPersistentRefereeRegistry(prevReg => ({ ...prevReg, [key]: { name: player, team } }));
         }
-      };
+      }
+      return next;
     });
     setShowRefereePicker({ isOpen: false, matchIndex: null, side: '1' });
   };
@@ -4973,7 +5181,7 @@ export default function App() {
                           <GripVertical className="w-3 h-3 opacity-20" />
                         </div>
                         <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[6%] shrink-0 items-center">No.</div>
-                        {activeSetupTab !== 'singles' && (
+                        {(activeSetupTab === 'match' || activeSetupTab === 'group') && (
                           <div className="flex px-[0.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-center w-[12%] sm:w-[10%] shrink-0 items-center" title="Referee">Ref</div>
                         )}
                         <div 
@@ -4982,7 +5190,7 @@ export default function App() {
                           <span>{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
                         </div>
                         <div className="flex px-[0.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[8%] sm:w-[6%] shrink-0 items-center">VS</div>
-                        {activeSetupTab !== 'singles' && (
+                        {(activeSetupTab === 'match' || activeSetupTab === 'group') && (
                           <div className="flex px-[0.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-center w-[12%] sm:w-[10%] shrink-0 items-center" title="Referee">Ref</div>
                         )}
                         <div 
@@ -5021,6 +5229,9 @@ export default function App() {
                               const p2Name = p2 || '';
                               const matchup = matchupSettings[idx];
                               const lastMatch = getMatchResult(p1Name, p2Name);
+                              const regKey = [p1Name.trim().toUpperCase(), p2Name.trim().toUpperCase()].sort().join(' VS ');
+                              const autoRef = persistentRefereeRegistry[regKey];
+                              const effectiveReferee = matchup?.referee || (lastMatch && lastMatch.referee ? lastMatch.referee : autoRef);
                               
                               let displayScore: { score1: number, score2: number, isLive: boolean, date?: string, winner?: string } | null = null;
                               
@@ -5077,7 +5288,7 @@ export default function App() {
                                     className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                                   >
                                     <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs font-black text-slate-600 w-[6%] shrink-0 items-center whitespace-nowrap">#{idx + 1}</div>
-                                    {activeSetupTab !== 'singles' && (
+                                    {(activeSetupTab === 'match' || activeSetupTab === 'group') && (
                                       <div 
                                         className="flex px-[0.5vw] py-[2vh] justify-center w-[12%] sm:w-[10%] shrink-0 items-center"
                                         onClick={(e) => {
@@ -5085,21 +5296,21 @@ export default function App() {
                                           setShowRefereePicker({ isOpen: true, matchIndex: idx, side: '1' });
                                         }}
                                       >
-                                        {matchup?.referee?.team === '1' ? (
+                                        {effectiveReferee?.team === '1' ? (
                                           <span className="text-[3vw] sm:text-sm font-black text-amber-500 uppercase truncate text-center leading-tight">
-                                            {matchup.referee.name}
+                                            {effectiveReferee.name}
                                           </span>
                                         ) : (
-                                          <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!matchup?.referee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
-                                            <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!matchup?.referee ? 'animate-pulse' : ''}`} />
+                                          <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!effectiveReferee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
+                                            <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!effectiveReferee ? 'animate-pulse' : ''}`} />
                                           </div>
                                         )}
                                       </div>
                                     )}
                                     <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors flex-1 min-w-0 items-center overflow-hidden">
-                                      {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
+                                      {isBreakTrackingEnabled && (activeSetupTab === 'match' || activeSetupTab === 'group') && rowBreaker === '1' && (
                                         <div className="mr-2 shrink-0">
-                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" title="Breaker" />
                                         </div>
                                       )}
                                       <div className="flex flex-col">
@@ -5114,7 +5325,7 @@ export default function App() {
                                       </div>
                                     </div>
                                     <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[2vw] sm:text-[0.625rem] justify-center w-[8%] sm:w-[6%] shrink-0 items-center">VS</div>
-                                    {activeSetupTab !== 'singles' && (
+                                    {(activeSetupTab === 'match' || activeSetupTab === 'group') && (
                                       <div 
                                         className="flex px-[0.5vw] py-[2vh] justify-center w-[12%] sm:w-[10%] shrink-0 items-center"
                                         onClick={(e) => {
@@ -5122,13 +5333,13 @@ export default function App() {
                                           setShowRefereePicker({ isOpen: true, matchIndex: idx, side: '2' });
                                         }}
                                       >
-                                        {matchup?.referee?.team === '2' ? (
+                                        {effectiveReferee?.team === '2' ? (
                                           <span className="text-[3vw] sm:text-sm font-black text-amber-500 uppercase truncate text-center leading-tight">
-                                            {matchup.referee.name}
+                                            {effectiveReferee.name}
                                           </span>
                                         ) : (
-                                          <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!matchup?.referee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
-                                            <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!matchup?.referee ? 'animate-pulse' : ''}`} />
+                                          <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!effectiveReferee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
+                                            <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!effectiveReferee ? 'animate-pulse' : ''}`} />
                                           </div>
                                         )}
                                       </div>
@@ -5144,16 +5355,16 @@ export default function App() {
                                           <span className={`truncate ${selectedMatchIndex === idx ? 'text-emerald-400' : ''}`}>{p2 || <span className="text-slate-700 italic">EMPTY</span>}</span>
                                         )}
                                       </div>
-                                      {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '2' && (
+                                      {isBreakTrackingEnabled && (activeSetupTab === 'match' || activeSetupTab === 'group') && rowBreaker === '2' && (
                                         <div className="ml-2 shrink-0">
-                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
+                                          <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" title="Breaker" />
                                         </div>
                                       )}
                                     </div>
-                                    <div className="flex px-[1.5vw] py-[2vh] w-[18%] sm:w-[12%] shrink-0 items-center">
+                                    <div className="flex px-[1.5vw] py-[2vh] w-[18%] sm:w-[12%] shrink-0 items-center justify-end">
                                       {displayScore ? (
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
-                                          <span className={`text-[2.5vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
+                                        <div className="flex flex-col items-center gap-1 overflow-hidden w-full">
+                                          <span className={`text-[2.5vw] sm:text-[0.625rem] font-black px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all tracking-tighter tabular-nums ${
                                             displayScore.isLive 
                                               ? 'bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]' 
                                               : displayScore.winner === p1Name 
@@ -5173,22 +5384,8 @@ export default function App() {
                                         <span className="text-[2.5vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest whitespace-nowrap">READY</span>
                                       )}
                                     </div>
-                                    <div className="flex px-[1vw] py-[2vh] justify-end w-[13%] sm:w-[8%] items-center">
+                                    <div className="flex px-[1vw] py-[2vh] justify-end w-[13%] sm:w-[10%] items-center">
                                         <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                          {/* Only show row button in non-match modes */}
-                                          {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || selectedMatchIndex === idx) && (
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                viewMatchDetails(lastMatch ? lastMatch.id : `live-${idx}`);
-                                              }}
-                                              className="p-3 sm:p-5 2xl:p-1 flex items-center justify-center text-blue-500 hover:bg-blue-500/10 rounded-xl transition-all active:scale-95 shadow-lg bg-blue-500/5 sm:bg-transparent"
-                                              title="View Details"
-                                            >
-                                              <FileText className="w-5 h-5 sm:w-8 sm:h-8 2xl:w-3 2xl:h-3" />
-                                            </button>
-                                          )}
-                                          
                                           {/* Clear match button */}
                                           {(lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || (selectedMatchIndex === idx)) && (
                                             <button 
@@ -5232,15 +5429,33 @@ export default function App() {
                           </SortableContext>
                         </DndContext>
                             
-                            {/* Match Session Details Button - For Match & Singles Mode */}
-                            {(activeSetupTab === 'match' || activeSetupTab === 'singles') && (team1Players.length > 0 || team2Players.length > 0) && (
+                            {/* Detailed Results Button - Support for all modes */}
+                            {(team1Players.length > 0 || team2Players.length > 0) && (
                               <div className="p-4 bg-slate-900/40 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                                 <button 
-                                  onClick={() => viewMatchDetails('session')}
-                                  className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px]"
+                                  onClick={() => {
+                                    if (activeSetupTab === 'group') {
+                                      if (selectedHistoryEntryId) {
+                                        viewMatchDetails(selectedHistoryEntryId);
+                                      } else if (selectedMatchIndex !== null) {
+                                        const p1 = team1Players[selectedMatchIndex];
+                                        const p2 = team2Players[selectedMatchIndex];
+                                        const lastMatch = getMatchResult(p1, p2);
+                                        viewMatchDetails(lastMatch ? lastMatch.id : `live-${selectedMatchIndex}`);
+                                      }
+                                    } else {
+                                      viewMatchDetails('session');
+                                    }
+                                  }}
+                                  disabled={activeSetupTab === 'group' && selectedMatchIndex === null}
+                                  className={`flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-xl transition-all font-black uppercase tracking-widest text-xs sm:text-sm lg:text-[10px] ${
+                                    activeSetupTab === 'group' && selectedMatchIndex === null 
+                                    ? 'opacity-30 cursor-not-allowed bg-slate-800 text-slate-500' 
+                                    : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  }`}
                                 >
                                   <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-3 lg:h-3 transition-transform group-hover:scale-110" />
-                                  View Detailed Match Progress
+                                  {activeSetupTab === 'group' ? 'View Matchup Details' : 'View Detailed Match Progress'}
                                 </button>
                                 <button 
                                   onClick={(e) => {
@@ -5279,8 +5494,23 @@ export default function App() {
                                     <div 
                                       key={m.id} 
                                       className="flex items-center border-b border-slate-800/30 last:border-0 hover:bg-slate-800/50"
+                                      onClick={() => {
+                                        if (activeSetupTab === 'group') {
+                                          setSelectedHistoryEntryId(selectedHistoryEntryId === m.id ? null : m.id);
+                                        }
+                                      }}
                                     >
-                                      <div className="hidden sm:flex px-[1vw] py-3 text-xs font-black text-slate-700 w-[8%] items-center opacity-50">HIST</div>
+                                      <div className="flex px-[1.5vw] sm:px-[1vw] py-3 text-xs font-black text-slate-700 w-[12%] sm:w-[8%] items-center justify-center">
+                                        {activeSetupTab === 'group' ? (
+                                          <div 
+                                            className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 transition-all cursor-pointer flex items-center justify-center ${selectedHistoryEntryId === m.id ? 'border-emerald-500 bg-emerald-500/20' : 'border-slate-700 hover:border-slate-500'}`}
+                                          >
+                                            {selectedHistoryEntryId === m.id && <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />}
+                                          </div>
+                                        ) : (
+                                          <span className="opacity-50">HIST</span>
+                                        )}
+                                      </div>
                                       <div className="flex px-[1.5vw] py-3 text-sm text-slate-400 uppercase font-bold w-[27%] sm:w-[22%] items-center overflow-hidden">
                                         <div className="flex flex-col">
                                           {m.player1 && m.player1.includes('/') ? (
@@ -5306,27 +5536,15 @@ export default function App() {
                                           )}
                                         </div>
                                       </div>
-                                      <div className="flex px-[1.5vw] py-3 w-[24%] sm:w-[17%] items-center">
+                                      <div className="flex px-[1.5vw] py-3 w-[22%] sm:w-[17%] items-center justify-end">
                                         <div className="flex items-center gap-2">
                                           <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 whitespace-nowrap">
                                             {m.score1}-{m.score2}
                                           </span>
-                                          <span className="text-[0.625rem] text-slate-600 font-bold uppercase">{new Date(m.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
+                                          <span className="hidden sm:inline text-[0.625rem] text-slate-600 font-bold uppercase">{new Date(m.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}</span>
                                         </div>
                                       </div>
-                                      <div className="flex px-[1vw] py-3 justify-end w-[10%] sm:w-[8%] items-center">
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            viewMatchDetails(m.id);
-                                          }}
-                                          className="p-2 sm:p-4 2xl:p-1 flex items-center justify-center text-slate-500 hover:bg-slate-700 rounded-xl transition-all active:scale-95 bg-slate-800/20 sm:bg-transparent"
-                                          title="View Details"
-                                        >
-                                          <FileText className="w-4 h-4 sm:w-7 sm:h-7 2xl:w-2.5 2xl:h-2.5 px-0.5" />
-                                        </button>
-                                      </div>
-                                      <div className="hidden sm:flex px-[1.5vw] py-3 w-[15%] items-center" />
+                                      <div className="hidden sm:flex px-[1.5vw] py-3 w-[23%] items-center" />
                                     </div>
                                   ))}
                                 </div>
@@ -6215,49 +6433,64 @@ export default function App() {
                   score1: teamTotals.t1,
                   score2: teamTotals.t2,
                   winner: teamTotals.t1 > teamTotals.t2 ? (activeSetupTab === 'singles' ? (player1.name || team1Players[0] || 'Player 1') : (team1Name || 'Team 1')) : (teamTotals.t2 > teamTotals.t1 ? (activeSetupTab === 'singles' ? (player2.name || team2Players[0] || 'Player 2') : (team2Name || 'Team 2')) : 'TIE'),
-                  frameDetails: [
-                    ...matchHistory
-                      .filter(m => {
-                        if (m.isSession || m.id === 'session') return false; // Prevent recursion
-                        
-                        if (activeSetupTab === 'singles') {
-                          // In singles, current names determine the session
-                          const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
-                          const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
-                          const mP1 = (m.player1 || '').trim().toLowerCase();
-                          const mP2 = (m.player2 || '').trim().toLowerCase();
+                  frameDetails: (() => {
+                    const allFrames = [
+                      ...matchHistory
+                        .filter(m => {
+                          if (m.isSession || m.id === 'session') return false; 
                           
-                          const isSinglesEntry = m.mode === 'singles' || (!m.mode && !m.isDoubles && !m.team1);
-                          if (!isSinglesEntry) return false;
+                          if (activeSetupTab === 'singles') {
+                            const p1 = (player1.name || singlesSetup.p1Name || '').trim().toLowerCase();
+                            const p2 = (player2.name || singlesSetup.p2Name || '').trim().toLowerCase();
+                            const mP1 = (m.player1 || '').trim().toLowerCase();
+                            const mP2 = (m.player2 || '').trim().toLowerCase();
+                            
+                            const isSinglesEntry = m.mode === 'singles' || (!m.mode && !m.isDoubles && !m.team1);
+                            if (!isSinglesEntry) return false;
 
-                          if (p1 && p2 && !p1.includes('player') && !p2.includes('player')) {
-                            return (mP1 === p1 && mP2 === p2) || (mP1 === p2 && mP2 === p1);
+                            if (p1 && p2 && !p1.includes('player') && !p2.includes('player')) {
+                              return (mP1 === p1 && mP2 === p2) || (mP1 === p2 && mP2 === p1);
+                            }
+                            return true; 
                           }
-                          return true; // Sum all if no names specified
-                        }
-                        
-                        // For Match/Group, filter by team names if set, otherwise try to match any team-based entry
-                        const t1 = (team1Name || '').trim().toLowerCase();
-                        const t2 = (team2Name || '').trim().toLowerCase();
-                        const mT1 = (m.team1 || '').trim().toLowerCase();
-                        const mT2 = (m.team2 || '').trim().toLowerCase();
+                          
+                          const t1 = (team1Name || '').trim().toLowerCase();
+                          const t2 = (team2Name || '').trim().toLowerCase();
+                          const mT1 = (m.team1 || '').trim().toLowerCase();
+                          const mT2 = (m.team2 || '').trim().toLowerCase();
 
-                        if (t1 && t2) {
-                          return (mT1 === t1 && mT2 === t2) || (mT1 === t2 && mT2 === t1);
-                        }
-                        
-                        // Fallback: exclude singles matches
-                        return m.mode !== 'singles';
-                      })
-                      .reverse()
-                      .flatMap(m => m.frameDetails || []),
-                    // Include any frames stored in non-active matchups (Match/Group Mode)
-                    ...(Object.entries(matchupSettings)
-                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                      .flatMap(([_, settings]) => (settings as MatchupSettings).frameDetails || [])
-                      .filter(f => !currentMatchFrameDetails.some(cf => cf.timestamp === f.timestamp))), // Prevent duplicates if already in current
-                    ...currentMatchFrameDetails
-                  ].map((f, idx) => ({ ...f, frameNumber: idx + 1 })),
+                          if (t1 && t2) {
+                            return (mT1 === t1 && mT2 === t2) || (mT1 === t2 && mT2 === t1);
+                          }
+                          
+                          return m.mode !== 'singles';
+                        })
+                        .reverse()
+                        .flatMap(m => (m.frameDetails || []).map(f => ({ ...f, referee: f.referee || m.referee }))),
+                      ...(Object.entries(matchupSettings)
+                        .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                        .flatMap(([idx, settings]) => {
+                          // If this is the currently selected matchup, we'll take it from currentMatchFrameDetails instead
+                          // to prevent duplicates during the active frame creation
+                          if (parseInt(idx) === selectedMatchIndex) return [];
+                          return ((settings as MatchupSettings).frameDetails || []).map(f => ({ ...f, referee: f.referee || (settings as MatchupSettings).referee }));
+                        })),
+                      ...currentMatchFrameDetails.map(f => ({ ...f, referee: f.referee || (selectedMatchIndex !== null ? matchupSettings[selectedMatchIndex]?.referee : undefined) }))
+                    ];
+
+                    // Deduplicate by timestamp - using a stable key
+                    const uniqueFramesMap = new Map<string, any>();
+                    allFrames.forEach(f => {
+                      if (f.timestamp) {
+                        const key = `${f.timestamp}_${f.winnerName || ''}_${f.score1}_${f.score2}`;
+                        uniqueFramesMap.set(key, f);
+                      }
+                    });
+                    
+                    return Array.from(uniqueFramesMap.values())
+                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                      .map((f, idx) => ({ ...f, frameNumber: idx + 1 }));
+                  })(),
                   isLive: true,
                   isSession: true
                 } : isLiveId ? (() => {
@@ -6275,10 +6508,11 @@ export default function App() {
                     team2: team2Name || undefined,
                     score1: isCurrentActive ? player1.score : (settings?.score1 || 0),
                     score2: isCurrentActive ? player2.score : (settings?.score2 || 0),
+                    referee: isCurrentActive ? (matchupSettings[liveIdx!]?.referee) : (settings?.referee),
                     winner: (isCurrentActive ? (player1.score > player2.score ? player1.name : player2.name) : (settings ? ((settings.score1 || 0) > (settings.score2 || 0) ? (liveIdx !== null ? team1Players[liveIdx] : 'Player 1') : (liveIdx !== null ? team2Players[liveIdx] : 'Player 2')) : 'Player 1')) || 'Player 1',
                     shotClockSetting: isCurrentActive ? (isShotClockEnabled ? shotClockDuration : undefined) : (settings?.isShotClockEnabled ? settings.shotClock : undefined),
                     matchClockRemaining: isCurrentActive ? (isMatchClockEnabled ? matchClock : undefined) : undefined,
-                    frameDetails: isCurrentActive ? currentMatchFrameDetails : (settings?.frameDetails || []),
+                    frameDetails: (isCurrentActive ? currentMatchFrameDetails : (settings?.frameDetails || [])).map(f => ({ ...f, referee: f.referee || (isCurrentActive ? (matchupSettings[liveIdx!]?.referee) : (settings?.referee)) })),
                     isLive: true
                   };
                 })() : { ...matchHistory.find(m => m.id === viewingMatchDetailsId)!, isLive: false };
@@ -6310,6 +6544,14 @@ export default function App() {
                             )}
                           </div>
                           {match.team1 && !isSession && <p className="text-[1.1vh] sm:text-[1.3vh] text-slate-500 font-bold uppercase mt-1.5">{match.team1} vs {match.team2}</p>}
+                          
+                          {/* Match Referee Display */}
+                          {(match as any).referee && (
+                            <div className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+                              <Glasses className="w-3 h-3 text-amber-500" />
+                              <span className="text-[0.625rem] sm:text-[0.75rem] font-black text-amber-500 uppercase tracking-wider">{(match as any).referee.name}</span>
+                            </div>
+                          )}
                        </div>
                        <div className="p-3 sm:p-5 rounded-3xl bg-slate-900/50 border border-slate-800/50 text-right shadow-lg">
                           <div className="flex items-center justify-end gap-2 mb-1">
@@ -6326,10 +6568,11 @@ export default function App() {
                       <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[400px]">
                         {/* Header Row */}
                         <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800/50">
-                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.2vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] whitespace-nowrap items-center">#</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Breaker</div>
-                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[22%] items-center">Winner</div>
-                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Score</div>
+                          <div className="flex pl-[2vw] pr-0 sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.2vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[6%] whitespace-nowrap items-center">#</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[12%] justify-center items-center">Ref</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[18%] items-center">Breaker</div>
+                          <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[18%] items-center">Winner</div>
+                          <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[10%] justify-center items-center">Score</div>
                           <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center">Start</div>
                           <div className="flex px-[0.5vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[14%] justify-center items-center whitespace-nowrap">Finish</div>
                           <div className="flex px-[1vw] sm:px-[1.5vw] py-[1.5vh] sm:py-5 text-[2.5vw] sm:text-xs uppercase tracking-widest font-black text-slate-500 w-[8%] justify-end pr-[2vw] items-center">Dur.</div>
@@ -6339,8 +6582,13 @@ export default function App() {
                         <div className="flex flex-col divide-y divide-slate-800/30">
                           {match.frameDetails && match.frameDetails.length > 0 ? match.frameDetails.map((frame, fidx) => (
                             <div key={fidx} className="flex items-center hover:bg-emerald-500/5 transition-colors group">
-                              <div className="flex pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap w-[8%] items-center">#{frame.frameNumber}</div>
-                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
+                              <div className="flex pl-[2vw] pr-0 sm:px-5 py-[2vh] text-[2.2vw] sm:text-sm font-black text-slate-600 group-hover:text-emerald-500 transition-colors whitespace-nowrap w-[6%] items-center">#{frame.frameNumber}</div>
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] justify-center w-[12%] items-center">
+                                <span className="text-[1.8vw] sm:text-[10px] sm:text-xs font-black text-amber-500 uppercase truncate">
+                                  {(frame as any).referee?.name || (match as any).referee?.name || '-'}
+                                </span>
+                              </div>
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[18%] items-center overflow-hidden">
                                 {frame.breakerName && frame.breakerName.includes('/') ? (
                                   <div className="flex flex-col">
                                     <span className="text-[2vw] sm:text-xs font-bold text-slate-300 uppercase tracking-tight truncate block leading-none">{frame.breakerName.split('/')[0].trim()}</span>
@@ -6350,7 +6598,7 @@ export default function App() {
                                   <span className="text-[2.2vw] sm:text-sm font-bold text-slate-300 uppercase tracking-tight truncate block">{frame.breakerName}</span>
                                 )}
                               </div>
-                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[22%] items-center overflow-hidden">
+                              <div className="flex px-[1vw] sm:px-5 py-[2vh] w-[18%] items-center overflow-hidden">
                                 <div className="flex items-center gap-[0.5vw] sm:gap-2 truncate">
                                   <div className="w-[0.8vw] sm:w-1.5 h-[0.8vw] sm:h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                                   {frame.winnerName && frame.winnerName.includes('/') ? (
@@ -6363,7 +6611,7 @@ export default function App() {
                                   )}
                                 </div>
                               </div>
-                              <div className="flex px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap justify-center w-[12%] items-center">
+                              <div className="flex px-[0.5vw] sm:px-5 py-[2vh] font-mono text-[2.2vw] sm:text-base text-slate-500 font-bold tabular-nums whitespace-nowrap justify-center w-[10%] items-center">
                                 {frame.score1}<span className="text-slate-700 mx-[0.2vw] sm:mx-1">-</span>{frame.score2}
                               </div>
                               <div className="flex px-[0.5vw] sm:px-5 py-[2vh] justify-center w-[14%] items-center">
