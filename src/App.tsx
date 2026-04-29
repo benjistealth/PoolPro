@@ -30,7 +30,8 @@ import {
   ChevronRight,
   Eraser,
   RefreshCw,
-  GripVertical
+  GripVertical,
+  Glasses
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -132,6 +133,11 @@ export default function App() {
   const [activeSetupTab, setActiveSetupTab] = useState<SetupTab>('singles');
   const [matchModeBreakSide, setMatchModeBreakSide] = useState<'1' | '2' | 'none'>('none');
   const [showDoublesPicker, setShowDoublesPicker] = useState<{ isOpen: boolean, mode: 'singles' | 'doubles' }>({ isOpen: false, mode: 'doubles' });
+  const [showRefereePicker, setShowRefereePicker] = useState<{ isOpen: boolean, matchIndex: number | null, side: '1' | '2' }>({
+    isOpen: false,
+    matchIndex: null,
+    side: '1'
+  });
   const [selection1, setSelection1] = useState<string[]>([]);
   const [selection2, setSelection2] = useState<string[]>([]);
   const [player1, setPlayer1] = useState<Player>({ id: '1', name: '', score: 0, isTurn: true, ...SLOT1_DEFAULTS });
@@ -2490,6 +2496,22 @@ export default function App() {
     setShowDoublesPicker({ ...showDoublesPicker, isOpen: false });
   };
 
+  const updateReferee = (idx: number, player: string, team: '1' | '2') => {
+    setMatchupSettings(prev => {
+      return {
+        ...prev,
+        [idx]: {
+          ...(prev[idx] || {
+            player1: { ...SLOT1_DEFAULTS },
+            player2: { ...SLOT2_DEFAULTS }
+          }),
+          referee: { name: player, team }
+        }
+      };
+    });
+    setShowRefereePicker({ isOpen: false, matchIndex: null, side: '1' });
+  };
+
   // --- Rendering Helpers ---
   const renderSetupTabs = () => (
     <div className="flex items-center justify-center w-[95vw] mx-auto bg-white/5 rounded-2xl p-1 mb-8 overflow-hidden">
@@ -2497,10 +2519,10 @@ export default function App() {
         <button
           key={tab}
           onClick={() => handleTabSwitch(tab)}
-          className={`flex-1 py-2 rounded-xl font-black uppercase tracking-widest transition-all text-[1.6rem] sm:text-2xl ${
+          className={`flex-1 py-1 sm:py-2 rounded-xl font-black uppercase tracking-widest transition-all text-[1.4rem] sm:text-2xl ${
             activeSetupTab === tab 
-              ? 'text-slate-950 shadow-lg' 
-              : 'text-slate-400 hover:bg-white/5'
+              ? 'text-slate-950 shadow-lg scale-105 z-10' 
+              : 'text-slate-100 bg-white/5 border border-white/5 hover:bg-white/15'
           }`}
           style={activeSetupTab === tab ? { backgroundColor: player1.color } : {}}
         >
@@ -2509,6 +2531,95 @@ export default function App() {
       ))}
     </div>
   );
+
+  const renderRefereePicker = () => {
+    const { matchIndex, side } = showRefereePicker;
+    if (matchIndex === null) return null;
+    
+    // Get the current participants for this specific match index
+    const p1Name = team1Players[matchIndex];
+    const p2Name = team2Players[matchIndex];
+    
+    // Split any doubles strings (e.g. "Player 1 / Player 2") into individual names
+    const participantNames = [p1Name, p2Name]
+      .filter(Boolean)
+      .flatMap(p => p.includes(' / ') ? p.split(' / ') : [p]);
+
+    // Only allow individuals from the roster who are NOT playing in this match
+    const pool = side === '1' ? team1Roster : team2Roster;
+    const players = pool
+      .filter(p => p && !p.includes('/'))
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .filter(p => !participantNames.includes(p));
+    const teamColor = side === '1' ? player1.color : player2.color;
+    
+    return (
+      <div key="referee-picker-overlay" className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/95 backdrop-blur-xl">
+        <motion.div
+          initial={deviceInfo.isPhone ? { y: '100%' } : { scale: 0.9, opacity: 0 }}
+          animate={deviceInfo.isPhone ? { y: 0 } : { scale: 1, opacity: 1 }}
+          exit={deviceInfo.isPhone ? { y: '100%' } : { scale: 0.9, opacity: 0 }}
+          className="w-full max-w-md bg-slate-900 border-t-2 sm:border-2 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl relative h-[100dvh] sm:h-auto flex flex-col pt-12 sm:pt-8"
+          style={{ borderColor: `${teamColor}44` }}
+        >
+          <div className="flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <Glasses className="w-8 h-8" style={{ color: teamColor }} />
+              <h3 className="text-2xl font-black uppercase tracking-widest text-white">Select Referee</h3>
+            </div>
+            <button 
+              onClick={() => setShowRefereePicker({ ...showRefereePicker, isOpen: false })} 
+              className="p-2 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-8 h-8" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+            {players.length === 0 && <p className="text-center text-slate-600 italic py-10 font-bold uppercase tracking-widest">No players available on this roster</p>}
+            {players.map((name) => {
+              const isSelected = matchupSettings[matchIndex!]?.referee?.name === name && 
+                               matchupSettings[matchIndex!]?.referee?.team === side;
+              
+              return (
+                <button
+                  key={`ref-${name}`}
+                  onClick={() => updateReferee(matchIndex!, name, side)}
+                  className={`w-full p-4 rounded-xl font-black uppercase tracking-widest transition-all flex items-center justify-between gap-4 border-2 ${
+                    isSelected 
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-500' 
+                      : 'bg-white/5 border-transparent text-slate-400 hover:border-white/10 hover:text-white'
+                  }`}
+                >
+                  <span className="truncate">{name}</span>
+                  {isSelected && <Check className="w-5 h-5" />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="pt-4 border-t border-white/5 pb-8 sm:pb-0 shrink-0">
+             <button
+               onClick={() => {
+                 setMatchupSettings(prev => {
+                   const next = { ...prev };
+                   if (next[matchIndex!]) {
+                     const { referee, ...rest } = next[matchIndex!];
+                     next[matchIndex!] = rest;
+                   }
+                   return next;
+                 });
+                 setShowRefereePicker({ ...showRefereePicker, isOpen: false });
+               }}
+               className="w-full py-4 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-red-400 transition-colors"
+             >
+               Remove Referee
+             </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
 
   const renderDoublesPicker = () => {
     const { mode } = showDoublesPicker;
@@ -4524,7 +4635,7 @@ export default function App() {
                         {activeSetupTab !== 'group' && (
                           <div className="space-y-2 sm:space-y-4">
                             <div className="flex items-center justify-between">
-                              <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Team 1 Name</label>
+                              <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player1.color }}>Home Team Name</label>
                               <Users className="w-4 h-4" style={{ color: player1.color }} />
                             </div>
                             <input 
@@ -4660,7 +4771,7 @@ export default function App() {
                     {activeSetupTab !== 'group' && (
                       <div className="space-y-2 sm:space-y-4">
                         <div className="flex items-center justify-between">
-                          <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Team 2 Name</label>
+                          <label className="font-black uppercase tracking-widest" style={{ fontSize: labelFontSize, color: player2.color }}>Away Team Name</label>
                           <Users className="w-4 h-4" style={{ color: player2.color }} />
                         </div>
                         <input 
@@ -4811,24 +4922,26 @@ export default function App() {
                     <div className="w-full flex flex-col scrollbar-hide overflow-x-auto min-w-[300px]">
                       {/* Header Row */}
                       <div className="flex items-center bg-slate-900/80 border-b-2 border-slate-800 font-black">
-                        <div className="flex px-[1vw] py-[2vh] text-slate-400 w-[6%] items-center justify-center">
+                        <div className="flex px-[1vw] py-[2vh] text-slate-400 w-[5%] shrink-0 items-center justify-center">
                           <GripVertical className="w-3 h-3 opacity-20" />
                         </div>
-                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[8%] items-center">No.</div>
+                        <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-[0.2em] text-slate-400 w-[6%] shrink-0 items-center">No.</div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-center w-[12%] sm:w-[10%] shrink-0 items-center" title="Referee">Ref</div>
                         <div 
-                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[24%] sm:w-[20%] items-center truncate text-white"
+                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest flex-1 min-w-0 items-center truncate text-white"
                         >
                           <span>{activeSetupTab === 'group' ? 'SIDE A' : (team1Name || 'TEAM A')}</span>
                         </div>
-                        <div className="flex px-[0.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[12%] sm:w-[7%] items-center">VS</div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-600 justify-center w-[8%] sm:w-[6%] shrink-0 items-center">VS</div>
+                        <div className="flex px-[0.5vw] py-[2vh] text-[2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-center w-[12%] sm:w-[10%] shrink-0 items-center" title="Referee">Ref</div>
                         <div 
-                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest w-[24%] sm:w-[20%] items-center truncate text-white"
+                          className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-[0.85rem] uppercase tracking-widest flex-1 min-w-0 items-center truncate text-white"
                         >
                           <span>{activeSetupTab === 'group' ? 'SIDE B' : (team2Name || 'TEAM B')}</span>
                         </div>
-                        <div className="flex px-[1.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[21%] sm:w-[15%] items-center">Result</div>
-                        <div className="flex px-[1vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[13%] sm:w-[10%] items-center">Clear</div>
-                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[14%] items-center">TIMERS</div>
+                        <div className="flex px-[1.5vw] py-[2vh] text-[2.5vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[18%] sm:w-[12%] shrink-0 items-center">Result</div>
+                        <div className="flex px-[1vw] py-[2vh] text-[2.2vw] sm:text-[0.85rem] uppercase tracking-widest text-slate-400 justify-end w-[10%] sm:w-[7%] shrink-0 items-center">Clear</div>
+                        <div className="hidden sm:flex px-[1.5vw] py-[2vh] text-[2vw] sm:text-xs lg:text-[0.85rem] uppercase tracking-widest text-slate-400 w-[12%] shrink-0 items-center">TIMERS</div>
                       </div>
 
                       {/* Body */}
@@ -4912,8 +5025,25 @@ export default function App() {
                                     onClick={() => selectTeamMatch(idx)}
                                     className={`group flex items-center cursor-pointer transition-all border-b border-slate-800/30 last:border-0 hover:bg-emerald-500/5 ${selectedMatchIndex === idx ? 'bg-emerald-500/10' : ''}`}
                                   >
-                                    <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs font-black text-slate-600 w-[8%] items-center whitespace-nowrap">#{idx + 1}</div>
-                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[24%] sm:w-[20%] items-center overflow-hidden">
+                                    <div className="hidden sm:flex px-[1vw] py-[2vh] text-[2vw] sm:text-xs font-black text-slate-600 w-[6%] shrink-0 items-center whitespace-nowrap">#{idx + 1}</div>
+                                    <div 
+                                      className="flex px-[0.5vw] py-[2vh] justify-center w-[12%] sm:w-[10%] shrink-0 items-center"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowRefereePicker({ isOpen: true, matchIndex: idx, side: '1' });
+                                      }}
+                                    >
+                                      {matchup?.referee?.team === '1' ? (
+                                        <span className="text-[3vw] sm:text-sm font-black text-amber-500 uppercase truncate text-center leading-tight">
+                                          {matchup.referee.name}
+                                        </span>
+                                      ) : (
+                                        <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!matchup?.referee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
+                                          <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!matchup?.referee ? 'animate-pulse' : ''}`} />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors flex-1 min-w-0 items-center overflow-hidden">
                                       {activeSetupTab === 'match' && matchModeBreakSide !== 'none' && rowBreaker === '1' && (
                                         <div className="mr-2 shrink-0">
                                           <div className="w-[1.5vw] sm:w-2 h-[1.5vw] sm:h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" title="Breaker" />
@@ -4930,8 +5060,25 @@ export default function App() {
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[2vw] sm:text-[0.625rem] justify-center w-[12%] sm:w-[7%] items-center">VS</div>
-                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors w-[24%] sm:w-[20%] items-center overflow-hidden">
+                                    <div className="flex px-[0.5vw] py-[2vh] text-center text-slate-700 font-black text-[2vw] sm:text-[0.625rem] justify-center w-[8%] sm:w-[6%] shrink-0 items-center">VS</div>
+                                    <div 
+                                      className="flex px-[0.5vw] py-[2vh] justify-center w-[12%] sm:w-[10%] shrink-0 items-center"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowRefereePicker({ isOpen: true, matchIndex: idx, side: '2' });
+                                      }}
+                                    >
+                                      {matchup?.referee?.team === '2' ? (
+                                        <span className="text-[3vw] sm:text-sm font-black text-amber-500 uppercase truncate text-center leading-tight">
+                                          {matchup.referee.name}
+                                        </span>
+                                      ) : (
+                                        <div className={`p-1 sm:p-1.5 rounded-lg transition-all flex items-center justify-center cursor-pointer ${!matchup?.referee ? 'text-amber-500/30' : 'text-slate-800 hover:text-slate-500'}`}>
+                                          <Glasses className={`w-[2.5vw] sm:w-4 h-[2.5vw] sm:h-4 ${!matchup?.referee ? 'animate-pulse' : ''}`} />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex px-[1.5vw] py-[2vh] text-[3vw] sm:text-sm text-slate-100 uppercase font-bold group-hover:text-emerald-400 transition-colors flex-1 min-w-0 items-center overflow-hidden">
                                       <div className="flex flex-col">
                                         {p2 && p2.includes('/') ? (
                                           <>
@@ -4948,7 +5095,7 @@ export default function App() {
                                         </div>
                                       )}
                                     </div>
-                                    <div className="flex px-[1.5vw] py-[2vh] w-[21%] sm:w-[15%] items-center">
+                                    <div className="flex px-[1.5vw] py-[2vh] w-[18%] sm:w-[12%] shrink-0 items-center">
                                       {displayScore ? (
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 overflow-hidden">
                                           <span className={`text-[2.5vw] sm:text-xs font-bold px-1.5 py-0.5 rounded w-fit whitespace-nowrap transition-all ${
@@ -4971,7 +5118,7 @@ export default function App() {
                                         <span className="text-[2.5vw] sm:text-[0.625rem] text-slate-700 font-bold uppercase tracking-widest whitespace-nowrap">READY</span>
                                       )}
                                     </div>
-                                    <div className="flex px-[1vw] py-[2vh] justify-end w-[13%] sm:w-[10%] items-center">
+                                    <div className="flex px-[1vw] py-[2vh] justify-end w-[13%] sm:w-[8%] items-center">
                                         <div className="flex items-center justify-end gap-1 sm:gap-2">
                                           {/* Only show row button in non-match modes */}
                                           {activeSetupTab !== 'match' && (lastMatch || (matchupSettings[idx] && ((matchupSettings[idx].score1 || 0) > 0 || (matchupSettings[idx].score2 || 0) > 0 || (matchupSettings[idx].frameDetails && matchupSettings[idx].frameDetails.length > 0))) || selectedMatchIndex === idx) && (
@@ -5014,7 +5161,7 @@ export default function App() {
                                           </button>
                                         </div>
                                     </div>
-                                    <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[14%] items-center overflow-hidden">
+                                    <div className="hidden sm:flex px-[1.5vw] py-[2vh] w-[12%] items-center overflow-hidden">
                                       {lastMatch && (lastMatch.shotClockSetting || lastMatch.matchClockRemaining !== undefined) ? (
                                         <div className="flex flex-col gap-0.5">
                                           {lastMatch.shotClockSetting && <span className="text-[0.625rem] font-bold text-slate-500 whitespace-nowrap">SHOT: {lastMatch.shotClockSetting}S</span>}
@@ -5738,7 +5885,7 @@ export default function App() {
                         {/* Content Box - Description */}
                         <div className="w-full text-left flex-1 space-y-4">
                           <p className="text-white font-bold uppercase tracking-widest leading-relaxed" style={{ fontSize: deviceInfo.titleSizes.tileDesc }}>
-                            Install Pool-Pro as a full-screen app for the best match tracking experience.
+                            Install Pool-Pro as a full-screen app for the best match tracking experience Offline.
                           </p>
                           
                           {isInstallable ? (
@@ -6513,6 +6660,7 @@ export default function App() {
             </div>
           )}
           {showDoublesPicker.isOpen && renderDoublesPicker()}
+          {showRefereePicker.isOpen && renderRefereePicker()}
           {showDeleteAllConfirm && (
             <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
               <motion.div 

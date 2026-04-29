@@ -33,6 +33,7 @@ export interface MatchupSettings {
   shotClock?: number;
   isShotClockEnabled?: boolean;
   frameDetails?: FrameDetail[];
+  referee?: { name: string, team: '1' | '2' };
 }
 
 export interface FrameDetail {
