@@ -239,7 +239,9 @@ export const SetupView: React.FC<SetupViewProps> = (props) => {
                           const lastMatch = getMatchResult(p1Name, p2Name, activeSetupTab);
                           const regKey = [p1Name.trim().toUpperCase(), p2Name.trim().toUpperCase()].sort().join(' VS ');
                           const autoRef = persistentRefereeRegistry[regKey];
-                          const effectiveReferee = matchup?.referee || (lastMatch && lastMatch.referee ? lastMatch.referee : autoRef);
+                          const effectiveReferee = (matchup && matchup.hasOwnProperty('referee')) 
+                                                  ? matchup.referee 
+                                                  : (lastMatch && lastMatch.referee ? lastMatch.referee : autoRef);
                           
                           let displayScore: any = null;
                           if (selectedMatchIndex === idx) {
