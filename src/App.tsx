@@ -63,7 +63,7 @@ import {
 } from './constants';
 import { SetupView } from './components/setup/SetupView';
 import { ColorPicker } from './components/ColorPicker';
-import portraitBackdrop from './assets/portrait_mode_backdrop.png';
+const portraitBackdrop = '/assets/portrait_mode_backdrop.webp';
 
 const SHOT_CLOCK_DEFAULT = 30;
 
@@ -280,17 +280,34 @@ export default function App() {
     }, 1000);
 
     // Preload Pool Ball Assets
-    POOL_BALLS.forEach(ball => {
-      // Preload high-res
-      if (ball.image) {
+    const preloadImage = (src: string) => {
+      return new Promise((resolve, reject) => {
         const img = new Image();
-        img.src = ball.image;
-      }
-      // Preload thumbnails
-      if (ball.thumbnail) {
-        const thumbImg = new Image();
-        thumbImg.src = ball.thumbnail;
-      }
+        img.src = src;
+        img.onload = resolve;
+        img.onerror = resolve; // Continue even if one fails
+      });
+    };
+
+    const assetsToPreload: string[] = [];
+    
+    POOL_BALLS.forEach(ball => {
+      if (ball.image) assetsToPreload.push(ball.image);
+      if (ball.thumbnail) assetsToPreload.push(ball.thumbnail);
+      if (ball.mediumImage) assetsToPreload.push(ball.mediumImage);
+    });
+
+    FULL_SCREEN_BACKDROPS.forEach(backdrop => {
+      if (backdrop.image) assetsToPreload.push(backdrop.image);
+      if (backdrop.thumbnail) assetsToPreload.push(backdrop.thumbnail);
+    });
+
+    assetsToPreload.push(portraitBackdrop);
+
+    // Run Preload
+    Promise.all(assetsToPreload.map(src => preloadImage(src))).then(() => {
+      console.log('All critical assets preloaded');
+      setIsLoaded(true);
     });
 
     return () => {
@@ -330,7 +347,7 @@ export default function App() {
     };
 
     return { 
-      isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, 
+      isPhone, isTablet, isDesktop, isLandscape, isPortrait, isShort, isSquarish,
       shouldHideDeviceTime, titleSizes,
       isStandalone, isIOS, isAndroid
     };
@@ -859,7 +876,7 @@ export default function App() {
       if (state.userPreferences?.shotClockPosition !== undefined) setShotClockPosition(state.userPreferences.shotClockPosition);
 
       // Finalize loading after state updates
-      setTimeout(() => setIsLoaded(true), 100);
+      // setTimeout(() => setIsLoaded(true), 100); // Moved to asset preloader
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
       // Do not set isLoaded to true here to prevent wiping data with empty state
@@ -2764,7 +2781,7 @@ export default function App() {
 
           <div 
             className="px-4 sm:px-8 border-t border-white/5 shrink-0 bg-slate-900 shadow-[0_-20px_40px_rgba(0,0,0,0.5)] flex items-center justify-center"
-            style={{ height: '6vh', minHeight: '45px' }}
+            style={{ height: '5vh' }}
           >
              <button
                onClick={() => updateReferee(matchIndex!, null, side!)}
@@ -2923,12 +2940,11 @@ export default function App() {
           <div 
             className="mt-auto border-t border-white/5 shrink-0 flex flex-col items-center justify-center px-5"
             style={{ 
-              height: '6vh',
-              minHeight: '50px'
+              height: '5vh'
             }}
           >
              {canConfirm && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center h-[1.5vh] items-center">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center h-[1vh] items-center">
                   <span className="text-[7.5px] sm:text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-black/90 px-3 py-1 rounded-full border border-emerald-500/30 backdrop-blur-md">
                     Ready: {matchCount} {mode === 'doubles' ? 'doubles' : 'singles'} matchup{matchCount === 1 ? '' : 's'}
                   </span>
@@ -2945,7 +2961,7 @@ export default function App() {
               style={{ 
                 backgroundColor: canConfirm ? 'white' : '#334155', 
                 color: '#000',
-                height: '4vh'
+                height: '3.5vh'
               }}
             >
               Confirm Matchups
@@ -3731,7 +3747,6 @@ export default function App() {
               transform: 'translateZ(0)',
               willChange: 'transform'
             }}
-            referrerPolicy="no-referrer"
           />
 
           {/* Logo & Icon at top center */}
@@ -3805,7 +3820,6 @@ export default function App() {
                 src={activeBackItem.image} 
                 className="w-full h-full object-fill" 
                 alt="" 
-                referrerPolicy="no-referrer"
               />
             </div>
           ) : null;
@@ -4253,10 +4267,9 @@ export default function App() {
                             
                             return (
                               <img 
-                                src={ball.image} 
+                                src={(deviceInfo.isTablet || deviceInfo.isPhone) && ball.mediumImage ? ball.mediumImage : ball.image} 
                                 alt={ball.name} 
-                                className="absolute inset-0 w-full h-full object-contain rounded-full"
-                                referrerPolicy="no-referrer"
+                                className="absolute inset-[15%] w-[70%] h-[70%] object-contain rounded-full"
                               />
                             );
                           })()}
@@ -4270,8 +4283,8 @@ export default function App() {
                                }}
                                className="absolute rounded-full text-slate-950 flex items-center justify-center transition-all active:translate-y-1 hover:scale-105 hover:brightness-110 group z-20 overflow-hidden cursor-pointer"
                                style={{ 
-                                 width: p.bgStyle === 'balls' ? '12vh' : '15vh',
-                                 height: p.bgStyle === 'balls' ? '12vh' : '15vh',
+                                 width: (p.bgStyle === 'balls' || deviceInfo.isSquarish) ? '12vh' : '15vh',
+                                 height: (p.bgStyle === 'balls' || deviceInfo.isSquarish) ? '12vh' : '15vh',
                                  bottom: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '7vh' : '5vh') : '3vh',
                                  background: `radial-gradient(circle at 35% 35%, ${p.color}, ${p.color}dd 40%, ${p.color}aa 100%)`,
                                  right: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '6.5vw' : '7.5vw') : '1.5vh',
@@ -4294,8 +4307,8 @@ export default function App() {
                                }}
                                className="absolute rounded-full bg-slate-900 flex items-center justify-center transition-all active:translate-y-0.5 hover:scale-105 hover:bg-slate-800 z-20 border-2 overflow-hidden group cursor-pointer"
                                style={{ 
-                                 width: p.bgStyle === 'balls' ? '8vh' : '10vh',
-                                 height: p.bgStyle === 'balls' ? '8vh' : '10vh',
+                                 width: (p.bgStyle === 'balls' || deviceInfo.isSquarish) ? '8vh' : '10vh',
+                                 height: (p.bgStyle === 'balls' || deviceInfo.isSquarish) ? '8vh' : '10vh',
                                  bottom: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '9.5vh' : '6.5vh') : '3.5vh',
                                  left: p.bgStyle === 'balls' ? (deviceInfo.isTablet ? '10vw' : '9vw') : '3vh',
                                  borderColor: `${p.color}44`
@@ -4416,7 +4429,9 @@ export default function App() {
                               className="font-black tracking-tighter tabular-nums leading-[0.75] block m-0 p-0" 
                               style={{ 
                                 color: p.color,
-                                fontSize: deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh'),
+                                fontSize: deviceInfo.isSquarish 
+                                  ? (deviceInfo.isPhone ? '22.5vh' : (deviceInfo.isTablet ? '25.2vh' : '31.5vh'))
+                                  : (deviceInfo.isPhone ? '25vh' : (deviceInfo.isTablet ? '28vh' : '35vh')),
                               }}
                             >
                               {p.score}
@@ -4725,16 +4740,16 @@ export default function App() {
                            />
 
                           <ColorPicker
-                            label="Card Style / Border"
+                            label="Player Ball Options"
                             value={p.bgColor}
-                            onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, bgColor: color})) : setPlayer2(prev => ({...prev, bgColor: color}))}
-                            colors={p.bgStyle === 'balls' ? POOL_BALLS : BACKGROUND_COLORS}
+                            onChange={(color) => idx === 0 ? setPlayer1(prev => ({...prev, bgColor: color, bgStyle: 'balls'})) : setPlayer2(prev => ({...prev, bgColor: color, bgStyle: 'balls'}))}
+                            colors={POOL_BALLS}
                             icon={<Layout className="w-4 h-4" />}
                             isOpen={activePicker === `p${idx + 1}-bg`}
                             onToggle={(isOpen) => setActivePicker(isOpen ? `p${idx + 1}-bg` : null)}
                             themeColor={p.color}
-                            pickerStyle={p.bgStyle || 'default'}
-                            allowedStyles={['default', 'balls']}
+                            pickerStyle="balls"
+                            allowedStyles={['balls']}
                             onStyleChange={(style) => idx === 0 ? setPlayer1(prev => ({...prev, bgStyle: style})) : setPlayer2(prev => ({...prev, bgStyle: style}))}
                           />
 
@@ -5606,6 +5621,23 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Hidden SEO Content for search engine indexing */}
+        <section className="sr-only" aria-hidden="true" style={{ position: 'absolute', width: '1px', height: '1px', padding: '0', margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: '0' }}>
+          <h2>Pool-Pro.uk: Premium Pool Scoreboard and Tournament Manager</h2>
+          <p>
+            The ultimate pool app for serious players. Pool-Pro is a professional digital score board and scoreboard solution. 
+            Manage your tournament sessions with ease using our poolpro tools. Track every match at pool-pro.uk and poolpro.uk.
+            Includes advanced tracking for pool scores, best pool scor (scores), frame counters, and match clocks.
+          </p>
+          <ul>
+            <li>Professional Pool Scoreboard</li>
+            <li>Digital Score Board</li>
+            <li>Professional tournament tracking</li>
+            <li>Best pool score app</li>
+            <li>Pool pro scoreboard UK</li>
+          </ul>
+        </section>
+
       </motion.main>
 
       {/* Global Modals - Moved to root level for proper z-index stacking above TopBarNav */}
@@ -5904,13 +5936,19 @@ export default function App() {
               <div className="grid grid-cols-2 gap-4 sm:gap-8 items-center border-t border-b border-white/10 py-6 sm:py-8">
                 <div className="space-y-2 sm:space-y-4">
                   <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player1.color }}>{activeSetupTab === 'group' ? (player1.name || team1Players[0] || 'PLAYER 1') : (team1Name || 'TEAM 1')}</p>
-                  <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
+                  <p 
+                    className="text-4xl sm:text-8xl font-black text-white tabular-nums"
+                    style={{ fontSize: deviceInfo.isSquarish ? (deviceInfo.isPhone ? '2.025rem' : '5.4rem') : undefined }}
+                  >
                     {teamTotals.t1}
                   </p>
                 </div>
                 <div className="space-y-2 sm:space-y-4">
                   <p className="text-sm sm:text-xl font-black uppercase tracking-tight truncate px-1" style={{ color: player2.color }}>{activeSetupTab === 'group' ? (player2.name || team2Players[0] || 'PLAYER 2') : (team2Name || 'TEAM 2')}</p>
-                  <p className="text-4xl sm:text-8xl font-black text-white tabular-nums">
+                  <p 
+                    className="text-4xl sm:text-8xl font-black text-white tabular-nums"
+                    style={{ fontSize: deviceInfo.isSquarish ? (deviceInfo.isPhone ? '2.025rem' : '5.4rem') : undefined }}
+                  >
                     {teamTotals.t2}
                   </p>
                 </div>

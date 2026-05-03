@@ -64,6 +64,7 @@ export const TopBarNav: React.FC<TopBarNavProps> = ({
             height: deviceInfo.isPhone ? '13.5vh' : (deviceInfo.isTablet ? '7.2vh' : '9vh'),
           }}
         >
+          <span className="sr-only">Pool-Pro | Digital Pool Scoreboard & Tournament Manager</span>
           <svg 
             height="100%" 
             viewBox="0 0 210 40" 
