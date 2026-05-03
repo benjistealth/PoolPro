@@ -4269,7 +4269,7 @@ export default function App() {
                               <img 
                                 src={(deviceInfo.isTablet || deviceInfo.isPhone) && ball.mediumImage ? ball.mediumImage : ball.image} 
                                 alt={ball.name} 
-                                className="absolute inset-[15%] w-[70%] h-[70%] object-contain rounded-full"
+                                className="absolute inset-0 w-full h-full object-contain rounded-full"
                               />
                             );
                           })()}
